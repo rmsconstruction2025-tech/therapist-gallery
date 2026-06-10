@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin Portal — Therapist Gallery</title>
+
+  <!-- Firebase compat SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+
+  <!-- React 18 + Babel for JSX -->
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0a; --surface: #141414; --elevated: #1e1e1e;
+      --gold: #d4af37; --gold-light: #f0c040; --gold-dark: #a07820;
+      --text: #ffffff; --muted: #888888; --border: #2a2a2a;
+      --border-gold: rgba(212,175,55,0.3);
+      --danger: #e74c3c; --success: #27ae60;
+    }
+    html, body { background: var(--bg); color: var(--text); font-family: Georgia, serif; min-height: 100vh; }
+    input, textarea, select { user-select: text; -webkit-user-select: text; }
+    img { pointer-events: none; -webkit-user-drag: none; }
+    button { cursor: pointer; font-family: inherit; }
+    ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: var(--bg); } ::-webkit-scrollbar-thumb { background: var(--gold-dark); border-radius: 3px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { display: inline-block; animation: spin 0.8s linear infinite; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+    .fade-in { animation: fadeIn 0.3s ease forwards; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ════════════════════════════════════════════════════════
+// ⚙️  CONFIGURATION — Fill in your Firebase values below
+// ════════════════════════════════════════════════════════
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyAw7KXjgZaHM833PZDwTLUSNGNk7WJx_sY",
+  authDomain:        "therapist-gallery.firebaseapp.com",
+  projectId:         "therapist-gallery",
+  storageBucket:     "therapist-gallery.firebasestorage.app",
+  messagingSenderId: "826400735387",
+  appId:             "1:826400735387:web:379974d8aa913786f0063e"
+};
+const ADMIN_EMAIL    = "admin@admin.com";
+const ADMIN_PASSWORD = "admin123";
+const ADMIN_WHATSAPP = "918148243019";
+// ════════════════════════════════════════════════════════
+
+if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+const auth    = firebase.auth();
+const db      = firebase.firestore();
+const storage = firebase.storage();
+const FieldValue = firebase.firestore.FieldValue;
+
+// ── Generate random token ──────────────────────────────
+function genToken() {
+  const c = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const a = new Uint8Array(40);
+  crypto.getRandomValues(a);
+  return Array.from(a, b => c[b % c.length]).join('');
+}
+
+// ══════════════════════════════════════════════════════
+//  APP
+// ══════════════════════════════════════════════════════
+function App() {
+  const [user,    setUser]    = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => auth.onAuthStateChanged(u => { setUser(u); setLoading(false); }), []);
+  if (loading) return <Center><span className="spin" style={{fontSize:'2rem',color:'var(--gold)'}}>✦</span></Center>;
+  return user ? <Dashboard user={user}/> : <AdminLogin/>;
+}
+
+// ══════════════════════════════════════════════════════
+//  ADMIN LOGIN
+// ══════════════════════════════════════════════════════
+function AdminLogin() {
+  const [email,   setEmail]   = useState('');
+  const [pass,    setPass]    = useState('');
+  const [err,     setErr]     = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handle = async (e) => {
+    e.preventDefault(); setErr('');
+    if (email.trim().toLowerCase() !== ADMIN_EMAIL.toLowerCase()) { setErr('Invalid credentials.'); return; }
+    setLoading(true);
+    try {
+      await auth.signInWithEmailAndPassword(email.trim(), pass);
+    } catch (er) {
+      if (er.code === 'auth/user-not-found' || er.code === 'auth/invalid-credential') {
+        try { await auth.createUserWithEmailAndPassword(email.trim(), pass); }
+        catch { setErr('Enable Email/Password auth in Firebase Console.'); }
+      } else if (er.code === 'auth/wrong-password') {
+        setErr('Wrong password.');
+      } else { setErr(er.message); }
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'radial-gradient(ellipse at 50% 0%,#1a1000,var(--bg) 65%)',padding:'20px'}}>
+      <div className="fade-in" style={{background:'var(--surface)',border:'1px solid var(--border-gold)',borderRadius:'20px',padding:'52px 44px',width:'100%',maxWidth:'420px',textAlign:'center',boxShadow:'0 0 30px rgba(212,175,55,0.1)'}}>
+        <div style={{fontSize:'2.4rem',color:'var(--gold)',marginBottom:'16px',textShadow:'0 0 20px rgba(212,175,55,.5)'}}>✦</div>
+        <h1 style={{fontSize:'1.75rem',fontWeight:'700',color:'var(--gold)',letterSpacing:'3px',marginBottom:'8px'}}>Admin Portal</h1>
+        <p style={{color:'var(--muted)',fontSize:'0.85rem',marginBottom:'40px'}}>Therapist Gallery Management</p>
+        <form onSubmit={handle} style={{display:'flex',flexDirection:'column',gap:'22px',textAlign:'left'}}>
+          <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+            <label style={labelStyle}>Email</label>
+            <input type="email" value={email} onChange={e=>setEmail(e.target.value)} style={inputStyle} placeholder="admin@admin.com" required autoComplete="email"/>
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+            <label style={labelStyle}>Password</label>
+            <input type="password" value={pass} onChange={e=>setPass(e.target.value)} style={inputStyle} placeholder="••••••••" required autoComplete="current-password"/>
+          </div>
+          {err && <p style={{color:'var(--danger)',fontSize:'0.84rem',textAlign:'center'}}>{err}</p>}
+          <button type="submit" disabled={loading} style={{...goldBtn,marginTop:'8px',padding:'15px',fontSize:'0.95rem',letterSpacing:'2px',textTransform:'uppercase'}}>
+            {loading ? <span className="spin">✦</span> : 'Sign In'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+//  DASHBOARD
+// ══════════════════════════════════════════════════════
+function Dashboard({ user }) {
+  const [tab, setTab] = useState('therapists');
+  return (
+    <div style={{maxWidth:'1100px',margin:'0 auto',padding:'0 20px 60px'}}>
+      <header style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'22px 0',borderBottom:'1px solid var(--border-gold)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'14px'}}>
+          <span style={{fontSize:'2rem',color:'var(--gold)',textShadow:'0 0 15px rgba(212,175,55,.4)'}}>✦</span>
+          <div>
+            <h1 style={{fontSize:'1.3rem',fontWeight:'700',color:'var(--gold)',letterSpacing:'2px'}}>Admin Dashboard</h1>
+            <p style={{fontSize:'0.75rem',color:'var(--muted)',marginTop:'2px'}}>{user.email}</p>
+          </div>
+        </div>
+        <button onClick={()=>auth.signOut()} style={{background:'transparent',border:'1px solid var(--border)',color:'var(--muted)',borderRadius:'8px',padding:'8px 18px',fontSize:'0.82rem'}}>Sign Out</button>
+      </header>
+      <nav style={{display:'flex',gap:'4px',paddingTop:'20px',borderBottom:'1px solid var(--border)'}}>
+        {[['therapists','Therapist Photos'],['links','Gallery Links'],['accounts','Therapist Accounts']].map(([id,label])=>(
+          <button key={id} onClick={()=>setTab(id)} style={{background:'transparent',border:'none',color:tab===id?'var(--gold)':'var(--muted)',padding:'12px 28px',fontSize:'0.88rem',borderBottom:tab===id?'2px solid var(--gold)':'2px solid transparent',cursor:'pointer'}}>
+            {label}
+          </button>
+        ))}
+      </nav>
+      <main style={{paddingTop:'36px'}}>
+        {tab==='therapists' && <TherapistManager/>}
+        {tab==='links'      && <LinkCreator/>}
+        {tab==='accounts'   && <TherapistAccounts/>}
+      </main>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+//  THERAPIST MANAGER
+// ══════════════════════════════════════════════════════
+function TherapistManager() {
+  const [therapists, setTherapists] = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [uploading,  setUploading]  = useState(false);
+  const [progress,   setProgress]   = useState(0);
+  const [preview,    setPreview]    = useState(null);
+  const [file,       setFile]       = useState(null);
+  const [dragOver,   setDragOver]   = useState(false);
+  const [uploadErr,  setUploadErr]  = useState('');
+  const fileRef = useRef(null);
+
+  useEffect(()=>{ fetchAll(); },[]);
+
+  const fetchAll = async () => {
+    setLoading(true);
+    try {
+      const snap = await db.collection('therapists').orderBy('createdAt','desc').get();
+      setTherapists(snap.docs.map(d=>({id:d.id,...d.data()})));
+    } finally { setLoading(false); }
+  };
+
+  const pickFile = (f) => {
+    if (!f) return;
+    if (!f.type.startsWith('image/')) { setUploadErr('Select an image file.'); return; }
+    if (f.size > 10*1024*1024) { setUploadErr('Image must be under 10 MB.'); return; }
+    setUploadErr(''); setFile(f);
+    const r = new FileReader();
+    r.onloadend = () => setPreview(r.result);
+    r.readAsDataURL(f);
+  };
+
+  const clearFile = () => { setFile(null); setPreview(null); setUploadErr(''); setProgress(0); };
+
+  // Resize image and convert to base64 (bypasses Firebase Storage)
+  const resizeToBase64 = (f) => new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(f);
+    img.onload = () => {
+      const MAX = 900;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else        { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+
+  const handleUpload = async () => {
+    if (!file || uploading) return;
+    setUploading(true); setUploadErr('');
+    try {
+      setProgress(30);
+      const imageUrl = await resizeToBase64(file); // base64 stored in Firestore
+      setProgress(70);
+      const therapistId = `TH_${Date.now()}_${Math.random().toString(36).slice(2,7).toUpperCase()}`;
+      await db.collection('therapists').add({
+        therapistId, imageUrl, available: true,
+        createdAt: FieldValue.serverTimestamp()
+      });
+      setProgress(100);
+      clearFile(); await fetchAll();
+    } catch(err) { setUploadErr(`Upload failed: ${err.message}`); }
+    finally { setUploading(false); setProgress(0); }
+  };
+
+  const toggleAvailable = async (t) => {
+    await db.collection('therapists').doc(t.id).update({available:!t.available});
+    setTherapists(prev=>prev.map(x=>x.id===t.id?{...x,available:!x.available}:x));
+  };
+
+  const handleDelete = async (t) => {
+    if (!confirm(`Delete ${t.therapistId}?`)) return;
+    try {
+      await db.collection('therapists').doc(t.id).delete();
+      setTherapists(prev=>prev.filter(x=>x.id!==t.id));
+    } catch(err) { alert(`Delete failed: ${err.message}`); }
+  };
+
+  return (
+    <div>
+      <SectionTitle>Upload Therapist Photo</SectionTitle>
+      <div
+        style={{border:`2px dashed ${dragOver?'var(--gold)':'var(--border-gold)'}`,borderRadius:'14px',padding:'36px 20px',cursor:'pointer',background:dragOver?'rgba(212,175,55,.04)':'var(--surface)',minHeight:'180px',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',transition:'all .2s'}}
+        onDragOver={e=>{e.preventDefault();setDragOver(true);}}
+        onDragLeave={()=>setDragOver(false)}
+        onDrop={e=>{e.preventDefault();setDragOver(false);pickFile(e.dataTransfer.files[0]);}}
+        onClick={()=>!uploading&&fileRef.current?.click()}
+      >
+        {preview
+          ? <img src={preview} style={{maxHeight:'280px',maxWidth:'100%',objectFit:'contain',borderRadius:'8px'}}/>
+          : <div style={{textAlign:'center'}}>
+              <div style={{fontSize:'2.8rem'}}>📷</div>
+              <p style={{color:'var(--muted)',marginTop:'8px'}}>Drop photo here or click to browse</p>
+              <p style={{color:'var(--muted)',fontSize:'0.8rem',marginTop:'4px'}}>JPG · PNG · WEBP · Max 10 MB</p>
+            </div>
+        }
+      </div>
+      <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={e=>pickFile(e.target.files[0])}/>
+      {uploadErr && <p style={{color:'var(--danger)',fontSize:'0.84rem',marginTop:'10px'}}>{uploadErr}</p>}
+      {uploading && <div style={{height:'4px',background:'var(--border)',borderRadius:'2px',marginTop:'14px',overflow:'hidden'}}><div style={{height:'100%',background:'var(--gold)',width:`${progress}%`,transition:'width .2s'}}/></div>}
+      <div style={{display:'flex',gap:'12px',marginTop:'16px',justifyContent:'flex-end'}}>
+        {preview && !uploading && <button onClick={clearFile} style={{background:'transparent',border:'1px solid var(--border)',color:'var(--muted)',borderRadius:'8px',padding:'10px 22px',fontSize:'0.88rem'}}>Clear</button>}
+        <button onClick={handleUpload} disabled={!file||uploading} style={{...goldBtn,opacity:!file||uploading?.5:1,padding:'10px 30px',fontSize:'0.88rem'}}>
+          {uploading?`Uploading… ${progress}%`:'Upload Therapist Photo'}
+        </button>
+      </div>
+
+      <div style={{marginTop:'48px'}}>
+        <SectionTitle>Therapists ({therapists.length})</SectionTitle>
+        {loading
+          ? <p style={{color:'var(--muted)',textAlign:'center',padding:'48px 0'}}><span className="spin">✦</span> Loading…</p>
+          : therapists.length===0
+            ? <p style={{color:'var(--muted)',textAlign:'center',padding:'48px 0'}}>No therapists yet. Upload a photo above.</p>
+            : <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(210px,1fr))',gap:'20px'}}>
+                {therapists.map(t=>(
+                  <div key={t.id} style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'14px',overflow:'hidden'}}>
+                    <div style={{position:'relative',aspectRatio:'3/4',background:'var(--elevated)'}}>
+                      <img src={t.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
+                      <span style={{position:'absolute',top:'8px',right:'8px',padding:'4px 10px',borderRadius:'20px',fontSize:'0.65rem',fontWeight:'700',letterSpacing:'1px',color:'#fff',background:t.available?'var(--success)':'#444'}}>
+                        {t.available?'VISIBLE':'HIDDEN'}
+                      </span>
+                    </div>
+                    <div style={{padding:'14px'}}>
+                      <p style={{color:'var(--gold)',fontSize:'0.9rem',fontWeight:'700',marginBottom:'2px'}}>{t.name || '—'}</p>
+                      <p style={{color:'var(--muted)',fontSize:'0.68rem',fontFamily:'monospace',marginBottom:'6px',wordBreak:'break-all'}}>{t.therapistId}</p>
+                      {t.speciality && <p style={{color:'var(--text)',fontSize:'0.75rem',marginBottom:'4px'}}>💆 {t.speciality}</p>}
+                      {t.workStart && t.workEnd && <p style={{color:'var(--muted)',fontSize:'0.73rem',marginBottom:'4px'}}>🕐 {t.workStart} – {t.workEnd}</p>}
+                      {t.bio && <p style={{color:'var(--muted)',fontSize:'0.72rem',marginBottom:'8px',fontStyle:'italic',lineHeight:'1.4'}}>{t.bio.slice(0,60)}{t.bio.length>60?'…':''}</p>}
+                      <p style={{color:'var(--muted)',fontSize:'0.7rem',marginBottom:'10px'}}>{t.createdAt?.toDate?.()?.toLocaleDateString?.()??'Just now'}</p>
+                      <div style={{display:'flex',gap:'8px'}}>
+                        <button onClick={()=>toggleAvailable(t)} style={{flex:1,border:'1px solid',borderRadius:'7px',padding:'8px 6px',fontSize:'0.72rem',fontWeight:'700',letterSpacing:'1px',cursor:'pointer',background:t.available?'rgba(39,174,96,.1)':'transparent',borderColor:t.available?'var(--success)':'var(--border)',color:t.available?'var(--success)':'var(--muted)'}}>
+                          {t.available?'● ON':'○ OFF'}
+                        </button>
+                        <button onClick={()=>handleDelete(t)} style={{background:'transparent',border:'1px solid var(--danger)',color:'var(--danger)',borderRadius:'7px',padding:'8px 12px',fontSize:'0.72rem',cursor:'pointer'}}>
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+        }
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+//  LINK CREATOR
+// ══════════════════════════════════════════════════════
+function LinkCreator() {
+  const [form, setForm] = useState({clientName:'',clientPhone:'',expiryMinutes:60,maxViewsPerImage:2,viewDurationSeconds:3});
+  const [links,    setLinks]    = useState([]);
+  const [creating, setCreating] = useState(false);
+  const [newLink,  setNewLink]  = useState('');
+  const [loading,  setLoading]  = useState(true);
+  const [copied,   setCopied]   = useState('');
+
+  useEffect(()=>{ fetchLinks(); },[]);
+
+  const galleryUrl = (token) => {
+    const base = window.location.href.replace('admin.html','gallery.html');
+    return `${base.split('?')[0]}?token=${token}`;
+  };
+
+  const fetchLinks = async () => {
+    try {
+      const snap = await db.collection('galleryTokens').orderBy('createdAt','desc').get();
+      setLinks(snap.docs.map(d=>({id:d.id,...d.data()})));
+    } finally { setLoading(false); }
+  };
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!form.clientName.trim()) return;
+    setCreating(true);
+    try {
+      const token     = genToken();
+      const expiresAt = new Date(Date.now() + Number(form.expiryMinutes)*60000);
+      await db.collection('galleryTokens').add({
+        token, expiresAt: firebase.firestore.Timestamp.fromDate(expiresAt),
+        maxViewsPerImage: Number(form.maxViewsPerImage),
+        viewDurationSeconds: Number(form.viewDurationSeconds),
+        clientName: form.clientName.trim(), clientPhone: form.clientPhone.trim(),
+        used: false, createdAt: FieldValue.serverTimestamp(),
+      });
+      setNewLink(galleryUrl(token));
+      setForm(f=>({...f,clientName:'',clientPhone:''}));
+      await fetchLinks();
+    } catch(err) { alert(`Failed: ${err.message}`); }
+    finally { setCreating(false); }
+  };
+
+  const copyLink = async (url, key) => {
+    try { await navigator.clipboard.writeText(url); }
+    catch { const el=Object.assign(document.createElement('textarea'),{value:url}); document.body.appendChild(el); el.select(); document.execCommand('copy'); document.body.removeChild(el); }
+    setCopied(key); setTimeout(()=>setCopied(''),2000);
+  };
+
+  const isExpired = (l) => l.expiresAt?.toDate?.() < new Date();
+
+  return (
+    <div>
+      <SectionTitle>Create Gallery Link</SectionTitle>
+      <form onSubmit={handleCreate} style={{display:'flex',flexDirection:'column',gap:'24px'}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))',gap:'20px'}}>
+          {[
+            ['clientName','Client Name *','Full name','text'],
+            ['clientPhone','Client WhatsApp (optional)','10-digit number','tel'],
+            ['expiryMinutes','Expiry (minutes)','60','number'],
+            ['maxViewsPerImage','Max Views Per Image','2','number'],
+            ['viewDurationSeconds','View Duration (seconds)','3','number'],
+          ].map(([key,label,ph,type])=>(
+            <div key={key} style={{display:'flex',flexDirection:'column',gap:'7px'}}>
+              <label style={labelStyle}>{label}</label>
+              <input type={type} value={form[key]} onChange={e=>setForm(p=>({...p,[key]:e.target.value}))} style={inputStyle} placeholder={ph} required={key==='clientName'}/>
+            </div>
+          ))}
+        </div>
+        <button type="submit" disabled={creating} style={{...goldBtn,alignSelf:'flex-start',minWidth:'220px',padding:'14px 36px',fontSize:'0.92rem',letterSpacing:'1px'}}>
+          {creating?<span className="spin">✦</span>:'✦ Generate Gallery Link'}
+        </button>
+      </form>
+
+      {newLink && (
+        <div className="fade-in" style={{marginTop:'20px',background:'rgba(39,174,96,.06)',border:'1px solid rgba(39,174,96,.3)',borderRadius:'12px',padding:'20px'}}>
+          <p style={{color:'var(--success)',fontWeight:'700',marginBottom:'10px'}}>✓ Link created!</p>
+          <div style={{display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap'}}>
+            <code style={{flex:1,background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'7px',padding:'8px 12px',fontSize:'0.82rem',color:'var(--muted)',wordBreak:'break-all',fontFamily:'monospace'}}>{newLink}</code>
+            <button onClick={()=>copyLink(newLink,'new')} style={{...goldBtn,padding:'8px 16px',fontSize:'0.82rem',whiteSpace:'nowrap'}}>{copied==='new'?'✓ Copied':'Copy'}</button>
+          </div>
+        </div>
+      )}
+
+      <div style={{marginTop:'48px'}}>
+        <SectionTitle>Created Links ({links.length})</SectionTitle>
+        {loading
+          ? <p style={{color:'var(--muted)',textAlign:'center',padding:'40px 0'}}><span className="spin">✦</span></p>
+          : links.length===0
+            ? <p style={{color:'var(--muted)',textAlign:'center',padding:'40px 0'}}>No links yet.</p>
+            : <div style={{display:'flex',flexDirection:'column',gap:'14px'}}>
+                {links.map(l=>{
+                  const expired=isExpired(l); const url=galleryUrl(l.token);
+                  return (
+                    <div key={l.id} style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'12px',padding:'18px 20px',opacity:expired?.6:1}}>
+                      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'12px',marginBottom:'10px'}}>
+                        <div>
+                          <span style={{fontWeight:'600',fontSize:'0.95rem'}}>{l.clientName}</span>
+                          {l.clientPhone&&<span style={{color:'var(--muted)',fontSize:'0.85rem'}}> · {l.clientPhone}</span>}
+                        </div>
+                        <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+                          <span style={{padding:'3px 10px',borderRadius:'20px',fontSize:'0.68rem',fontWeight:'700',letterSpacing:'1px',background:expired?'#222':'rgba(39,174,96,.15)',color:expired?'var(--muted)':'var(--success)',border:`1px solid ${expired?'var(--border)':'var(--success)'}`}}>{expired?'EXPIRED':'ACTIVE'}</span>
+                          <button onClick={async()=>{if(confirm('Delete this link?')){await db.collection('galleryTokens').doc(l.id).delete();setLinks(p=>p.filter(x=>x.id!==l.id));}}} style={{background:'transparent',border:'none',color:'var(--muted)',fontSize:'0.9rem',cursor:'pointer'}}>✕</button>
+                        </div>
+                      </div>
+                      <div style={{display:'flex',gap:'16px',flexWrap:'wrap',color:'var(--muted)',fontSize:'0.78rem',marginBottom:'10px'}}>
+                        <span>Expires: {l.expiresAt?.toDate?.()?.toLocaleString?.()??'—'}</span>
+                        <span>Max views: {l.maxViewsPerImage} · Duration: {l.viewDurationSeconds}s</span>
+                      </div>
+                      <div style={{display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap'}}>
+                        <code style={{flex:1,background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'7px',padding:'8px 12px',fontSize:'0.72rem',color:'var(--muted)',wordBreak:'break-all',fontFamily:'monospace'}}>{url.length>70?url.slice(0,70)+'…':url}</code>
+                        <button onClick={()=>copyLink(url,l.id)} style={{...goldBtn,padding:'8px 14px',fontSize:'0.78rem',whiteSpace:'nowrap'}}>{copied===l.id?'✓':'Copy'}</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+        }
+      </div>
+    </div>
+  );
+}
+
+// ── Shared helpers ─────────────────────────────────────
+function SectionTitle({children}) {
+  return <h2 style={{fontSize:'0.82rem',color:'var(--gold)',letterSpacing:'2.5px',textTransform:'uppercase',marginBottom:'24px',paddingBottom:'12px',borderBottom:'1px solid var(--border)'}}>{children}</h2>;
+}
+function Center({children}) {
+  return <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100vh'}}>{children}</div>;
+}
+const labelStyle = {color:'var(--muted)',fontSize:'0.76rem',letterSpacing:'1px',textTransform:'uppercase'};
+const inputStyle = {background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'9px',padding:'11px 14px',color:'var(--text)',fontSize:'0.95rem',outline:'none',width:'100%'};
+const goldBtn = {background:'linear-gradient(135deg,var(--gold-dark),var(--gold))',color:'#0a0a0a',border:'none',borderRadius:'10px',fontWeight:'700',cursor:'pointer'};
+
+// ══════════════════════════════════════════════════════
+//  THERAPIST ACCOUNTS — create / manage therapist logins
+// ══════════════════════════════════════════════════════
+function TherapistAccounts() {
+  const [accounts, setAccounts]   = useState([]);
+  const [loading,  setLoading]    = useState(true);
+  const [form,     setForm]       = useState({ name:'', pin:'' });
+  const [saving,   setSaving]     = useState(false);
+  const [msg,      setMsg]        = useState('');
+  const [deleting, setDeleting]   = useState(null);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const snap = await db.collection('therapists')
+        .where('pin', '>=', '')   // only docs with a pin field
+        .get();
+      setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch(e) { console.error(e); }
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!form.name.trim() || !form.pin.trim()) { setMsg('Name and PIN are required.'); return; }
+    if (form.pin.length < 4) { setMsg('PIN must be at least 4 characters.'); return; }
+    setSaving(true); setMsg('');
+    try {
+      const therapistId = `TH_${Date.now().toString(36).toUpperCase()}_${Math.random().toString(36).slice(2,6).toUpperCase()}`;
+      await db.collection('therapists').add({
+        therapistId,
+        name:      form.name.trim(),
+        pin:       form.pin.trim(),
+        available: false,
+        imageUrl:  '',
+        createdAt: FieldValue.serverTimestamp()
+      });
+      setMsg(`✓ Account created! ID: ${therapistId}`);
+      setForm({ name:'', pin:'' });
+      load();
+    } catch(e) { setMsg(`Error: ${e.message}`); }
+    setSaving(false);
+  };
+
+  const handleDelete = async (acc) => {
+    if (!window.confirm(`Delete therapist "${acc.name}" (${acc.therapistId})? This cannot be undone.`)) return;
+    setDeleting(acc.id);
+    try {
+      await db.collection('therapists').doc(acc.id).delete();
+      load();
+    } catch(e) { alert(`Error: ${e.message}`); }
+    setDeleting(null);
+  };
+
+  const handleResetPin = async (acc) => {
+    const newPin = prompt(`New PIN for "${acc.name}":`);
+    if (!newPin || newPin.length < 4) { alert('PIN must be at least 4 characters.'); return; }
+    try {
+      await db.collection('therapists').doc(acc.id).update({ pin: newPin.trim() });
+      alert('PIN updated.');
+    } catch(e) { alert(`Error: ${e.message}`); }
+  };
+
+  const cardSt = { background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'14px',padding:'20px',display:'flex',flexDirection:'column',gap:'10px' };
+  const badgeSt = (on) => ({ display:'inline-block',padding:'3px 10px',borderRadius:'20px',fontSize:'0.75rem',fontWeight:'700',background:on?'rgba(39,174,96,.15)':'rgba(231,76,60,.12)',color:on?'var(--success)':'var(--danger)',border:`1px solid ${on?'var(--success)':'var(--danger)'}` });
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:'36px'}}>
+
+      {/* Create form */}
+      <div style={{background:'var(--surface)',border:'1px solid var(--border-gold)',borderRadius:'18px',padding:'32px'}}>
+        <h2 style={{color:'var(--gold)',fontSize:'1.1rem',letterSpacing:'2px',marginBottom:'24px'}}>CREATE THERAPIST ACCOUNT</h2>
+        <form onSubmit={handleCreate} style={{display:'flex',flexWrap:'wrap',gap:'16px',alignItems:'flex-end'}}>
+          <div style={{display:'flex',flexDirection:'column',gap:'8px',flex:'1 1 200px'}}>
+            <label style={{color:'var(--muted)',fontSize:'0.8rem',letterSpacing:'1px'}}>DISPLAY NAME</label>
+            <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}
+              placeholder="e.g. Priya" required
+              style={{...inputStyle,fontSize:'0.95rem'}}/>
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:'8px',flex:'1 1 160px'}}>
+            <label style={{color:'var(--muted)',fontSize:'0.8rem',letterSpacing:'1px'}}>PIN (min 4 chars)</label>
+            <input value={form.pin} onChange={e=>setForm(f=>({...f,pin:e.target.value}))}
+              placeholder="e.g. 1234" required
+              style={{...inputStyle,fontSize:'0.95rem'}}/>
+          </div>
+          <button type="submit" disabled={saving}
+            style={{...goldBtn,padding:'12px 28px',fontSize:'0.9rem',borderRadius:'10px',height:'48px',minWidth:'140px'}}>
+            {saving ? <span className="spin">✦</span> : '+ Create Account'}
+          </button>
+        </form>
+        {msg && <p style={{marginTop:'16px',color:msg.startsWith('✓')?'var(--success)':'var(--danger)',fontSize:'0.88rem'}}>{msg}</p>}
+      </div>
+
+      {/* Account list */}
+      <div>
+        <h2 style={{color:'var(--gold)',fontSize:'1.1rem',letterSpacing:'2px',marginBottom:'20px'}}>EXISTING ACCOUNTS</h2>
+        {loading ? (
+          <div style={{textAlign:'center',padding:'40px',color:'var(--muted)'}}><span className="spin" style={{fontSize:'1.5rem',color:'var(--gold)'}}>✦</span></div>
+        ) : accounts.length === 0 ? (
+          <p style={{color:'var(--muted)',textAlign:'center',padding:'40px'}}>No therapist accounts yet.</p>
+        ) : (
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:'16px'}}>
+            {accounts.map(acc => (
+              <div key={acc.id} style={cardSt}>
+                <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
+                  {acc.imageUrl
+                    ? <img src={acc.imageUrl} alt={acc.name} style={{width:'48px',height:'48px',borderRadius:'50%',objectFit:'cover',border:'2px solid var(--border-gold)'}}/>
+                    : <div style={{width:'48px',height:'48px',borderRadius:'50%',background:'var(--border)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--muted)',fontSize:'1.2rem'}}>✦</div>
+                  }
+                  <div>
+                    <div style={{fontWeight:'700',color:'var(--text)'}}>{acc.name || '—'}</div>
+                    <div style={{fontSize:'0.78rem',color:'var(--muted)',fontFamily:'monospace',marginTop:'2px'}}>{acc.therapistId}</div>
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+                  <span style={badgeSt(acc.available)}>{acc.available ? 'Available' : 'Unavailable'}</span>
+                </div>
+                <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginTop:'4px'}}>
+                  <button onClick={()=>handleResetPin(acc)}
+                    style={{flex:'1',padding:'8px',background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',fontSize:'0.8rem'}}>
+                    Reset PIN
+                  </button>
+                  <button onClick={()=>handleDelete(acc)} disabled={deleting===acc.id}
+                    style={{flex:'1',padding:'8px',background:'rgba(231,76,60,.1)',border:'1px solid var(--danger)',borderRadius:'8px',color:'var(--danger)',fontSize:'0.8rem'}}>
+                    {deleting===acc.id ? <span className="spin">✦</span> : 'Delete'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Render ─────────────────────────────────────────────
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

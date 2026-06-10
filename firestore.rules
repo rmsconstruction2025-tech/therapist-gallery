@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Admin = any authenticated user (only one admin account exists)
+    function isAdmin() {
+      return request.auth != null;
+    }
+
+    // Therapists: admin full control; public can read (available filter done client-side)
+    match /therapists/{therapistId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Gallery tokens: admin full control; clients can read to validate & update name/phone
+    match /galleryTokens/{tokenId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || request.resource.data.diff(resource.data)
+             .affectedKeys()
+             .hasOnly(['clientName', 'clientPhone', 'used']);
+    }
+
+    // View counts per (tokenId_therapistId): clients read/write for tracking
+    match /viewCounts/{countId} {
+      allow read, write: if true;
+    }
+
+    // View logs: clients can create; admin can read
+    match /viewLogs/{logId} {
+      allow create: if true;
+      allow read: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Therapist Gallery</title>
+
+  <!-- Firebase compat SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+
+  <!-- React 18 + Babel -->
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0a; --surface: #141414; --elevated: #1e1e1e;
+      --gold: #d4af37; --gold-dark: #a07820;
+      --text: #ffffff; --muted: #888888; --border: #2a2a2a;
+      --border-gold: rgba(212,175,55,0.3);
+      --danger: #e74c3c; --success: #27ae60;
+    }
+    html, body {
+      background: var(--bg); color: var(--text); font-family: Georgia, serif;
+      min-height: 100vh;
+      user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+    }
+    input { user-select: text; -webkit-user-select: text; }
+    img { pointer-events: none; -webkit-user-drag: none; }
+    button { cursor: pointer; font-family: inherit; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { display: inline-block; animation: spin 0.8s linear infinite; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+    .fade-in { animation: fadeIn 0.3s ease forwards; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ════════════════════════════════════════════════════════
+// ⚙️  CONFIGURATION — Fill in your Firebase values below
+// ════════════════════════════════════════════════════════
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyAw7KXjgZaHM833PZDwTLUSNGNk7WJx_sY",
+  authDomain:        "therapist-gallery.firebaseapp.com",
+  projectId:         "therapist-gallery",
+  storageBucket:     "therapist-gallery.firebasestorage.app",
+  messagingSenderId: "826400735387",
+  appId:             "1:826400735387:web:379974d8aa913786f0063e"
+};
+const ADMIN_WHATSAPP = "919999999999";
+// ════════════════════════════════════════════════════════
+
+if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+const db      = firebase.firestore();
+const FieldValue = firebase.firestore.FieldValue;
+
+function getTokenFromUrl() {
+  return new URLSearchParams(window.location.search).get('token') || '';
+}
+
+// ══════════════════════════════════════════════════════
+//  APP
+// ══════════════════════════════════════════════════════
+function App() {
+  const [status,    setStatus]    = useState('loading'); // loading|invalid|expired|info|gallery
+  const [tokenData, setTokenData] = useState(null);
+  const [client,    setClient]    = useState({name:'',phone:''});
+  const [isBlurred, setIsBlurred] = useState(false);
+  const tokenStr = getTokenFromUrl();
+
+  // Privacy protection
+  useEffect(() => {
+    const block = e => e.preventDefault();
+    document.addEventListener('contextmenu', block);
+    document.addEventListener('copy',        block);
+    document.addEventListener('cut',         block);
+    document.addEventListener('dragstart',   block);
+    document.addEventListener('selectstart', block);
+    const onVis = () => { if (document.hidden && status==='gallery') setIsBlurred(true); };
+    document.addEventListener('visibilitychange', onVis);
+    const onTouch = e => { if (e.target.tagName==='IMG') e.preventDefault(); };
+    document.addEventListener('touchstart', onTouch, {passive:false});
+    const onKey = e => {
+      if (e.key==='PrintScreen'||(e.ctrlKey&&e.key==='p')||(e.metaKey&&e.shiftKey&&['3','4','5','s'].includes(e.key))) {
+        e.preventDefault(); alert('Screenshots are not permitted.');
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('contextmenu', block);
+      document.removeEventListener('copy',        block);
+      document.removeEventListener('cut',         block);
+      document.removeEventListener('dragstart',   block);
+      document.removeEventListener('selectstart', block);
+      document.removeEventListener('visibilitychange', onVis);
+      document.removeEventListener('touchstart',  onTouch);
+      document.removeEventListener('keydown',     onKey);
+    };
+  }, [status]);
+
+  // Token validation
+  useEffect(() => {
+    if (!tokenStr) { setStatus('invalid'); return; }
+    (async () => {
+      try {
+        const snap = await db.collection('galleryTokens').where('token','==',tokenStr).get();
+        if (snap.empty) { setStatus('invalid'); return; }
+        const data = {id:snap.docs[0].id,...snap.docs[0].data()};
+        if (data.expiresAt?.toDate?.() < new Date()) { setStatus('expired'); return; }
+        setTokenData(data);
+        if (data.clientName && data.clientPhone) {
+          setClient({name:data.clientName, phone:data.clientPhone});
+          setStatus('gallery');
+        } else {
+          setStatus('info');
+        }
+      } catch(err) { console.error(err); setStatus('invalid'); }
+    })();
+  }, [tokenStr]);
+
+  if (status==='loading') return <FullScreen><span className="spin" style={{fontSize:'2.5rem',color:'var(--gold)'}}>✦</span><p style={{color:'var(--muted)',marginTop:'16px'}}>Validating access…</p></FullScreen>;
+  if (status==='invalid') return <FullScreen><div style={{fontSize:'3rem',color:'var(--gold)',marginBottom:'16px'}}>⚠</div><h2 style={msgTitle}>Invalid Link</h2><p style={msgSub}>This gallery link is invalid.</p></FullScreen>;
+  if (status==='expired') return <FullScreen><div style={{fontSize:'3rem',color:'var(--gold)',marginBottom:'16px'}}>⏱</div><h2 style={msgTitle}>Link Expired</h2><p style={msgSub}>This gallery link has expired. Please contact us for a new link.</p></FullScreen>;
+  if (status==='info')    return <ClientInfoForm tokenData={tokenData} onConfirmed={(n,p)=>{ setClient({name:n,phone:p}); setStatus('gallery'); }}/>;
+
+  return (
+    <div style={{position:'relative'}}>
+      <div style={{background:'rgba(212,175,55,.07)',borderBottom:'1px solid rgba(212,175,55,.2)',color:'var(--muted)',fontSize:'0.75rem',textAlign:'center',padding:'10px 20px'}}>
+        ⚠ Screenshots or sharing are not allowed. All images carry your personal watermark. Note: complete technical prevention is not guaranteed.
+      </div>
+
+      {/* Page watermark removed — watermark only on photo canvas */}
+
+      {/* Blur overlay on tab switch */}
+      {isBlurred && (
+        <div onClick={()=>setIsBlurred(false)} style={{position:'fixed',inset:0,zIndex:2000,background:'rgba(0,0,0,.92)',backdropFilter:'blur(12px)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'20px',cursor:'pointer'}}>
+          <p style={{color:'var(--muted)',fontSize:'1.1rem'}}>Gallery hidden for privacy.</p>
+          <button style={{background:'linear-gradient(135deg,var(--gold-dark),var(--gold))',color:'#0a0a0a',border:'none',borderRadius:'10px',padding:'12px 32px',fontSize:'0.95rem',fontWeight:'700'}}>Tap to Resume</button>
+        </div>
+      )}
+
+      <TherapistGallery tokenData={tokenData} clientName={client.name} clientPhone={client.phone} isBlurred={isBlurred}/>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+//  CLIENT INFO FORM
+// ══════════════════════════════════════════════════════
+function ClientInfoForm({ tokenData, onConfirmed }) {
+  const [name,   setName]   = useState(tokenData?.clientName  || '');
+  const [phone,  setPhone]  = useState(tokenData?.clientPhone || '');
+  const [nameErr,setNameErr]= useState('');
+  const [phErr,  setPhErr]  = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handle = async (e) => {
+    e.preventDefault(); setNameErr(''); setPhErr('');
+    let ok = true;
+    if (!name.trim()) { setNameErr('Please enter your name.'); ok=false; }
+    if (!/^[6-9]\d{9}$/.test(phone.replace(/\s/g,''))) { setPhErr('Enter a valid 10-digit India mobile number starting with 6, 7, 8, or 9.'); ok=false; }
+    if (!ok) return;
+    setSaving(true);
+    try {
+      await db.collection('galleryTokens').doc(tokenData.id).update({clientName:name.trim(),clientPhone:phone.trim(),used:true});
+      onConfirmed(name.trim(), phone.trim());
+    } catch(err) { alert(`Error: ${err.message}`); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'radial-gradient(ellipse at 50% 0%,#1a1000,var(--bg) 65%)',padding:'20px'}}>
+      <div className="fade-in" style={{background:'var(--surface)',border:'1px solid var(--border-gold)',borderRadius:'20px',padding:'48px 40px',width:'100%',maxWidth:'440px',textAlign:'center',boxShadow:'0 0 30px rgba(212,175,55,.1)'}}>
+        <div style={{fontSize:'2.2rem',color:'var(--gold)',marginBottom:'14px'}}>✦</div>
+        <h1 style={{fontSize:'1.6rem',fontWeight:'700',color:'var(--gold)',letterSpacing:'2px',marginBottom:'8px'}}>Welcome</h1>
+        <p style={{color:'var(--muted)',fontSize:'0.88rem',marginBottom:'36px'}}>Please enter your details to access the gallery.</p>
+        <form onSubmit={handle} style={{display:'flex',flexDirection:'column',gap:'20px',textAlign:'left'}}>
+          <div style={{display:'flex',flexDirection:'column',gap:'7px'}}>
+            <label style={labelSt}>Your Name</label>
+            <input type="text" value={name} onChange={e=>setName(e.target.value)} style={{...inputSt,borderColor:nameErr?'var(--danger)':'var(--border)'}} placeholder="Full name" required/>
+            {nameErr&&<p style={{color:'var(--danger)',fontSize:'0.8rem'}}>{nameErr}</p>}
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:'7px'}}>
+            <label style={labelSt}>WhatsApp Number (India)</label>
+            <div style={{display:'flex'}}>
+              <span style={{background:'var(--elevated)',border:'1px solid var(--border)',borderRight:'none',borderRadius:'10px 0 0 10px',padding:'13px 12px',color:'var(--muted)',fontSize:'0.95rem',whiteSpace:'nowrap'}}>+91</span>
+              <input type="tel" value={phone} onChange={e=>setPhone(e.target.value.replace(/\D/g,'').slice(0,10))} style={{...inputSt,borderRadius:'0 10px 10px 0',borderLeft:'none',flex:1,borderColor:phErr?'var(--danger)':'var(--border)'}} placeholder="9876543210" maxLength={10} required/>
+            </div>
+            {phErr&&<p style={{color:'var(--danger)',fontSize:'0.8rem'}}>{phErr}</p>}
+          </div>
+          <p style={{color:'var(--muted)',fontSize:'0.78rem',lineHeight:'1.6',background:'rgba(212,175,55,.04)',border:'1px solid var(--border-gold)',borderRadius:'8px',padding:'12px',textAlign:'center'}}>
+            Your name and number will appear as a watermark on all images to prevent unauthorised sharing.
+          </p>
+          <button type="submit" disabled={saving} style={{background:'linear-gradient(135deg,var(--gold-dark),var(--gold))',color:'#0a0a0a',border:'none',borderRadius:'10px',padding:'15px',fontSize:'0.95rem',fontWeight:'700',letterSpacing:'1px',marginTop:'8px',minHeight:'50px'}}>
+            {saving?<span className="spin">✦</span>:'Access Gallery →'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+//  THERAPIST GALLERY
+// ══════════════════════════════════════════════════════
+function TherapistGallery({ tokenData, clientName, clientPhone, isBlurred }) {
+  const [therapists, setTherapists] = useState([]);
+  const [loading,    setLoading]    = useState(true);
+
+  useEffect(()=>{
+    (async()=>{
+      try {
+        const snap = await db.collection('therapists').where('available','==',true).get();
+        setTherapists(snap.docs.map(d=>({id:d.id,...d.data()})));
+      } finally { setLoading(false); }
+    })();
+  },[]);
+
+  return (
+    <div style={{minHeight:'100vh',filter:isBlurred?'blur(24px)':'none',transition:'filter .3s'}}>
+      <header style={{textAlign:'center',padding:'40px 20px 30px',borderBottom:'1px solid var(--border)',background:'radial-gradient(ellipse at 50% -20%,#1a1000,transparent 60%)'}}>
+        <div style={{fontSize:'1.8rem',color:'var(--gold)',marginBottom:'10px'}}>✦</div>
+        <h1 style={{fontSize:'1.8rem',fontWeight:'700',color:'var(--gold)',letterSpacing:'3px',marginBottom:'8px'}}>Our Therapists</h1>
+        <p style={{color:'var(--muted)',fontSize:'0.9rem'}}>Welcome, <span style={{color:'var(--gold)'}}>{clientName}</span></p>
+      </header>
+      {loading
+        ? <div style={{display:'flex',flexDirection:'column',alignItems:'center',padding:'80px 20px'}}><span className="spin" style={{fontSize:'2rem',color:'var(--gold)'}}>✦</span><p style={{color:'var(--muted)',marginTop:'12px'}}>Loading gallery…</p></div>
+        : therapists.length===0
+          ? <div style={{textAlign:'center',padding:'80px 20px',color:'var(--muted)'}}>No therapists available at this time.</div>
+          : <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:'24px',padding:'32px 20px',maxWidth:'1100px',margin:'0 auto'}}>
+              {therapists.map(t=><TherapistCard key={t.id} therapist={t} tokenData={tokenData} clientName={clientName} clientPhone={clientPhone}/>)}
+            </div>
+      }
+      <footer style={{textAlign:'center',color:'var(--muted)',fontSize:'0.75rem',padding:'20px',borderTop:'1px solid var(--border)'}}>
+        All images are watermarked with your identity. Sharing is strictly prohibited.
+      </footer>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+//  THERAPIST CARD
+// ══════════════════════════════════════════════════════
+function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
+  const [viewCount,    setViewCount]    = useState(0);
+  const [limitReached, setLimitReached] = useState(false);
+  const [isVisible,    setIsVisible]    = useState(false);
+  const [timeLeft,     setTimeLeft]     = useState(0);
+  const [loading,      setLoading]      = useState(false);
+  const [canvasUrl,    setCanvasUrl]    = useState('');
+  const timerRef  = useRef(null);
+  const canvasRef = useRef(null);
+
+  const tokenId    = tokenData?.id                  || '';
+  const maxViews   = tokenData?.maxViewsPerImage    ?? 2;
+  const viewSecs   = tokenData?.viewDurationSeconds ?? 3;
+  const countDocId = `${tokenId}_${therapist.id}`;
+
+  useEffect(()=>{
+    db.collection('viewCounts').doc(countDocId).get().then(snap=>{
+      if (snap.exists) { const c=snap.data().count||0; setViewCount(c); if(c>=maxViews) setLimitReached(true); }
+    });
+    return ()=>clearInterval(timerRef.current);
+  },[]);
+
+  const buildCanvas = useCallback(()=>{
+    return new Promise(resolve=>{
+      const canvas = canvasRef.current;
+      if (!canvas) { resolve(therapist.imageUrl); return; }
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = ()=>{
+        const W=img.naturalWidth||img.width, H=img.naturalHeight||img.height;
+        canvas.width=W; canvas.height=H;
+        const ctx=canvas.getContext('2d');
+        ctx.drawImage(img,0,0,W,H);
+        const ts=new Date().toLocaleString('en-IN');
+        // Subtle diagonal watermark — visible but not blocking the photo
+        ctx.save();
+        ctx.globalAlpha=0.13; ctx.fillStyle='#ffffff';
+        ctx.font=`bold ${Math.max(11,W*0.022)}px Arial`;
+        ctx.rotate(-Math.PI/8);
+        const step=Math.max(120,W*0.38);
+        for(let y=-H;y<H*2;y+=step)
+          for(let x=-W;x<W*2;x+=step*1.8){
+            ctx.fillText(clientName,x,y);
+            ctx.fillText(`+91${clientPhone}`,x,y+Math.max(16,W*0.03));
+          }
+        ctx.restore();
+        // Single bottom-right corner stamp (always visible)
+        ctx.save();
+        ctx.globalAlpha=0.55; ctx.fillStyle='#ffffff';
+        ctx.font=`bold ${Math.max(10,W*0.02)}px Arial`;
+        ctx.textAlign='right';
+        const pad=W*0.03;
+        ctx.fillText(`${clientName} | +91${clientPhone}`,W-pad,H-pad-Math.max(14,W*0.025));
+        ctx.fillText(ts,W-pad,H-pad);
+        ctx.restore();
+        resolve(canvas.toDataURL('image/jpeg',0.92));
+      };
+      img.onerror=()=>resolve(therapist.imageUrl);
+      img.src=therapist.imageUrl;
+    });
+  },[therapist.imageUrl,clientName,clientPhone]);
+
+  const handleView = async ()=>{
+    if(limitReached||isVisible||loading) return;
+    setLoading(true);
+    try {
+      const snap = await db.collection('viewCounts').doc(countDocId).get();
+      const live  = snap.exists ? (snap.data().count||0) : 0;
+      if(live>=maxViews){ setViewCount(live); setLimitReached(true); return; }
+
+      await db.collection('viewCounts').doc(countDocId).set({
+        count: FieldValue.increment(1), lastViewedAt: FieldValue.serverTimestamp(),
+        therapistId:therapist.id, tokenId,
+      },{merge:true});
+
+      await db.collection('viewLogs').add({
+        token:tokenId, therapistId:therapist.id,
+        clientName, clientPhone,
+        viewedAt:FieldValue.serverTimestamp(),
+        viewCount:live+1, userAgent:navigator.userAgent,
+      });
+
+      const newCount=live+1;
+      setViewCount(newCount);
+      if(newCount>=maxViews) setLimitReached(true);
+
+      const url=await buildCanvas();
+      setCanvasUrl(url);
+      setIsVisible(true); setTimeLeft(viewSecs);
+      let rem=viewSecs;
+      timerRef.current=setInterval(()=>{
+        rem-=1; setTimeLeft(rem);
+        if(rem<=0){ clearInterval(timerRef.current); setIsVisible(false); setCanvasUrl(''); }
+      },1000);
+    } catch(err){ console.error(err); }
+    finally{ setLoading(false); }
+  };
+
+  const bookUrl=()=>{
+    const msg=encodeURIComponent(`Hi, I choose therapist ID: ${therapist.therapistId}. My name is ${clientName} and my number is ${clientPhone}.`);
+    return `https://wa.me/${ADMIN_WHATSAPP}?text=${msg}`;
+  };
+
+  const watermarkText=`${clientName} | +91${clientPhone}`;
+
+  return (
+    <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'16px',overflow:'hidden',boxShadow:'0 4px 24px rgba(0,0,0,.4)'}}>
+      <canvas ref={canvasRef} style={{display:'none'}}/>
+      <div style={{position:'relative',aspectRatio:'3/4',background:'#0d0d0d',overflow:'hidden'}}>
+
+        {/* Blurred base image */}
+        <img src={therapist.imageUrl} crossOrigin="anonymous" style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',filter:'blur(14px)',opacity:isVisible?0:1,transition:'opacity .3s'}}/>
+
+        {/* Watermarked canvas */}
+        {isVisible&&canvasUrl&&(
+          <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <img src={canvasUrl} style={{width:'100%',height:'100%',objectFit:'cover'}} onContextMenu={e=>e.preventDefault()}/>
+            {/* Countdown */}
+            <div style={{position:'absolute',top:'10px',right:'10px',zIndex:10,background:'rgba(0,0,0,.7)',color:'var(--gold)',borderRadius:'20px',padding:'4px 12px',fontSize:'0.85rem',fontWeight:'700'}}>{timeLeft}s</div>
+          </div>
+        )}
+
+        {/* Hidden overlay */}
+        {!isVisible&&(
+          <div style={{position:'absolute',inset:0,zIndex:6,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,.5)',backdropFilter:'blur(2px)'}}>
+            {limitReached
+              ? <div style={{textAlign:'center',padding:'20px'}}>
+                  <div style={{fontSize:'1.6rem'}}>🚫</div>
+                  <p style={{marginTop:'8px',fontSize:'0.85rem',color:'var(--muted)'}}>View limit reached</p>
+                  <p style={{fontSize:'0.75rem',color:'var(--muted)',marginTop:'4px'}}>({viewCount}/{maxViews} views used)</p>
+                </div>
+              : <button onClick={handleView} disabled={loading} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'6px',background:'linear-gradient(135deg,var(--gold-dark),var(--gold))',color:'#0a0a0a',border:'none',borderRadius:'12px',padding:'16px 28px',fontSize:'0.95rem',fontWeight:'700',cursor:'pointer',boxShadow:'0 4px 20px rgba(212,175,55,.3)'}}>
+                  {loading?<span className="spin">✦</span>:<><span style={{fontSize:'1.4rem'}}>👁</span><span>View Photo</span><span style={{fontSize:'0.75rem',color:'rgba(10,10,10,.6)'}}>{viewCount}/{maxViews} views</span></>}
+                </button>
+            }
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div style={{padding:'14px 18px',display:'flex',flexDirection:'column',gap:'10px'}}>
+        <div>
+          <p style={{color:'var(--gold)',fontSize:'1rem',fontWeight:'700',letterSpacing:'1px'}}>{therapist.name || therapist.therapistId}</p>
+          {therapist.speciality && (
+            <p style={{color:'var(--muted)',fontSize:'0.78rem',marginTop:'3px'}}>💆 {therapist.speciality}</p>
+          )}
+          {therapist.workStart && therapist.workEnd && (
+            <p style={{color:'var(--muted)',fontSize:'0.76rem',marginTop:'2px'}}>🕐 {therapist.workStart} – {therapist.workEnd}</p>
+          )}
+          {therapist.bio && (
+            <p style={{color:'var(--muted)',fontSize:'0.76rem',marginTop:'4px',lineHeight:'1.5',fontStyle:'italic'}}>{therapist.bio}</p>
+          )}
+        </div>
+        <a href={bookUrl()} target="_blank" rel="noopener noreferrer" style={{background:'linear-gradient(135deg,#1a6e2e,#25a240)',color:'#fff',border:'none',borderRadius:'8px',padding:'11px 16px',fontSize:'0.85rem',fontWeight:'700',textDecoration:'none',display:'block',boxShadow:'0 2px 12px rgba(37,162,64,.3)',textAlign:'center'}}>
+          Book Now via WhatsApp
+        </a>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+//  PAGE WATERMARK (fixed over entire page)
+// ══════════════════════════════════════════════════════
+function PageWatermark({ name, phone }) {
+  const text = `${name} · ${phone}`;
+  return (
+    <div style={{position:'fixed',inset:0,overflow:'hidden',pointerEvents:'none',zIndex:1000}}>
+      {Array.from({length:40},(_,i)=>(
+        <span key={i} style={{position:'absolute',left:`${(i%4)*28}%`,top:`${Math.floor(i/4)*14}%`,transform:'rotate(-22deg)',whiteSpace:'nowrap',fontSize:'11px',color:'rgba(255,255,255,.04)',fontWeight:'700',letterSpacing:'1px',fontFamily:'monospace',pointerEvents:'none'}}>
+          {text}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ── Shared ──────────────────────────────────────────────
+function FullScreen({children}) {
+  return <div style={{minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'radial-gradient(ellipse at 50% 0%,#1a1000,var(--bg) 65%)',padding:'40px 20px',textAlign:'center'}}>{children}</div>;
+}
+const msgTitle={fontSize:'1.5rem',color:'var(--gold)',fontWeight:'700',letterSpacing:'1px',marginBottom:'12px'};
+const msgSub={color:'var(--muted)',fontSize:'0.95rem',maxWidth:'360px',lineHeight:'1.6'};
+const labelSt={color:'var(--muted)',fontSize:'0.76rem',letterSpacing:'1.2px',textTransform:'uppercase'};
+const inputSt={background:'var(--elevated)',border:'1px solid',borderRadius:'10px',padding:'13px 16px',color:'var(--text)',fontSize:'1rem',outline:'none',width:'100%'};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

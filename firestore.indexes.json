@@ -1,0 +1,21 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "therapists",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "available", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "galleryTokens",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "token",     "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

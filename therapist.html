@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Feel Free Spa</title>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0a0a0a; --surface: #141414; --elevated: #1e1e1e;
+      --gold: #d4af37; --gold-dark: #a07820;
+      --text: #ffffff; --muted: #888888; --border: #2a2a2a;
+      --border-gold: rgba(212,175,55,0.3);
+      --danger: #e74c3c; --success: #27ae60;
+    }
+    html, body { background: var(--bg); color: var(--text); font-family: Georgia, serif; min-height: 100vh; }
+    input, textarea, select { user-select: text; -webkit-user-select: text; }
+    input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.7); }
+    @media (max-width: 480px) { body { font-size: 15px; } }
+    img { pointer-events: none; -webkit-user-drag: none; }
+    button { cursor: pointer; font-family: inherit; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spin { display: inline-block; animation: spin 0.8s linear infinite; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+    .fade-in { animation: fadeIn 0.3s ease forwards; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+// ── Firebase Config ──────────────────────────────────
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyAw7KXjgZaHM833PZDwTLUSNGNk7WJx_sY",
+  authDomain:        "therapist-gallery.firebaseapp.com",
+  projectId:         "therapist-gallery",
+  storageBucket:     "therapist-gallery.firebasestorage.app",
+  messagingSenderId: "826400735387",
+  appId:             "1:826400735387:web:379974d8aa913786f0063e"
+};
+if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.firestore();
+const FieldValue = firebase.firestore.FieldValue;
+
+// ── Resize image to base64 ────────────────────────────
+const resizeToBase64 = (f) => new Promise((resolve, reject) => {
+  const img = new Image();
+  const url = URL.createObjectURL(f);
+  img.onload = () => {
+    const MAX = 900;
+    let w = img.width, h = img.height;
+    if (w > MAX || h > MAX) {
+      if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+      else        { w = Math.round(w * MAX / h); h = MAX; }
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    URL.revokeObjectURL(url);
+    resolve(canvas.toDataURL('image/jpeg', 0.82));
+  };
+  img.onerror = reject;
+  img.src = url;
+});
+
+// ══════════════════════════════════════════════════════
+//  APP
+// ══════════════════════════════════════════════════════
+function App() {
+  const [session,  setSession]  = useState(null); // { docId, therapistId, name }
+  const [loading,  setLoading]  = useState(true);
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem('therapist_session');
+    if (saved) {
+      try { setSession(JSON.parse(saved)); }
+      catch { sessionStorage.removeItem('therapist_session'); }
+    }
+    setLoading(false);
+  }, []);
+
+  const handleLogin = (s) => {
+    sessionStorage.setItem('therapist_session', JSON.stringify(s));
+    setSession(s);
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('therapist_session');
+    setSession(null);
+  };
+
+  if (loading) return <Center><span className="spin" style={{fontSize:'2rem',color:'var(--gold)'}}>✦</span></Center>;
+  return session
+    ? <TherapistPortal session={session} onLogout={handleLogout}/>
+    : <TherapistLogin onLogin={handleLogin}/>;
+}
+
+// ══════════════════════════════════════════════════════
+//  LOGIN
+// ══════════════════════════════════════════════════════
+function TherapistLogin({ onLogin }) {
+  const [therapistId, setTherapistId] = useState('');
+  const [pin,         setPin]         = useState('');
+  const [err,         setErr]         = useState('');
+  const [loading,     setLoading]     = useState(false);
+
+  const handle = async (e) => {
+    e.preventDefault(); setErr('');
+    if (!therapistId.trim() || !pin.trim()) { setErr('Enter your Therapist ID and PIN.'); return; }
+    setLoading(true);
+    try {
+      const snap = await db.collection('therapists')
+        .where('therapistId', '==', therapistId.trim().toUpperCase())
+        .where('pin', '==', pin.trim())
+        .get();
+      if (snap.empty) { setErr('Invalid Therapist ID or PIN.'); return; }
+      const doc = snap.docs[0];
+      onLogin({ docId: doc.id, therapistId: doc.data().therapistId, name: doc.data().name || '' });
+    } catch(err) { setErr(`Error: ${err.message}`); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'radial-gradient(ellipse at 50% 0%,#1a1000,var(--bg) 65%)',padding:'20px'}}>
+      <div className="fade-in" style={{background:'var(--surface)',border:'1px solid var(--border-gold)',borderRadius:'20px',padding:'52px 44px',width:'100%',maxWidth:'420px',textAlign:'center',boxShadow:'0 0 30px rgba(212,175,55,.1)'}}>
+        <div style={{fontSize:'2.4rem',color:'var(--gold)',marginBottom:'16px'}}>✦</div>
+        <h1 style={{fontSize:'1.75rem',fontWeight:'700',color:'var(--gold)',letterSpacing:'3px',marginBottom:'8px'}}>Feel Free Spa</h1>
+        <p style={{color:'var(--muted)',fontSize:'0.85rem',marginBottom:'40px'}}>Therapist Login</p>
+
+        <form onSubmit={handle} style={{display:'flex',flexDirection:'column',gap:'20px',textAlign:'left'}}>
+          <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+            <label style={labelSt}>Therapist ID</label>
+            <input
+              type="text"
+              value={therapistId}
+              onChange={e=>setTherapistId(e.target.value)}
+              style={inputSt}
+              placeholder="e.g. TH_1234_ABCDE"
+              autoComplete="username"
+              required
+            />
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+            <label style={labelSt}>PIN</label>
+            <input
+              type="password"
+              value={pin}
+              onChange={e=>setPin(e.target.value)}
+              style={inputSt}
+              placeholder="Enter your PIN"
+              autoComplete="current-password"
+              required
+            />
+          </div>
+          {err && <p style={{color:'var(--danger)',fontSize:'0.84rem',textAlign:'center'}}>{err}</p>}
+          <button type="submit" disabled={loading} style={{...goldBtn,padding:'15px',fontSize:'0.95rem',letterSpacing:'2px',textTransform:'uppercase',marginTop:'8px'}}>
+            {loading ? <span className="spin">✦</span> : 'Login'}
+          </button>
+        </form>
+
+        <p style={{marginTop:'24px',color:'var(--muted)',fontSize:'0.78rem'}}>
+          Contact your admin for your Therapist ID and PIN.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+//  THERAPIST PORTAL (after login)
+// ══════════════════════════════════════════════════════
+function TherapistPortal({ session, onLogout }) {
+  const [data,        setData]        = useState(null);
+  const [loading,     setLoading]     = useState(true);
+  const [saving,      setSaving]      = useState('');   // which field is saving
+  const [available,   setAvailable]   = useState(false);
+  const [name,        setName]        = useState('');
+  const [workStart,   setWorkStart]   = useState('09:00');
+  const [workEnd,     setWorkEnd]     = useState('18:00');
+  const [speciality,  setSpeciality]  = useState('');
+  const [bio,         setBio]         = useState('');
+  const [preview,     setPreview]     = useState(null);
+  const [file,        setFile]        = useState(null);
+  const [uploading,   setUploading]   = useState(false);
+  const [msg,         setMsg]         = useState('');
+  const [msgType,     setMsgType]     = useState('success');
+  const fileRef = useRef(null);
+
+  useEffect(() => { fetchProfile(); }, []);
+
+  const fetchProfile = async () => {
+    setLoading(true);
+    try {
+      const snap = await db.collection('therapists').doc(session.docId).get();
+      if (snap.exists) {
+        const d = snap.data();
+        setData(d);
+        setName(d.name || '');
+        setAvailable(d.available ?? false);
+        setWorkStart(d.workStart || '09:00');
+        setWorkEnd(d.workEnd || '18:00');
+        setSpeciality(d.speciality || '');
+        setBio(d.bio || '');
+      }
+    } finally { setLoading(false); }
+  };
+
+  const showMsg = (text, type='success') => {
+    setMsg(text); setMsgType(type);
+    setTimeout(() => setMsg(''), 3000);
+  };
+
+  const save = async (field, updates, label) => {
+    setSaving(field);
+    try {
+      await db.collection('therapists').doc(session.docId).update(updates);
+      setData(prev => ({ ...prev, ...updates }));
+      showMsg(`${label} saved!`);
+    } catch(err) { showMsg(`Error: ${err.message}`, 'error'); }
+    finally { setSaving(''); }
+  };
+
+  const handleToggleDuty = async () => {
+    const next = !available;
+    setAvailable(next);
+    try {
+      await db.collection('therapists').doc(session.docId).update({ available: next });
+      showMsg(next ? 'Duty ON — you are now visible to clients' : 'Duty OFF — profile hidden from clients');
+    } catch(err) { setAvailable(!next); showMsg(`Error: ${err.message}`, 'error'); }
+  };
+
+  const pickFile = (f) => {
+    if (!f || !f.type.startsWith('image/')) return;
+    setFile(f);
+    const r = new FileReader();
+    r.onloadend = () => setPreview(r.result);
+    r.readAsDataURL(f);
+  };
+
+  const handleUploadPhoto = async () => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const imageUrl = await resizeToBase64(file);
+      await db.collection('therapists').doc(session.docId).update({ imageUrl });
+      setData(prev => ({ ...prev, imageUrl }));
+      setFile(null); setPreview(null);
+      showMsg('Profile photo updated!');
+    } catch(err) { showMsg(`Upload failed: ${err.message}`, 'error'); }
+    finally { setUploading(false); }
+  };
+
+  // Profile completion score
+  const completion = React.useMemo(() => {
+    if (!data) return 0;
+    const checks = [!!data.imageUrl, !!data.name, !!(data.workStart&&data.workEnd), !!data.speciality, !!data.bio];
+    return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+  }, [data]);
+
+  if (loading) return <Center><span className="spin" style={{fontSize:'2rem',color:'var(--gold)'}}>✦</span></Center>;
+
+  const fmt = (t) => { if (!t) return ''; const [h,m]=t.split(':'); const hr=+h; return `${hr===0?12:hr>12?hr-12:hr}:${m} ${hr<12?'AM':'PM'}`; };
+
+  return (
+    <div style={{maxWidth:'600px',margin:'0 auto',padding:'0 16px 80px'}}>
+
+      {/* ── Header ── */}
+      <header style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'18px 0 16px',borderBottom:'1px solid var(--border-gold)',marginBottom:'20px'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
+          <div style={{width:'38px',height:'38px',borderRadius:'50%',overflow:'hidden',border:'2px solid var(--border-gold)',flexShrink:0}}>
+            {data?.imageUrl
+              ? <img src={data.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+              : <div style={{width:'100%',height:'100%',background:'var(--elevated)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--gold)',fontSize:'1rem'}}>✦</div>
+            }
+          </div>
+          <div>
+            <p style={{fontSize:'1rem',fontWeight:'700',color:'var(--gold)',lineHeight:'1.2'}}>{data?.name || 'My Portal'}</p>
+            <p style={{fontSize:'0.7rem',color:'var(--muted)',fontFamily:'monospace'}}>{session.therapistId}</p>
+          </div>
+        </div>
+        <button onClick={onLogout} style={{background:'transparent',border:'1px solid var(--border)',color:'var(--muted)',borderRadius:'8px',padding:'7px 16px',fontSize:'0.8rem',flexShrink:0}}>Logout</button>
+      </header>
+
+      {/* Toast */}
+      {msg && (
+        <div style={{marginBottom:'16px',padding:'11px 18px',borderRadius:'10px',background:msgType==='success'?'rgba(39,174,96,.15)':'rgba(231,76,60,.15)',border:`1px solid ${msgType==='success'?'var(--success)':'var(--danger)'}`,color:msgType==='success'?'var(--success)':'var(--danger)',fontSize:'0.85rem',textAlign:'center'}}>
+          {msgType==='success'?'✓':'✕'} {msg}
+        </div>
+      )}
+
+      {/* ── DUTY STATUS — big card at top ── */}
+      <div style={{background:available?'rgba(39,174,96,.08)':'rgba(100,100,100,.07)',border:`2px solid ${available?'var(--success)':'var(--border)'}`,borderRadius:'18px',padding:'22px 20px',marginBottom:'20px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'16px'}}>
+        <div>
+          <p style={{fontSize:'0.72rem',color:'var(--muted)',letterSpacing:'2px',textTransform:'uppercase',marginBottom:'6px'}}>Duty Status</p>
+          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+            <div style={{width:'10px',height:'10px',borderRadius:'50%',background:available?'var(--success)':'var(--muted)',boxShadow:available?'0 0 8px var(--success)':'none',flexShrink:0}}/>
+            <p style={{fontSize:'1.2rem',fontWeight:'700',color:available?'var(--success)':'var(--muted)'}}>
+              {available ? 'On Duty' : 'Off Duty'}
+            </p>
+          </div>
+          <p style={{fontSize:'0.78rem',color:'var(--muted)',marginTop:'4px'}}>
+            {available ? 'Clients can see your profile in gallery' : 'Your profile is hidden from clients'}
+          </p>
+          {available && data?.workStart && data?.workEnd && (
+            <p style={{fontSize:'0.8rem',color:'var(--gold)',marginTop:'6px',fontWeight:'600'}}>
+              🕐 {fmt(data.workStart)} – {fmt(data.workEnd)}
+            </p>
+          )}
+        </div>
+        {/* Toggle switch */}
+        <div onClick={handleToggleDuty} style={{cursor:'pointer',flexShrink:0}}>
+          <div style={{width:'62px',height:'34px',borderRadius:'17px',background:available?'var(--success)':'var(--border)',transition:'background .25s',position:'relative',boxShadow:available?'0 0 12px rgba(39,174,96,.35)':'none'}}>
+            <div style={{position:'absolute',top:'4px',left:available?'32px':'4px',width:'26px',height:'26px',borderRadius:'50%',background:'#fff',transition:'left .25s',boxShadow:'0 2px 6px rgba(0,0,0,.3)'}}/>
+          </div>
+        </div>
+      </div>
+
+      <div style={{display:'flex',flexDirection:'column',gap:'20px'}}>
+
+        {/* ── PROFILE PHOTO ── */}
+        <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'16px',padding:'20px',overflow:'hidden'}}>
+          <SectionTitle>Profile Photo</SectionTitle>
+          <div style={{display:'flex',gap:'16px',alignItems:'flex-start',flexWrap:'wrap'}}>
+            {/* Current photo preview */}
+            <div style={{width:'90px',height:'110px',borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border-gold)',flexShrink:0,background:'#0d0d0d'}}>
+              {(preview || data?.imageUrl)
+                ? <img src={preview || data?.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+                : <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--muted)',fontSize:'1.6rem'}}>✦</div>
+              }
+            </div>
+            {/* Upload area */}
+            <div style={{flex:1,minWidth:'180px'}}>
+              <div
+                style={{border:'2px dashed var(--border-gold)',borderRadius:'10px',padding:'20px 16px',cursor:'pointer',background:'var(--elevated)',textAlign:'center',transition:'all .2s'}}
+                onClick={()=>!uploading&&fileRef.current?.click()}
+              >
+                <div style={{fontSize:'1.6rem',marginBottom:'6px'}}>📷</div>
+                <p style={{color:'var(--muted)',fontSize:'0.82rem'}}>
+                  {file ? file.name : (data?.imageUrl ? 'Tap to change photo' : 'Tap to upload photo')}
+                </p>
+              </div>
+              <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{display:'none'}} onChange={e=>pickFile(e.target.files[0])}/>
+              {file && (
+                <div style={{display:'flex',gap:'10px',marginTop:'12px'}}>
+                  <button onClick={()=>{setFile(null);setPreview(null);}} style={{flex:1,padding:'10px',background:'transparent',border:'1px solid var(--border)',color:'var(--muted)',borderRadius:'8px',fontSize:'0.82rem'}}>Cancel</button>
+                  <button onClick={handleUploadPhoto} disabled={uploading} style={{...goldBtn,flex:1,padding:'10px',fontSize:'0.82rem'}}>
+                    {uploading?<span className="spin">✦</span>:'Save Photo'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          {/* Profile completion bar */}
+          <div style={{marginTop:'16px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'6px'}}>
+              <span style={{fontSize:'0.72rem',color:'var(--muted)',letterSpacing:'1px'}}>PROFILE COMPLETE</span>
+              <span style={{fontSize:'0.72rem',color:completion===100?'var(--success)':'var(--gold)',fontWeight:'700'}}>{completion}%</span>
+            </div>
+            <div style={{height:'4px',borderRadius:'2px',background:'var(--border)'}}>
+              <div style={{height:'100%',borderRadius:'2px',width:`${completion}%`,background:`linear-gradient(90deg,var(--gold-dark),var(--gold))`,transition:'width .4s'}}/>
+            </div>
+          </div>
+        </div>
+
+        {/* ── PROFILE DETAILS ── */}
+        <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'16px',padding:'20px'}}>
+          <SectionTitle>Profile Details</SectionTitle>
+          <div style={{display:'flex',flexDirection:'column',gap:'16px'}}>
+
+            {/* Name */}
+            <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+              <label style={labelSt}>Display Name</label>
+              <div style={{display:'flex',gap:'10px'}}>
+                <input type="text" value={name} onChange={e=>setName(e.target.value)} style={{...inputSt,flex:1}} placeholder="Your name shown to clients"/>
+                <button onClick={()=>save('name',{name:name.trim()},'Name')} disabled={saving==='name'||!name.trim()} style={{...goldBtn,padding:'11px 18px',fontSize:'0.82rem',flexShrink:0}}>
+                  {saving==='name'?<span className="spin">✦</span>:'Save'}
+                </button>
+              </div>
+            </div>
+
+            {/* Speciality */}
+            <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+              <label style={labelSt}>Speciality / Services</label>
+              <div style={{display:'flex',gap:'10px'}}>
+                <input type="text" value={speciality} onChange={e=>setSpeciality(e.target.value)} style={{...inputSt,flex:1}} placeholder="e.g. Swedish Massage, Deep Tissue"/>
+                <button onClick={()=>save('speciality',{speciality:speciality.trim()},'Speciality')} disabled={saving==='speciality'} style={{...goldBtn,padding:'11px 18px',fontSize:'0.82rem',flexShrink:0}}>
+                  {saving==='speciality'?<span className="spin">✦</span>:'Save'}
+                </button>
+              </div>
+            </div>
+
+            {/* Bio */}
+            <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+              <label style={labelSt}>Short Bio</label>
+              <textarea value={bio} onChange={e=>setBio(e.target.value)} rows={3} style={{...inputSt,resize:'none',lineHeight:'1.5'}} placeholder="Brief description about yourself…"/>
+              <button onClick={()=>save('bio',{bio:bio.trim()},'Bio')} disabled={saving==='bio'} style={{...goldBtn,padding:'10px',fontSize:'0.82rem',alignSelf:'flex-end',width:'100px'}}>
+                {saving==='bio'?<span className="spin">✦</span>:'Save Bio'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ── WORKING HOURS ── */}
+        <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'16px',padding:'20px'}}>
+          <SectionTitle>Working Hours</SectionTitle>
+          <div style={{display:'flex',gap:'14px',alignItems:'flex-end',flexWrap:'wrap'}}>
+            <div style={{flex:1,minWidth:'120px',display:'flex',flexDirection:'column',gap:'6px'}}>
+              <label style={labelSt}>Start Time</label>
+              <input type="time" value={workStart} onChange={e=>setWorkStart(e.target.value)} style={{...inputSt,colorScheme:'dark'}}/>
+            </div>
+            <div style={{flex:1,minWidth:'120px',display:'flex',flexDirection:'column',gap:'6px'}}>
+              <label style={labelSt}>End Time</label>
+              <input type="time" value={workEnd} onChange={e=>setWorkEnd(e.target.value)} style={{...inputSt,colorScheme:'dark'}}/>
+            </div>
+            <button onClick={()=>save('hours',{workStart,workEnd},'Hours')} disabled={saving==='hours'} style={{...goldBtn,padding:'12px 20px',fontSize:'0.85rem',flexShrink:0,height:'48px'}}>
+              {saving==='hours'?<span className="spin">✦</span>:'Save Hours'}
+            </button>
+          </div>
+          {data?.workStart && data?.workEnd && (
+            <p style={{marginTop:'12px',fontSize:'0.82rem',color:'var(--gold)',background:'rgba(212,175,55,.06)',borderRadius:'8px',padding:'8px 12px',textAlign:'center'}}>
+              🕐 Currently set: {fmt(data.workStart)} — {fmt(data.workEnd)}
+            </p>
+          )}
+        </div>
+
+        {/* ── MY ID ── */}
+        <div style={{background:'rgba(212,175,55,.04)',border:'1px solid var(--border-gold)',borderRadius:'12px',padding:'16px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px'}}>
+          <div>
+            <p style={{color:'var(--muted)',fontSize:'0.7rem',letterSpacing:'1.5px',textTransform:'uppercase',marginBottom:'6px'}}>My Therapist ID</p>
+            <p style={{color:'var(--gold)',fontFamily:'monospace',fontSize:'0.95rem',fontWeight:'700'}}>{session.therapistId}</p>
+          </div>
+          <button onClick={()=>{navigator.clipboard?.writeText(session.therapistId).then(()=>showMsg('ID copied!'));}} style={{background:'transparent',border:'1px solid var(--border-gold)',color:'var(--gold)',borderRadius:'8px',padding:'8px 14px',fontSize:'0.78rem',flexShrink:0}}>
+            Copy
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+// ── Shared ────────────────────────────────────────────
+function SectionTitle({children}) {
+  return <h2 style={{fontSize:'0.82rem',color:'var(--gold)',letterSpacing:'2.5px',textTransform:'uppercase',marginBottom:'20px',paddingBottom:'10px',borderBottom:'1px solid var(--border)'}}>{children}</h2>;
+}
+function Center({children}) {
+  return <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100vh'}}>{children}</div>;
+}
+const labelSt = {color:'var(--muted)',fontSize:'0.76rem',letterSpacing:'1px',textTransform:'uppercase'};
+const inputSt = {background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'9px',padding:'11px 14px',color:'var(--text)',fontSize:'0.95rem',outline:'none',width:'100%'};
+const goldBtn = {background:'linear-gradient(135deg,var(--gold-dark),var(--gold))',color:'#0a0a0a',border:'none',borderRadius:'10px',fontWeight:'700',cursor:'pointer'};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**",
+      "vite.config.js",
+      "package.json",
+      "package-lock.json",
+      "cors.json",
+      "firestore.rules",
+      "firestore.indexes.json",
+      "storage.rules",
+      "README.md",
+      "src/**",
+      "libs/**",
+      ".env.example"
+    ]
+  }
+}
