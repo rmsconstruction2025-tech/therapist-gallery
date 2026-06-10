@@ -284,35 +284,70 @@ function TherapistManager() {
       </div>
 
       <div style={{marginTop:'48px'}}>
-        <SectionTitle>Therapists ({therapists.length})</SectionTitle>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px'}}>
+          <SectionTitle style={{margin:0}}>Therapists ({therapists.length})</SectionTitle>
+          <div style={{display:'flex',gap:'8px'}}>
+            <span style={{fontSize:'0.75rem',color:'var(--muted)',padding:'4px 10px',background:'rgba(39,174,96,.1)',border:'1px solid var(--success)',borderRadius:'20px',color:'var(--success)'}}>
+              ● {therapists.filter(t=>t.available).length} Visible
+            </span>
+            <span style={{fontSize:'0.75rem',padding:'4px 10px',background:'rgba(136,136,136,.1)',border:'1px solid var(--border)',borderRadius:'20px',color:'var(--muted)'}}>
+              ○ {therapists.filter(t=>!t.available).length} Hidden
+            </span>
+          </div>
+        </div>
         {loading
           ? <p style={{color:'var(--muted)',textAlign:'center',padding:'48px 0'}}><span className="spin">✦</span> Loading…</p>
           : therapists.length===0
             ? <p style={{color:'var(--muted)',textAlign:'center',padding:'48px 0'}}>No therapists yet. Upload a photo above.</p>
-            : <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(210px,1fr))',gap:'20px'}}>
-                {therapists.map(t=>(
-                  <div key={t.id} style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'14px',overflow:'hidden'}}>
-                    <div style={{position:'relative',aspectRatio:'3/4',background:'var(--elevated)'}}>
+            : <div style={{border:'1px solid var(--border)',borderRadius:'14px',overflow:'hidden'}}>
+                {/* Header */}
+                <div style={{display:'grid',gridTemplateColumns:'64px 1fr 120px 110px 160px',gap:'0',background:'var(--elevated)',padding:'10px 16px',borderBottom:'1px solid var(--border)'}}>
+                  <div/>
+                  <div style={{fontSize:'0.72rem',color:'var(--muted)',letterSpacing:'1px',fontFamily:'monospace',paddingLeft:'12px'}}>THERAPIST</div>
+                  <div style={{fontSize:'0.72rem',color:'var(--muted)',letterSpacing:'1px',fontFamily:'monospace'}}>ADDED</div>
+                  <div style={{fontSize:'0.72rem',color:'var(--muted)',letterSpacing:'1px',fontFamily:'monospace'}}>VISIBILITY</div>
+                  <div style={{fontSize:'0.72rem',color:'var(--muted)',letterSpacing:'1px',fontFamily:'monospace',textAlign:'right'}}>ACTIONS</div>
+                </div>
+                {therapists.map((t,i)=>(
+                  <div key={t.id} style={{
+                    display:'grid',gridTemplateColumns:'64px 1fr 120px 110px 160px',
+                    alignItems:'center',padding:'12px 16px',
+                    borderBottom:i<therapists.length-1?'1px solid var(--border)':'none',
+                    background:i%2===0?'var(--surface)':'rgba(30,30,30,0.5)',
+                    transition:'background .15s',
+                  }}
+                  onMouseEnter={e=>e.currentTarget.style.background='rgba(212,175,55,0.05)'}
+                  onMouseLeave={e=>e.currentTarget.style.background=i%2===0?'var(--surface)':'rgba(30,30,30,0.5)'}
+                  >
+                    {/* Photo thumbnail */}
+                    <div style={{width:'52px',height:'52px',borderRadius:'10px',overflow:'hidden',background:'var(--elevated)',border:'1px solid var(--border)',flexShrink:0}}>
                       <img src={t.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
-                      <span style={{position:'absolute',top:'8px',right:'8px',padding:'4px 10px',borderRadius:'20px',fontSize:'0.65rem',fontWeight:'700',letterSpacing:'1px',color:'#fff',background:t.available?'var(--success)':'#444'}}>
-                        {t.available?'VISIBLE':'HIDDEN'}
-                      </span>
                     </div>
-                    <div style={{padding:'14px'}}>
-                      <p style={{color:'var(--gold)',fontSize:'0.9rem',fontWeight:'700',marginBottom:'2px'}}>{t.name || '—'}</p>
-                      <p style={{color:'var(--muted)',fontSize:'0.68rem',fontFamily:'monospace',marginBottom:'6px',wordBreak:'break-all'}}>{t.therapistId}</p>
-                      {t.speciality && <p style={{color:'var(--text)',fontSize:'0.75rem',marginBottom:'4px'}}>💆 {t.speciality}</p>}
-                      {t.workStart && t.workEnd && <p style={{color:'var(--muted)',fontSize:'0.73rem',marginBottom:'4px'}}>🕐 {t.workStart} – {t.workEnd}</p>}
-                      {t.bio && <p style={{color:'var(--muted)',fontSize:'0.72rem',marginBottom:'8px',fontStyle:'italic',lineHeight:'1.4'}}>{t.bio.slice(0,60)}{t.bio.length>60?'…':''}</p>}
-                      <p style={{color:'var(--muted)',fontSize:'0.7rem',marginBottom:'10px'}}>{t.createdAt?.toDate?.()?.toLocaleDateString?.()??'Just now'}</p>
-                      <div style={{display:'flex',gap:'8px'}}>
-                        <button onClick={()=>toggleAvailable(t)} style={{flex:1,border:'1px solid',borderRadius:'7px',padding:'8px 6px',fontSize:'0.72rem',fontWeight:'700',letterSpacing:'1px',cursor:'pointer',background:t.available?'rgba(39,174,96,.1)':'transparent',borderColor:t.available?'var(--success)':'var(--border)',color:t.available?'var(--success)':'var(--muted)'}}>
-                          {t.available?'● ON':'○ OFF'}
-                        </button>
-                        <button onClick={()=>handleDelete(t)} style={{background:'transparent',border:'1px solid var(--danger)',color:'var(--danger)',borderRadius:'7px',padding:'8px 12px',fontSize:'0.72rem',cursor:'pointer'}}>
-                          Delete
-                        </button>
-                      </div>
+                    {/* Info */}
+                    <div style={{paddingLeft:'12px'}}>
+                      <div style={{fontWeight:'700',color:'var(--gold)',fontSize:'0.92rem'}}>{t.name||'—'}</div>
+                      <div style={{fontSize:'0.7rem',color:'var(--muted)',fontFamily:'monospace',marginTop:'2px'}}>{t.therapistId}</div>
+                      {t.speciality && <div style={{fontSize:'0.72rem',color:'var(--text)',marginTop:'3px'}}>💆 {t.speciality}</div>}
+                      {t.workStart&&t.workEnd && <div style={{fontSize:'0.7rem',color:'var(--muted)',marginTop:'2px'}}>🕐 {t.workStart}–{t.workEnd}</div>}
+                    </div>
+                    {/* Date */}
+                    <div style={{fontSize:'0.75rem',color:'var(--muted)'}}>{t.createdAt?.toDate?.()?.toLocaleDateString?.()??'—'}</div>
+                    {/* Toggle */}
+                    <div>
+                      <button onClick={()=>toggleAvailable(t)} style={{
+                        padding:'6px 14px',borderRadius:'20px',border:'1px solid',fontSize:'0.72rem',fontWeight:'700',letterSpacing:'1px',cursor:'pointer',
+                        background:t.available?'rgba(39,174,96,.15)':'rgba(136,136,136,.1)',
+                        borderColor:t.available?'var(--success)':'var(--border)',
+                        color:t.available?'var(--success)':'var(--muted)',
+                      }}>
+                        {t.available?'● VISIBLE':'○ HIDDEN'}
+                      </button>
+                    </div>
+                    {/* Delete */}
+                    <div style={{display:'flex',justifyContent:'flex-end'}}>
+                      <button onClick={()=>handleDelete(t)} style={{padding:'7px 20px',background:'rgba(231,76,60,.1)',border:'1px solid var(--danger)',borderRadius:'8px',color:'var(--danger)',fontSize:'0.78rem',cursor:'pointer'}}>
+                        Delete
+                      </button>
                     </div>
                   </div>
                 ))}
