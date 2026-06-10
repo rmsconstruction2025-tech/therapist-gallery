@@ -326,10 +326,29 @@ function TherapistPortal({ session, onLogout }) {
   // Bookings
   const [pendingBookings,   setPendingBookings]   = useState([]);
   const [scheduledBookings, setScheduledBookings] = useState([]);
-  const fileRef     = useRef(null);
-  const seenInitRef = useRef(false);
+  const [hasNewPending,     setHasNewPending]     = useState(false);
+  const fileRef        = useRef(null);
+  const seenInitRef    = useRef(false);
+  const alertIntervalRef = useRef(null);
 
   useEffect(() => { fetchProfile(); }, []);
+
+  // Repeating alert (Uber/Rapido style) — plays every 3.5s while pending booking exists
+  useEffect(()=>{
+    if(hasNewPending){
+      playAlert('new');
+      alertIntervalRef.current = setInterval(()=>playAlert('new'), 3500);
+    } else {
+      clearInterval(alertIntervalRef.current);
+      alertIntervalRef.current = null;
+    }
+    return ()=>{ clearInterval(alertIntervalRef.current); alertIntervalRef.current=null; };
+  },[hasNewPending]);
+
+  // Stop alert when no more pending bookings
+  useEffect(()=>{
+    if(pendingBookings.length===0) setHasNewPending(false);
+  },[pendingBookings.length]);
 
   // Real-time booking listener — no Firestore index required, filter client-side
   useEffect(()=>{
@@ -344,14 +363,13 @@ function TherapistPortal({ session, onLogout }) {
         const pending   = mine.filter(b=>b.status==='pending');
         const scheduled = mine.filter(b=>b.status==='scheduled');
 
-        // Play sound on new pending/scheduled booking (after initial load)
+        // Trigger repeating alert on new booking arrival (after initial load)
         if(seenInitRef.current){
           snap.docChanges().forEach(c=>{
             const d = c.doc.data();
             const isMyBooking = d.therapistId===session.therapistId || d.therapistDocId===session.docId;
-            if(c.type==='added' && isMyBooking){
-              const s = d.status;
-              if(s==='pending'||s==='scheduled') playAlert('new');
+            if(c.type==='added' && isMyBooking && (d.status==='pending'||d.status==='scheduled')){
+              setHasNewPending(true);
             }
           });
         }
