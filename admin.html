@@ -399,6 +399,7 @@ function TherapistManager() {
   const [file,       setFile]       = useState(null);
   const [dragOver,   setDragOver]   = useState(false);
   const [uploadErr,  setUploadErr]  = useState('');
+  const [showAddForm, setShowAddForm] = useState(false);
   const fileRef = useRef(null);
 
   useEffect(()=>{ fetchAll(); },[]);
@@ -445,11 +446,11 @@ function TherapistManager() {
   });
 
   const handleUpload = async () => {
-    if (!file || uploading) return;
+    if (!file || uploading) return false;
     setUploading(true); setUploadErr('');
     try {
       setProgress(30);
-      const imageUrl = await resizeToBase64(file); // base64 stored in Firestore
+      const imageUrl = await resizeToBase64(file);
       setProgress(70);
       const therapistId = `TH_${Date.now()}_${Math.random().toString(36).slice(2,7).toUpperCase()}`;
       await db.collection('therapists').add({
@@ -458,7 +459,8 @@ function TherapistManager() {
       });
       setProgress(100);
       clearFile(); await fetchAll();
-    } catch(err) { setUploadErr(`Upload failed: ${err.message}`); }
+      return true;
+    } catch(err) { setUploadErr(`Upload failed: ${err.message}`); return false; }
     finally { setUploading(false); setProgress(0); }
   };
 
@@ -500,59 +502,61 @@ function TherapistManager() {
   };
 
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:'24px'}}>
-
-      {/* Upload card */}
-      <div className="card-gold" style={{padding:'24px'}}>
-        <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'20px'}}>
-          <span style={{fontSize:'1.1rem'}}>📤</span>
-          <h2 style={{fontSize:'0.95rem',fontWeight:'700',color:'var(--text)'}}>Upload New Therapist Photo</h2>
-        </div>
-        <div
-          className={`upload-zone${dragOver?' drag':''}`}
-          style={{minHeight:'150px',padding:'28px 20px'}}
-          onDragOver={e=>{e.preventDefault();setDragOver(true);}}
-          onDragLeave={()=>setDragOver(false)}
-          onDrop={e=>{e.preventDefault();setDragOver(false);pickFile(e.dataTransfer.files[0]);}}
-          onClick={()=>!uploading&&fileRef.current?.click()}
-        >
-          {preview
-            ? <img src={preview} style={{maxHeight:'220px',maxWidth:'100%',objectFit:'contain',borderRadius:'8px'}}/>
-            : <div style={{textAlign:'center',pointerEvents:'none'}}>
-                <div style={{fontSize:'2.2rem',marginBottom:'8px'}}>📷</div>
-                <p style={{color:'var(--text)',fontSize:'0.9rem',fontWeight:'500'}}>Drop photo here or click to browse</p>
-                <p style={{color:'var(--muted)',fontSize:'0.78rem',marginTop:'4px'}}>JPG · PNG · WEBP · Max 10 MB</p>
-              </div>
-          }
-        </div>
-        <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={e=>pickFile(e.target.files[0])}/>
-        {uploadErr && <div style={{marginTop:'10px',padding:'8px 12px',background:'var(--danger-bg)',border:'1px solid rgba(231,76,60,.3)',borderRadius:'8px',color:'var(--danger)',fontSize:'0.82rem'}}>{uploadErr}</div>}
-        {uploading && <div style={{marginTop:'12px'}}><div style={{height:'4px',background:'var(--border)',borderRadius:'4px',overflow:'hidden'}}><div style={{height:'100%',background:'linear-gradient(90deg,var(--gold-dark),var(--gold))',width:`${progress}%`,transition:'width .2s',borderRadius:'4px'}}/></div><p style={{color:'var(--muted)',fontSize:'0.75rem',marginTop:'6px',textAlign:'center'}}>Uploading… {progress}%</p></div>}
-        <div style={{display:'flex',gap:'10px',marginTop:'16px',justifyContent:'flex-end'}}>
-          {preview && !uploading && <button onClick={clearFile} className="btn btn-ghost btn-md">✕ Clear</button>}
-          <button onClick={handleUpload} disabled={!file||uploading} className="btn btn-gold btn-md" style={{opacity:!file||uploading?.5:1,minWidth:'180px'}}>
-            {uploading?<span className="spin">✦</span>:'Upload Photo'}
-          </button>
-        </div>
-      </div>
-
+    <div>
       {/* Therapist list */}
       <div className="card" style={{overflow:'hidden'}}>
-        <div style={{padding:'16px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid var(--border)'}}>
+        <div style={{padding:'16px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom: showAddForm ? '1px solid var(--border)' : '1px solid var(--border)'}}>
           <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
             <span style={{fontSize:'1rem'}}>🖼️</span>
             <span style={{fontWeight:'700',fontSize:'0.95rem'}}>Therapists</span>
             <span className="badge badge-gray">{therapists.length}</span>
+            <span className="badge badge-green">● {therapists.filter(t=>t.available).length}</span>
           </div>
-          <div style={{display:'flex',gap:'8px'}}>
-            <span className="badge badge-green">● {therapists.filter(t=>t.available).length} visible</span>
-            <span className="badge badge-gray">○ {therapists.filter(t=>!t.available).length} hidden</span>
-          </div>
+          <button
+            onClick={()=>{ setShowAddForm(v=>!v); if(showAddForm){clearFile();} }}
+            className={`btn btn-sm ${showAddForm?'btn-ghost':'btn-gold'}`}
+            style={{gap:'5px',display:'flex',alignItems:'center'}}
+          >
+            {showAddForm ? '✕ Cancel' : '+ Add Therapist'}
+          </button>
         </div>
+
+        {/* Collapsible add form */}
+        {showAddForm && (
+          <div style={{padding:'20px',borderBottom:'1px solid var(--border)',background:'var(--elevated)'}}>
+            <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={e=>pickFile(e.target.files[0])}/>
+            <div
+              className={`upload-zone${dragOver?' drag':''}`}
+              style={{minHeight:'120px',padding:'20px'}}
+              onDragOver={e=>{e.preventDefault();setDragOver(true);}}
+              onDragLeave={()=>setDragOver(false)}
+              onDrop={e=>{e.preventDefault();setDragOver(false);pickFile(e.dataTransfer.files[0]);}}
+              onClick={()=>!uploading&&fileRef.current?.click()}
+            >
+              {preview
+                ? <img src={preview} style={{maxHeight:'180px',maxWidth:'100%',objectFit:'contain',borderRadius:'8px'}}/>
+                : <div style={{textAlign:'center',pointerEvents:'none'}}>
+                    <div style={{fontSize:'2rem',marginBottom:'6px'}}>📷</div>
+                    <p style={{color:'var(--text)',fontSize:'0.85rem',fontWeight:'500'}}>Drop photo here or click to browse</p>
+                    <p style={{color:'var(--muted)',fontSize:'0.75rem',marginTop:'3px'}}>JPG · PNG · WEBP · Max 10 MB</p>
+                  </div>
+              }
+            </div>
+            {uploadErr && <div style={{marginTop:'8px',padding:'8px 12px',background:'var(--danger-bg)',border:'1px solid rgba(231,76,60,.3)',borderRadius:'8px',color:'var(--danger)',fontSize:'0.8rem'}}>{uploadErr}</div>}
+            {uploading && <div style={{marginTop:'10px'}}><div style={{height:'3px',background:'var(--border)',borderRadius:'4px',overflow:'hidden'}}><div style={{height:'100%',background:'linear-gradient(90deg,var(--gold-dark),var(--gold))',width:`${progress}%`,transition:'width .2s',borderRadius:'4px'}}/></div><p style={{color:'var(--muted)',fontSize:'0.72rem',marginTop:'5px',textAlign:'center'}}>Uploading… {progress}%</p></div>}
+            <div style={{display:'flex',gap:'8px',marginTop:'14px',justifyContent:'flex-end'}}>
+              {preview && !uploading && <button onClick={clearFile} className="btn btn-ghost btn-sm">✕ Clear</button>}
+              <button onClick={async ()=>{ const ok = await handleUpload(); if(ok) setShowAddForm(false); }} disabled={!file||uploading} className="btn btn-gold btn-sm" style={{opacity:!file||uploading?.5:1,minWidth:'140px'}}>
+                {uploading?<span className="spin">✦</span>:'Upload Photo'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {loading
           ? <div style={{padding:'48px',textAlign:'center',color:'var(--muted)'}}><span className="spin" style={{fontSize:'1.5rem',color:'var(--gold)'}}>✦</span></div>
           : therapists.length===0
-            ? <div style={{padding:'48px',textAlign:'center',color:'var(--muted)',fontSize:'0.9rem'}}>No therapists yet — upload a photo above.</div>
+            ? <div style={{padding:'48px',textAlign:'center',color:'var(--muted)',fontSize:'0.9rem'}}>No therapists yet — click "+ Add Therapist" above.</div>
             : <>
                 <input ref={rowFileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleRowFileChange}/>
                 {therapists.map(t=>(
