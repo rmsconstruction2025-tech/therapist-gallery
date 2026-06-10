@@ -25,6 +25,11 @@
     img { pointer-events: none; -webkit-user-drag: none; }
     button { cursor: pointer; font-family: inherit; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes bookingPulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(212,175,55,0.5); }
+      50%      { box-shadow: 0 0 0 12px rgba(212,175,55,0); }
+    }
+    .booking-alert { animation: bookingPulse 1.4s ease-in-out infinite; }
     .spin { display: inline-block; animation: spin 0.8s linear infinite; }
     @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
     .fade-in { animation: fadeIn 0.3s ease forwards; }
@@ -297,21 +302,29 @@ function TherapistPortal({ session, onLogout }) {
 
   useEffect(() => { fetchProfile(); }, []);
 
-  // Real-time booking listener
+  // Real-time booking listener — simple single-field query (no composite index needed)
   useEffect(()=>{
     const unsub = db.collection('bookings')
       .where('therapistDocId','==',session.docId)
-      .where('status','in',['pending','scheduled'])
-      .orderBy('createdAt','desc')
       .onSnapshot(snap=>{
+        const all = snap.docs.map(d=>({id:d.id,...d.data()}))
+          .sort((a,b)=>(b.createdAt?.toMillis?.()??0)-(a.createdAt?.toMillis?.()??0));
+        const pending   = all.filter(b=>b.status==='pending');
+        const scheduled = all.filter(b=>b.status==='scheduled');
+
+        // Play sound on new pending/scheduled booking (after initial load)
         if(seenInitRef.current){
-          snap.docChanges().forEach(c=>{ if(c.type==='added') playAlert('new'); });
+          snap.docChanges().forEach(c=>{
+            if(c.type==='added'){
+              const s = c.doc.data().status;
+              if(s==='pending'||s==='scheduled') playAlert('new');
+            }
+          });
         }
         seenInitRef.current = true;
-        const all = snap.docs.map(d=>({id:d.id,...d.data()}));
-        setPendingBookings(all.filter(b=>b.status==='pending'));
-        setScheduledBookings(all.filter(b=>b.status==='scheduled'));
-      }, err=>console.error('bookings listener:',err));
+        setPendingBookings(pending);
+        setScheduledBookings(scheduled);
+      }, err=>console.error('bookings listener error:',err));
     return ()=>unsub();
   },[session.docId]);
 
@@ -440,7 +453,7 @@ function TherapistPortal({ session, onLogout }) {
 
       {/* ── BOOKING NOTIFICATIONS ── */}
       {pendingBookings.map(b=>(
-        <div key={b.id} style={{background:'rgba(212,175,55,0.07)',border:'2px solid var(--gold)',borderRadius:'16px',padding:'20px',marginBottom:'16px'}}>
+        <div key={b.id} className="booking-alert" style={{background:'rgba(212,175,55,0.07)',border:'2px solid var(--gold)',borderRadius:'16px',padding:'20px',marginBottom:'16px'}}>
           <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'14px'}}>
             <span style={{fontSize:'1.3rem',animation:'spin 1.2s linear infinite',display:'inline-block'}}>🔔</span>
             <span style={{color:'var(--gold)',fontWeight:'700',fontSize:'0.88rem',letterSpacing:'1.5px',textTransform:'uppercase'}}>New Booking Request</span>

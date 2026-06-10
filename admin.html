@@ -993,7 +993,6 @@ function BookingsPanel() {
 
   useEffect(()=>{
     const unsub = db.collection('bookings')
-      .orderBy('createdAt','desc')
       .limit(100)
       .onSnapshot(snap=>{
         if(seenInitRef.current){
@@ -1002,7 +1001,9 @@ function BookingsPanel() {
           if(added>0) setNewCount(n=>n+added);
         }
         seenInitRef.current = true;
-        setBookings(snap.docs.map(d=>({id:d.id,...d.data()})));
+        const sorted = snap.docs.map(d=>({id:d.id,...d.data()}))
+          .sort((a,b)=>(b.createdAt?.toMillis?.()??0)-(a.createdAt?.toMillis?.()??0));
+        setBookings(sorted);
         setLoading(false);
       }, err=>{ console.error(err); setLoading(false); });
     return ()=>unsub();
