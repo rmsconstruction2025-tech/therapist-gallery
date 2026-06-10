@@ -70,6 +70,84 @@ const resizeToBase64 = (f) => new Promise((resolve, reject) => {
 });
 
 // ══════════════════════════════════════════════════════
+//  CROP MODAL
+// ══════════════════════════════════════════════════════
+function CropModal({ src, onConfirm, onCancel }) {
+  const canvasRef = useRef(null);
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+  const imgEl = useRef(null);
+  const W = 300, H = 400;
+
+  useEffect(() => {
+    const img = new Image();
+    imgEl.current = img;
+    img.onload = () => {
+      const s = Math.max(W / img.width, H / img.height);
+      setScale(s);
+      setOffset({ x: (W - img.width * s) / 2, y: (H - img.height * s) / 2 });
+    };
+    img.src = src;
+  }, [src]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const img = imgEl.current;
+    if (!canvas || !img || !img.complete || !img.naturalWidth) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+    ctx.drawImage(img, offset.x, offset.y, img.width * scale, img.height * scale);
+  }, [scale, offset]);
+
+  const getPoint = (e) => e.touches ? e.touches[0] : e;
+
+  const onDown = (e) => {
+    e.preventDefault();
+    setDragging(true);
+    const p = getPoint(e);
+    dragStart.current = { x: p.clientX - offset.x, y: p.clientY - offset.y };
+  };
+  const onMove = (e) => {
+    if (!dragging) return;
+    e.preventDefault();
+    const p = getPoint(e);
+    setOffset({ x: p.clientX - dragStart.current.x, y: p.clientY - dragStart.current.y });
+  };
+  const onUp = () => setDragging(false);
+  const onWheel = (e) => setScale(s => Math.max(0.3, Math.min(s - e.deltaY * 0.001, 6)));
+
+  const confirm = () => onConfirm(canvasRef.current.toDataURL('image/jpeg', 0.88));
+
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.93)',zIndex:9999,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'20px'}}>
+      <p style={{color:'var(--gold)',marginBottom:'6px',fontWeight:'700',fontSize:'0.9rem',letterSpacing:'1px'}}>ADJUST PHOTO</p>
+      <p style={{color:'var(--muted)',fontSize:'0.75rem',marginBottom:'14px'}}>Drag to reposition · Pinch or slider to zoom</p>
+      <div style={{borderRadius:'12px',overflow:'hidden',border:'2px solid var(--border-gold)'}}>
+        <canvas ref={canvasRef} width={W} height={H}
+          style={{display:'block',cursor:dragging?'grabbing':'grab',touchAction:'none'}}
+          onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
+          onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
+          onWheel={onWheel}
+        />
+      </div>
+      <div style={{marginTop:'14px',width:'100%',maxWidth:'300px'}}>
+        <label style={{color:'var(--muted)',fontSize:'0.75rem'}}>Zoom</label>
+        <input type="range" min="0.3" max="6" step="0.05" value={scale}
+          onChange={e=>setScale(Number(e.target.value))}
+          style={{width:'100%',marginTop:'4px',accentColor:'var(--gold)'}}
+        />
+      </div>
+      <div style={{display:'flex',gap:'12px',marginTop:'18px',width:'100%',maxWidth:'300px'}}>
+        <button onClick={onCancel} style={{flex:1,padding:'12px',background:'transparent',border:'1px solid var(--border)',color:'var(--muted)',borderRadius:'10px',fontSize:'0.85rem'}}>Cancel</button>
+        <button onClick={confirm} style={{flex:1,padding:'12px',background:'var(--gold)',border:'none',color:'#000',borderRadius:'10px',fontSize:'0.85rem',fontWeight:'700'}}>✓ Use Photo</button>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
 //  APP
 // ══════════════════════════════════════════════════════
 function App() {
@@ -190,6 +268,8 @@ function TherapistPortal({ session, onLogout }) {
   const [uploading,   setUploading]   = useState(false);
   const [msg,         setMsg]         = useState('');
   const [msgType,     setMsgType]     = useState('success');
+  const [cropSrc,     setCropSrc]     = useState(null);
+  const [showCrop,    setShowCrop]    = useState(false);
   const fileRef = useRef(null);
 
   useEffect(() => { fetchProfile(); }, []);
@@ -239,15 +319,24 @@ function TherapistPortal({ session, onLogout }) {
     if (!f || !f.type.startsWith('image/')) return;
     setFile(f);
     const r = new FileReader();
-    r.onloadend = () => setPreview(r.result);
+    r.onloadend = () => { setCropSrc(r.result); setShowCrop(true); };
     r.readAsDataURL(f);
   };
 
+  const handleCropConfirm = (croppedDataUrl) => {
+    setPreview(croppedDataUrl);
+    setShowCrop(false);
+  };
+
+  const handleCropCancel = () => {
+    setFile(null); setCropSrc(null); setShowCrop(false);
+  };
+
   const handleUploadPhoto = async () => {
-    if (!file) return;
+    if (!preview) return;
     setUploading(true);
     try {
-      const imageUrl = await resizeToBase64(file);
+      const imageUrl = preview; // already cropped base64
       await db.collection('therapists').doc(session.docId).update({ imageUrl });
       setData(prev => ({ ...prev, imageUrl }));
       setFile(null); setPreview(null);
@@ -264,6 +353,8 @@ function TherapistPortal({ session, onLogout }) {
   }, [data]);
 
   if (loading) return <Center><span className="spin" style={{fontSize:'2rem',color:'var(--gold)'}}>✦</span></Center>;
+
+  if (showCrop) return <CropModal src={cropSrc} onConfirm={handleCropConfirm} onCancel={handleCropCancel}/>;
 
   const fmt = (t) => { if (!t) return ''; const [h,m]=t.split(':'); const hr=+h; return `${hr===0?12:hr>12?hr-12:hr}:${m} ${hr<12?'AM':'PM'}`; };
 
