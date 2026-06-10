@@ -109,79 +109,90 @@
     .upload-zone { border:2px dashed var(--border); border-radius:14px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all .2s; background:var(--card); }
     .upload-zone:hover, .upload-zone.drag { border-color:var(--gold); background:rgba(212,175,55,0.03); }
 
-    /* ── Mobile ────────────────────────────────────────── */
+    /* ── Bottom Nav (mobile) ─────────────────────────── */
     .bottom-nav { display:none; }
 
+    /* ── Item card — used on ALL screen sizes ─────────── */
+    /* Single layout: flex row, avatar left, info middle, actions right */
+    .item-card {
+      display:flex; align-items:center; gap:12px;
+      padding:14px 18px; border-bottom:1px solid var(--border);
+      transition:background .12s;
+    }
+    .item-card:last-child { border-bottom:none; }
+    .item-card:hover { background:rgba(212,175,55,0.03); }
+    .item-avatar { flex-shrink:0; }
+    .item-info { flex:1; min-width:0; }
+    .item-info .name { font-weight:600; font-size:0.92rem; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .item-info .sub  { font-size:0.7rem; color:var(--muted); font-family:monospace; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .item-info .meta { margin-top:5px; display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+    .item-actions { display:flex; gap:8px; align-items:center; flex-shrink:0; }
+
+    /* Desktop: actions always inline */
+    .item-actions-desktop { display:flex; gap:8px; align-items:center; }
+    .item-actions-mobile  { display:none; }
+
+    /* Table header row */
+    .table-head { background:var(--elevated); padding:8px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
+    .table-head span { font-size:0.67rem; color:var(--muted); letter-spacing:1.5px; text-transform:uppercase; font-weight:600; }
+
+    /* ── Mobile ────────────────────────────────────────── */
     @media (max-width: 768px) {
       :root { --sidebar-w: 0px; }
-
-      /* Hide sidebar, show bottom nav */
       .sidebar { display:none !important; }
-      .main { margin-left:0; padding-bottom:70px; }
+      .main { margin-left:0; padding-bottom:72px; }
+
+      /* Bottom nav */
       .bottom-nav {
-        display:flex !important;
-        position:fixed; bottom:0; left:0; right:0; z-index:200;
+        display:flex !important; position:fixed; bottom:0; left:0; right:0; z-index:200;
         background:var(--surface); border-top:1px solid var(--border);
-        height:64px;
+        safe-area-inset-bottom: env(safe-area-inset-bottom);
+        padding-bottom: env(safe-area-inset-bottom);
       }
       .bottom-nav-item {
         flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
         gap:3px; background:transparent; border:none; color:var(--muted);
-        font-size:0.62rem; font-weight:600; cursor:pointer; font-family:inherit;
-        padding:8px 4px; letter-spacing:0.5px; text-transform:uppercase;
-        transition:color .15s;
+        font-size:0.6rem; font-weight:700; cursor:pointer; font-family:inherit;
+        padding:10px 4px; letter-spacing:0.5px; text-transform:uppercase; min-height:56px;
       }
-      .bottom-nav-item .bnav-icon { font-size:1.3rem; line-height:1; }
+      .bottom-nav-item .bnav-icon { font-size:1.4rem; line-height:1; }
       .bottom-nav-item.active { color:var(--gold); }
-      .bottom-nav-item.active .bnav-icon { filter:drop-shadow(0 0 6px rgba(212,175,55,.6)); }
 
-      /* Topbar compact */
-      .topbar { padding:12px 16px; }
+      /* Topbar */
+      .topbar { padding:11px 14px; }
       .topbar-email { display:none !important; }
-
-      /* Content */
-      .content { padding:14px; }
+      .content { padding:12px; gap:16px !important; }
 
       /* Cards */
-      .card, .card-gold { border-radius:12px; }
       .card-gold { padding:16px !important; }
+      .upload-zone { min-height:100px !important; padding:18px 12px !important; }
+      .form-grid { grid-template-columns:1fr !important; gap:12px !important; }
+      .btn-lg { width:100% !important; min-height:48px; }
+      .btn-md { min-height:44px; }
+      .btn-sm { min-height:38px; padding:8px 14px !important; }
 
-      /* Upload zone */
-      .upload-zone { min-height:110px !important; padding:20px 12px !important; }
-
-      /* Form grid → single column */
-      .form-grid { grid-template-columns:1fr !important; }
-
-      /* Table → card list on mobile */
-      .table-head { display:none !important; }
-      .table-row {
-        display:flex !important;
-        flex-direction:column;
-        gap:10px;
-        padding:14px !important;
+      /* Item cards — mobile: show mobile actions, hide desktop actions */
+      .item-card { padding:12px 14px; gap:10px; }
+      .item-actions-desktop { display:none !important; }
+      .item-actions-mobile  {
+        display:flex !important; gap:8px; margin-top:8px; flex-wrap:wrap;
       }
-      .row-mobile-top { display:flex; align-items:center; gap:10px; }
-      .row-mobile-actions { display:flex; gap:8px; flex-wrap:wrap; }
-      .row-mobile-meta { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-      .row-hide-mobile { display:none !important; }
 
-      /* Buttons — bigger touch targets */
-      .btn-sm { padding:8px 16px !important; font-size:0.82rem !important; min-height:38px; }
-      .btn-md { padding:12px 20px !important; min-height:44px; }
-      .btn-lg { min-height:48px; }
+      /* Table header hidden on mobile */
+      .table-head { display:none !important; }
 
-      /* Links list */
-      .link-row { padding:14px 16px !important; }
-      .link-meta { padding-left:0 !important; }
-      .link-actions { padding-left:0 !important; }
+      /* Link cards */
+      .link-indent { padding-left:0 !important; }
 
-      /* Login — single column */
+      /* Login */
       .login-split { flex-direction:column !important; }
-      .login-deco { display:none !important; }
+      .login-deco  { display:none !important; }
       .login-form-panel { padding:32px 20px !important; }
+
+      /* Card header row */
+      .card-header-counts { flex-wrap:wrap; gap:6px !important; }
     }
 
-    /* Tablet tweaks */
     @media (max-width:1024px) and (min-width:769px) {
       :root { --sidebar-w: 180px; }
       .content { padding:20px; }
@@ -543,57 +554,41 @@ function TherapistManager() {
           : therapists.length===0
             ? <div style={{padding:'48px',textAlign:'center',color:'var(--muted)',fontSize:'0.9rem'}}>No therapists yet — upload a photo above.</div>
             : <>
-                <div className="table-head" style={{gridTemplateColumns:'60px 1fr 110px 120px 100px'}}>
-                  <span/>
-                  <span style={{paddingLeft:'12px'}}>Therapist</span>
-                  <span>Added</span>
-                  <span>Visibility</span>
-                  <span style={{textAlign:'right'}}>Actions</span>
-                </div>
                 <input ref={rowFileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleRowFileChange}/>
                 {therapists.map(t=>(
-                  <div key={t.id} className="table-row" style={{gridTemplateColumns:'60px 1fr 110px 120px 100px'}}>
-                    {/* Photo — clickable to replace */}
-                    <div className="row-mobile-top" style={{display:'contents'}}>
-                      <div
-                        onClick={()=>rowUploading?null:handleRowPhotoClick(t)}
-                        title="Click to change photo"
-                        style={{width:'48px',height:'48px',borderRadius:'10px',overflow:'hidden',background:'var(--elevated)',border:'1px solid var(--border)',flexShrink:0,cursor:'pointer',position:'relative'}}
-                        onMouseEnter={e=>{const o=e.currentTarget.querySelector('.photo-overlay');if(o)o.style.opacity='1';}}
-                        onMouseLeave={e=>{const o=e.currentTarget.querySelector('.photo-overlay');if(o)o.style.opacity='0';}}
-                      >
-                        {rowUploading===t.id
-                          ? <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--elevated)'}}><span className="spin" style={{color:'var(--gold)'}}>✦</span></div>
-                          : <>
-                              <img src={t.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}} onError={e=>e.target.style.display='none'}/>
-                              <div className="photo-overlay" style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',opacity:0,transition:'opacity .15s',fontSize:'1.1rem'}}>📷</div>
-                            </>
-                        }
+                  <div key={t.id} className="item-card">
+                    {/* Avatar — tap to replace photo */}
+                    <div className="item-avatar"
+                      onClick={()=>rowUploading?null:handleRowPhotoClick(t)}
+                      title="Tap to change photo"
+                      style={{width:'48px',height:'48px',borderRadius:'10px',overflow:'hidden',background:'var(--elevated)',border:'1px solid var(--border)',cursor:'pointer',position:'relative',flexShrink:0}}
+                      onMouseEnter={e=>{const o=e.currentTarget.querySelector('.photo-overlay');if(o)o.style.opacity='1';}}
+                      onMouseLeave={e=>{const o=e.currentTarget.querySelector('.photo-overlay');if(o)o.style.opacity='0';}}
+                    >
+                      {rowUploading===t.id
+                        ? <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center'}}><span className="spin" style={{color:'var(--gold)'}}>✦</span></div>
+                        : <>
+                            <img src={t.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}} onError={e=>e.target.style.display='none'}/>
+                            <div className="photo-overlay" style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',opacity:0,transition:'opacity .15s',fontSize:'1.1rem'}}>📷</div>
+                          </>
+                      }
+                    </div>
+                    {/* Info */}
+                    <div className="item-info">
+                      <div className="name">{t.name||<span style={{color:'var(--muted)',fontStyle:'italic'}}>Unnamed</span>}</div>
+                      <div className="sub">{t.therapistId}{t.speciality?` · ${t.speciality}`:''}</div>
+                      <div className="meta">
+                        <button onClick={()=>toggleAvailable(t)} className={`badge ${t.available?'badge-green':'badge-gray'}`} style={{cursor:'pointer',border:'none',fontFamily:'inherit'}}>
+                          {t.available?'● Visible':'○ Hidden'}
+                        </button>
+                        <span style={{fontSize:'0.68rem',color:'var(--muted)'}}>{t.createdAt?.toDate?.()?.toLocaleDateString?.()??'—'}</span>
                       </div>
-                      {/* Name + ID */}
-                      <div style={{paddingLeft:'12px',flex:1}}>
-                        <div style={{fontWeight:'600',fontSize:'0.9rem',color:'var(--text)'}}>{t.name||<span style={{color:'var(--muted)',fontStyle:'italic'}}>Unnamed</span>}</div>
-                        <div style={{fontSize:'0.68rem',color:'var(--muted)',fontFamily:'monospace',marginTop:'2px'}}>{t.therapistId}</div>
-                        {t.speciality&&<div style={{fontSize:'0.72rem',color:'var(--muted)',marginTop:'3px'}}>💆 {t.speciality}</div>}
-                        {/* Mobile: show actions inline */}
-                        <div className="row-mobile-meta" style={{marginTop:'8px'}}>
-                          <button onClick={()=>toggleAvailable(t)} className={`badge ${t.available?'badge-green':'badge-gray'}`} style={{cursor:'pointer',border:'1px solid',fontFamily:'inherit'}}>
-                            {t.available?'● Visible':'○ Hidden'}
-                          </button>
-                          <span style={{fontSize:'0.7rem',color:'var(--muted)'}}>{t.createdAt?.toDate?.()?.toLocaleDateString?.()??'—'}</span>
-                        </div>
+                      <div className="item-actions-mobile">
+                        <button onClick={()=>handleDelete(t)} className="btn btn-danger btn-sm">Delete</button>
                       </div>
                     </div>
-                    {/* Desktop: date column */}
-                    <div className="row-hide-mobile" style={{fontSize:'0.75rem',color:'var(--muted)'}}>{t.createdAt?.toDate?.()?.toLocaleDateString?.()??'—'}</div>
-                    {/* Desktop: toggle */}
-                    <div className="row-hide-mobile">
-                      <button onClick={()=>toggleAvailable(t)} className={`badge ${t.available?'badge-green':'badge-gray'}`} style={{cursor:'pointer',border:'none',fontFamily:'inherit'}}>
-                        {t.available?'● Visible':'○ Hidden'}
-                      </button>
-                    </div>
-                    {/* Delete — always visible */}
-                    <div style={{display:'flex',justifyContent:'flex-end'}}>
+                    {/* Desktop actions */}
+                    <div className="item-actions item-actions-desktop">
                       <button onClick={()=>handleDelete(t)} className="btn btn-danger btn-sm">Delete</button>
                     </div>
                   </div>
@@ -921,39 +916,32 @@ function TherapistAccounts() {
           <div style={{padding:'48px',textAlign:'center',color:'var(--muted)',fontSize:'0.9rem'}}>No accounts yet — create one above.</div>
         ) : (
           <>
-            <div className="table-head" style={{gridTemplateColumns:'52px 1fr 120px 180px'}}>
-              <span/>
-              <span style={{paddingLeft:'12px'}}>Therapist</span>
-              <span>Status</span>
-              <span style={{textAlign:'right'}}>Actions</span>
-            </div>
             {accounts.map(acc=>(
-              <div key={acc.id} className="table-row" style={{gridTemplateColumns:'52px 1fr 120px 180px'}}>
-                {/* Photo */}
-                {acc.imageUrl
-                  ? <img src={acc.imageUrl} alt={acc.name} style={{width:'40px',height:'40px',borderRadius:'50%',objectFit:'cover',border:'2px solid var(--border-gold)',flexShrink:0}}/>
-                  : <div style={{width:'40px',height:'40px',borderRadius:'50%',background:'var(--elevated)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--muted)',fontSize:'1rem',flexShrink:0}}>✦</div>
-                }
-                {/* Name + mobile layout */}
-                <div style={{paddingLeft:'12px',flex:1}}>
-                  <div style={{fontWeight:'600',fontSize:'0.9rem'}}>{acc.name||'—'}</div>
-                  <div style={{fontSize:'0.68rem',color:'var(--muted)',fontFamily:'monospace',marginTop:'2px'}}>{acc.therapistId}</div>
-                  {/* Mobile: status + actions below name */}
-                  <div className="row-mobile-meta" style={{marginTop:'8px',gap:'8px'}}>
+              <div key={acc.id} className="item-card">
+                {/* Avatar */}
+                <div className="item-avatar">
+                  {acc.imageUrl
+                    ? <img src={acc.imageUrl} alt={acc.name} style={{width:'44px',height:'44px',borderRadius:'50%',objectFit:'cover',border:'2px solid var(--border-gold)',display:'block'}}/>
+                    : <div style={{width:'44px',height:'44px',borderRadius:'50%',background:'var(--elevated)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--muted)',fontSize:'1.1rem'}}>✦</div>
+                  }
+                </div>
+                {/* Info */}
+                <div className="item-info">
+                  <div className="name">{acc.name||'—'}</div>
+                  <div className="sub">{acc.therapistId}</div>
+                  <div className="meta">
                     <span className={`badge ${acc.available?'badge-green':'badge-red'}`}>{acc.available?'Available':'Unavailable'}</span>
                   </div>
-                  <div className="row-mobile-actions" style={{marginTop:'8px'}}>
+                  {/* Mobile actions */}
+                  <div className="item-actions-mobile">
                     <button onClick={()=>handleResetPin(acc)} className="btn btn-ghost btn-sm">Reset PIN</button>
                     <button onClick={()=>handleDelete(acc)} disabled={deleting===acc.id} className="btn btn-danger btn-sm">
                       {deleting===acc.id?<span className="spin">✦</span>:'Delete'}
                     </button>
                   </div>
                 </div>
-                {/* Desktop only */}
-                <div className="row-hide-mobile">
-                  <span className={`badge ${acc.available?'badge-green':'badge-red'}`}>{acc.available?'Available':'Unavailable'}</span>
-                </div>
-                <div className="row-hide-mobile" style={{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
+                {/* Desktop actions */}
+                <div className="item-actions item-actions-desktop">
                   <button onClick={()=>handleResetPin(acc)} className="btn btn-ghost btn-sm">Reset PIN</button>
                   <button onClick={()=>handleDelete(acc)} disabled={deleting===acc.id} className="btn btn-danger btn-sm" style={{minWidth:'64px'}}>
                     {deleting===acc.id?<span className="spin">✦</span>:'Delete'}
