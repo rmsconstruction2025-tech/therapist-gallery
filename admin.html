@@ -19,21 +19,108 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #0a0a0a; --surface: #141414; --elevated: #1e1e1e;
-      --gold: #d4af37; --gold-light: #f0c040; --gold-dark: #a07820;
-      --text: #ffffff; --muted: #888888; --border: #2a2a2a;
-      --border-gold: rgba(212,175,55,0.3);
-      --danger: #e74c3c; --success: #27ae60;
+      --bg: #080808; --surface: #111111; --elevated: #1a1a1a; --card: #161616;
+      --gold: #d4af37; --gold-light: #f0c040; --gold-dark: #a07820; --gold-glow: rgba(212,175,55,0.15);
+      --text: #f0f0f0; --muted: #666666; --subtle: #444444; --border: #222222;
+      --border-gold: rgba(212,175,55,0.25);
+      --danger: #e74c3c; --danger-bg: rgba(231,76,60,0.08);
+      --success: #2ecc71; --success-bg: rgba(46,204,113,0.08);
+      --info: #3498db;
+      --sidebar-w: 220px;
     }
-    html, body { background: var(--bg); color: var(--text); font-family: Georgia, serif; min-height: 100vh; }
+    html, body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
     input, textarea, select { user-select: text; -webkit-user-select: text; }
     img { pointer-events: none; -webkit-user-drag: none; }
     button { cursor: pointer; font-family: inherit; }
-    ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-track { background: var(--bg); } ::-webkit-scrollbar-thumb { background: var(--gold-dark); border-radius: 3px; }
+    ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .spin { display: inline-block; animation: spin 0.8s linear infinite; }
-    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
-    .fade-in { animation: fadeIn 0.3s ease forwards; }
+    .spin { display: inline-block; animation: spin 0.7s linear infinite; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+    .fade-in { animation: fadeIn 0.25s ease forwards; }
+
+    /* Layout */
+    .admin-layout { display:flex; min-height:100vh; }
+    .sidebar {
+      width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; position: fixed; top:0; left:0; height:100vh; z-index:100;
+      overflow-y: auto;
+    }
+    .sidebar-brand { padding: 24px 20px 20px; border-bottom: 1px solid var(--border); }
+    .sidebar-nav { padding: 12px 10px; flex:1; display:flex; flex-direction:column; gap:2px; }
+    .nav-item {
+      display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:10px;
+      color:var(--muted); font-size:0.875rem; font-weight:500; cursor:pointer;
+      background:transparent; border:none; text-align:left; width:100%; transition:all .15s;
+    }
+    .nav-item:hover { background:var(--elevated); color:var(--text); }
+    .nav-item.active { background:var(--gold-glow); color:var(--gold); border:1px solid var(--border-gold); }
+    .nav-icon { font-size:1rem; width:20px; text-align:center; flex-shrink:0; }
+    .sidebar-footer { padding:16px; border-top:1px solid var(--border); }
+    .main { margin-left:var(--sidebar-w); flex:1; min-height:100vh; }
+    .topbar {
+      background:var(--surface); border-bottom:1px solid var(--border);
+      padding:14px 28px; display:flex; align-items:center; justify-content:space-between;
+      position:sticky; top:0; z-index:50;
+    }
+    .content { padding:28px; }
+
+    /* Cards */
+    .card { background:var(--card); border:1px solid var(--border); border-radius:14px; }
+    .card-gold { background:var(--card); border:1px solid var(--border-gold); border-radius:14px; }
+    .stat-card { padding:20px 24px; }
+
+    /* Table */
+    .data-table { border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+    .table-head { background:var(--elevated); padding:10px 18px; border-bottom:1px solid var(--border); display:grid; align-items:center; }
+    .table-head span { font-size:0.68rem; color:var(--muted); letter-spacing:1.5px; text-transform:uppercase; font-weight:600; }
+    .table-row { padding:12px 18px; display:grid; align-items:center; border-bottom:1px solid var(--border); transition:background .1s; }
+    .table-row:last-child { border-bottom:none; }
+    .table-row:hover { background:rgba(212,175,55,0.03); }
+
+    /* Badge */
+    .badge { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:20px; font-size:0.72rem; font-weight:600; letter-spacing:0.5px; }
+    .badge-green { background:var(--success-bg); color:var(--success); border:1px solid rgba(46,204,113,0.3); }
+    .badge-red { background:var(--danger-bg); color:var(--danger); border:1px solid rgba(231,76,60,0.3); }
+    .badge-gray { background:rgba(255,255,255,0.05); color:var(--muted); border:1px solid var(--border); }
+    .badge-gold { background:var(--gold-glow); color:var(--gold); border:1px solid var(--border-gold); }
+
+    /* Buttons */
+    .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; border:none; border-radius:9px; font-weight:600; font-family:inherit; cursor:pointer; transition:all .15s; }
+    .btn-gold { background:linear-gradient(135deg,var(--gold-dark),var(--gold)); color:#0a0a0a; }
+    .btn-gold:hover { filter:brightness(1.1); }
+    .btn-ghost { background:var(--elevated); border:1px solid var(--border); color:var(--text); }
+    .btn-ghost:hover { border-color:var(--subtle); }
+    .btn-danger { background:var(--danger-bg); border:1px solid rgba(231,76,60,.4); color:var(--danger); }
+    .btn-danger:hover { background:rgba(231,76,60,.15); }
+    .btn-sm { padding:6px 14px; font-size:0.78rem; }
+    .btn-md { padding:9px 20px; font-size:0.85rem; }
+    .btn-lg { padding:12px 28px; font-size:0.9rem; }
+
+    /* Form */
+    .form-label { display:block; font-size:0.72rem; color:var(--muted); letter-spacing:1px; text-transform:uppercase; font-weight:600; margin-bottom:6px; }
+    .form-input { width:100%; background:var(--elevated); border:1px solid var(--border); border-radius:9px; padding:10px 14px; color:var(--text); font-size:0.92rem; outline:none; transition:border .15s; font-family:inherit; }
+    .form-input:focus { border-color:var(--border-gold); }
+    .form-input::placeholder { color:var(--subtle); }
+
+    /* Divider */
+    .divider { height:1px; background:var(--border); margin:0; }
+
+    /* Upload zone */
+    .upload-zone { border:2px dashed var(--border); border-radius:14px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all .2s; background:var(--card); }
+    .upload-zone:hover, .upload-zone.drag { border-color:var(--gold); background:rgba(212,175,55,0.03); }
+
+    /* Mobile */
+    @media (max-width: 768px) {
+      :root { --sidebar-w: 0px; }
+      .sidebar { display:none; }
+      .main { margin-left:0; }
+      .mobile-tabs { display:flex !important; }
+      .content { padding:16px; }
+      .topbar { padding:12px 16px; }
+    }
+    .mobile-tabs { display:none; background:var(--surface); border-bottom:1px solid var(--border); overflow-x:auto; }
+    .mobile-tab { flex:1; min-width:80px; padding:12px 8px; background:transparent; border:none; color:var(--muted); font-size:0.78rem; font-weight:600; cursor:pointer; text-align:center; border-bottom:2px solid transparent; white-space:nowrap; font-family:inherit; }
+    .mobile-tab.active { color:var(--gold); border-bottom-color:var(--gold); }
   </style>
 </head>
 <body>
@@ -109,25 +196,44 @@ function AdminLogin() {
   };
 
   return (
-    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'radial-gradient(ellipse at 50% 0%,#1a1000,var(--bg) 65%)',padding:'20px'}}>
-      <div className="fade-in" style={{background:'var(--surface)',border:'1px solid var(--border-gold)',borderRadius:'20px',padding:'52px 44px',width:'100%',maxWidth:'420px',textAlign:'center',boxShadow:'0 0 30px rgba(212,175,55,0.1)'}}>
-        <div style={{fontSize:'2.4rem',color:'var(--gold)',marginBottom:'16px',textShadow:'0 0 20px rgba(212,175,55,.5)'}}>✦</div>
-        <h1 style={{fontSize:'1.75rem',fontWeight:'700',color:'var(--gold)',letterSpacing:'3px',marginBottom:'8px'}}>Admin Portal</h1>
-        <p style={{color:'var(--muted)',fontSize:'0.85rem',marginBottom:'40px'}}>Therapist Gallery Management</p>
-        <form onSubmit={handle} style={{display:'flex',flexDirection:'column',gap:'22px',textAlign:'left'}}>
-          <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
-            <label style={labelStyle}>Email</label>
-            <input type="email" value={email} onChange={e=>setEmail(e.target.value)} style={inputStyle} placeholder="admin@admin.com" required autoComplete="email"/>
+    <div style={{minHeight:'100vh',display:'flex',background:'var(--bg)'}}>
+      {/* Left decorative panel */}
+      <div style={{display:'none',flex:1,background:'linear-gradient(160deg,#0f0a00,#1a1200)',borderRight:'1px solid var(--border-gold)',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:'16px',padding:'40px',...{display:'flex'}}} className="hide-mobile">
+        <div style={{fontSize:'4rem',color:'var(--gold)',textShadow:'0 0 40px rgba(212,175,55,.4)'}}>✦</div>
+        <h2 style={{color:'var(--gold)',fontSize:'1.6rem',fontWeight:'700',letterSpacing:'4px',textAlign:'center'}}>Feel Free Spa</h2>
+        <p style={{color:'var(--muted)',fontSize:'0.85rem',textAlign:'center',lineHeight:'1.6',maxWidth:'260px'}}>Secure admin portal for managing therapist profiles and client gallery access.</p>
+        <div style={{marginTop:'32px',display:'flex',flexDirection:'column',gap:'12px',width:'100%',maxWidth:'280px'}}>
+          {[['🖼️','Manage therapist photos'],['🔗','Create gallery links'],['👤','Manage therapist accounts']].map(([ic,txt])=>(
+            <div key={txt} style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px 14px',background:'rgba(212,175,55,0.06)',border:'1px solid var(--border-gold)',borderRadius:'10px'}}>
+              <span style={{fontSize:'1.1rem'}}>{ic}</span>
+              <span style={{color:'var(--text)',fontSize:'0.82rem'}}>{txt}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Login form */}
+      <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}>
+        <div className="fade-in" style={{width:'100%',maxWidth:'380px'}}>
+          <div style={{textAlign:'center',marginBottom:'36px'}}>
+            <div style={{fontSize:'2rem',color:'var(--gold)',marginBottom:'10px'}}>✦</div>
+            <h1 style={{fontSize:'1.5rem',fontWeight:'700',color:'var(--text)',marginBottom:'6px'}}>Welcome back</h1>
+            <p style={{color:'var(--muted)',fontSize:'0.85rem'}}>Sign in to Admin Dashboard</p>
           </div>
-          <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
-            <label style={labelStyle}>Password</label>
-            <input type="password" value={pass} onChange={e=>setPass(e.target.value)} style={inputStyle} placeholder="••••••••" required autoComplete="current-password"/>
-          </div>
-          {err && <p style={{color:'var(--danger)',fontSize:'0.84rem',textAlign:'center'}}>{err}</p>}
-          <button type="submit" disabled={loading} style={{...goldBtn,marginTop:'8px',padding:'15px',fontSize:'0.95rem',letterSpacing:'2px',textTransform:'uppercase'}}>
-            {loading ? <span className="spin">✦</span> : 'Sign In'}
-          </button>
-        </form>
+          <form onSubmit={handle} style={{display:'flex',flexDirection:'column',gap:'18px'}}>
+            <div>
+              <label className="form-label">Email</label>
+              <input type="email" value={email} onChange={e=>setEmail(e.target.value)} className="form-input" placeholder="admin@admin.com" required autoComplete="email"/>
+            </div>
+            <div>
+              <label className="form-label">Password</label>
+              <input type="password" value={pass} onChange={e=>setPass(e.target.value)} className="form-input" placeholder="••••••••" required autoComplete="current-password"/>
+            </div>
+            {err && <div style={{background:'var(--danger-bg)',border:'1px solid rgba(231,76,60,.3)',borderRadius:'8px',padding:'10px 14px',color:'var(--danger)',fontSize:'0.83rem'}}>{err}</div>}
+            <button type="submit" disabled={loading} className="btn btn-gold btn-lg" style={{width:'100%',marginTop:'4px',letterSpacing:'1px'}}>
+              {loading ? <span className="spin">✦</span> : 'Sign In →'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );
@@ -138,30 +244,68 @@ function AdminLogin() {
 // ══════════════════════════════════════════════════════
 function Dashboard({ user }) {
   const [tab, setTab] = useState('therapists');
+  const tabs = [
+    { id:'therapists', icon:'🖼️', label:'Therapist Photos' },
+    { id:'links',      icon:'🔗', label:'Gallery Links' },
+    { id:'accounts',   icon:'👤', label:'Accounts' },
+  ];
   return (
-    <div style={{maxWidth:'1100px',margin:'0 auto',padding:'0 20px 60px'}}>
-      <header style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'22px 0',borderBottom:'1px solid var(--border-gold)'}}>
-        <div style={{display:'flex',alignItems:'center',gap:'14px'}}>
-          <span style={{fontSize:'2rem',color:'var(--gold)',textShadow:'0 0 15px rgba(212,175,55,.4)'}}>✦</span>
-          <div>
-            <h1 style={{fontSize:'1.3rem',fontWeight:'700',color:'var(--gold)',letterSpacing:'2px'}}>Admin Dashboard</h1>
-            <p style={{fontSize:'0.75rem',color:'var(--muted)',marginTop:'2px'}}>{user.email}</p>
+    <div className="admin-layout">
+      {/* Sidebar */}
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+            <span style={{fontSize:'1.5rem',color:'var(--gold)'}}>✦</span>
+            <div>
+              <div style={{fontWeight:'700',fontSize:'0.95rem',color:'var(--text)'}}>Feel Free Spa</div>
+              <div style={{fontSize:'0.68rem',color:'var(--muted)'}}>Admin Portal</div>
+            </div>
           </div>
         </div>
-        <button onClick={()=>auth.signOut()} style={{background:'transparent',border:'1px solid var(--border)',color:'var(--muted)',borderRadius:'8px',padding:'8px 18px',fontSize:'0.82rem'}}>Sign Out</button>
-      </header>
-      <nav style={{display:'flex',gap:'4px',paddingTop:'20px',borderBottom:'1px solid var(--border)'}}>
-        {[['therapists','Therapist Photos'],['links','Gallery Links'],['accounts','Therapist Accounts']].map(([id,label])=>(
-          <button key={id} onClick={()=>setTab(id)} style={{background:'transparent',border:'none',color:tab===id?'var(--gold)':'var(--muted)',padding:'12px 28px',fontSize:'0.88rem',borderBottom:tab===id?'2px solid var(--gold)':'2px solid transparent',cursor:'pointer'}}>
-            {label}
-          </button>
-        ))}
-      </nav>
-      <main style={{paddingTop:'36px'}}>
-        {tab==='therapists' && <TherapistManager/>}
-        {tab==='links'      && <LinkCreator/>}
-        {tab==='accounts'   && <TherapistAccounts/>}
-      </main>
+        <nav className="sidebar-nav">
+          <div style={{fontSize:'0.65rem',color:'var(--muted)',letterSpacing:'2px',padding:'8px 14px 4px',textTransform:'uppercase'}}>Management</div>
+          {tabs.map(t=>(
+            <button key={t.id} className={`nav-item${tab===t.id?' active':''}`} onClick={()=>setTab(t.id)}>
+              <span className="nav-icon">{t.icon}</span>
+              {t.label}
+            </button>
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          <div style={{fontSize:'0.73rem',color:'var(--muted)',marginBottom:'10px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{user.email}</div>
+          <button onClick={()=>auth.signOut()} className="btn btn-ghost btn-sm" style={{width:'100%'}}>Sign Out</button>
+        </div>
+      </aside>
+
+      {/* Main */}
+      <div className="main">
+        {/* Topbar */}
+        <div className="topbar">
+          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+            <span style={{fontSize:'1.2rem',color:'var(--gold)'}}>✦</span>
+            <span style={{fontWeight:'700',fontSize:'1rem',color:'var(--text)'}}>{tabs.find(t=>t.id===tab)?.label}</span>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+            <span style={{fontSize:'0.78rem',color:'var(--muted)',display:'none'}} className="hide-mobile">{user.email}</span>
+            <button onClick={()=>auth.signOut()} className="btn btn-ghost btn-sm" style={{display:'none'}} id="mobile-signout">Sign Out</button>
+          </div>
+        </div>
+
+        {/* Mobile tabs */}
+        <div className="mobile-tabs">
+          {tabs.map(t=>(
+            <button key={t.id} className={`mobile-tab${tab===t.id?' active':''}`} onClick={()=>setTab(t.id)}>
+              {t.icon} {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="content">
+          {tab==='therapists' && <TherapistManager/>}
+          {tab==='links'      && <LinkCreator/>}
+          {tab==='accounts'   && <TherapistAccounts/>}
+        </div>
+      </div>
     </div>
   );
 }
@@ -255,103 +399,89 @@ function TherapistManager() {
   };
 
   return (
-    <div>
-      <SectionTitle>Upload Therapist Photo</SectionTitle>
-      <div
-        style={{border:`2px dashed ${dragOver?'var(--gold)':'var(--border-gold)'}`,borderRadius:'14px',padding:'36px 20px',cursor:'pointer',background:dragOver?'rgba(212,175,55,.04)':'var(--surface)',minHeight:'180px',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',transition:'all .2s'}}
-        onDragOver={e=>{e.preventDefault();setDragOver(true);}}
-        onDragLeave={()=>setDragOver(false)}
-        onDrop={e=>{e.preventDefault();setDragOver(false);pickFile(e.dataTransfer.files[0]);}}
-        onClick={()=>!uploading&&fileRef.current?.click()}
-      >
-        {preview
-          ? <img src={preview} style={{maxHeight:'280px',maxWidth:'100%',objectFit:'contain',borderRadius:'8px'}}/>
-          : <div style={{textAlign:'center'}}>
-              <div style={{fontSize:'2.8rem'}}>📷</div>
-              <p style={{color:'var(--muted)',marginTop:'8px'}}>Drop photo here or click to browse</p>
-              <p style={{color:'var(--muted)',fontSize:'0.8rem',marginTop:'4px'}}>JPG · PNG · WEBP · Max 10 MB</p>
-            </div>
-        }
-      </div>
-      <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={e=>pickFile(e.target.files[0])}/>
-      {uploadErr && <p style={{color:'var(--danger)',fontSize:'0.84rem',marginTop:'10px'}}>{uploadErr}</p>}
-      {uploading && <div style={{height:'4px',background:'var(--border)',borderRadius:'2px',marginTop:'14px',overflow:'hidden'}}><div style={{height:'100%',background:'var(--gold)',width:`${progress}%`,transition:'width .2s'}}/></div>}
-      <div style={{display:'flex',gap:'12px',marginTop:'16px',justifyContent:'flex-end'}}>
-        {preview && !uploading && <button onClick={clearFile} style={{background:'transparent',border:'1px solid var(--border)',color:'var(--muted)',borderRadius:'8px',padding:'10px 22px',fontSize:'0.88rem'}}>Clear</button>}
-        <button onClick={handleUpload} disabled={!file||uploading} style={{...goldBtn,opacity:!file||uploading?.5:1,padding:'10px 30px',fontSize:'0.88rem'}}>
-          {uploading?`Uploading… ${progress}%`:'Upload Therapist Photo'}
-        </button>
+    <div style={{display:'flex',flexDirection:'column',gap:'24px'}}>
+
+      {/* Upload card */}
+      <div className="card-gold" style={{padding:'24px'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'20px'}}>
+          <span style={{fontSize:'1.1rem'}}>📤</span>
+          <h2 style={{fontSize:'0.95rem',fontWeight:'700',color:'var(--text)'}}>Upload New Therapist Photo</h2>
+        </div>
+        <div
+          className={`upload-zone${dragOver?' drag':''}`}
+          style={{minHeight:'150px',padding:'28px 20px'}}
+          onDragOver={e=>{e.preventDefault();setDragOver(true);}}
+          onDragLeave={()=>setDragOver(false)}
+          onDrop={e=>{e.preventDefault();setDragOver(false);pickFile(e.dataTransfer.files[0]);}}
+          onClick={()=>!uploading&&fileRef.current?.click()}
+        >
+          {preview
+            ? <img src={preview} style={{maxHeight:'220px',maxWidth:'100%',objectFit:'contain',borderRadius:'8px'}}/>
+            : <div style={{textAlign:'center',pointerEvents:'none'}}>
+                <div style={{fontSize:'2.2rem',marginBottom:'8px'}}>📷</div>
+                <p style={{color:'var(--text)',fontSize:'0.9rem',fontWeight:'500'}}>Drop photo here or click to browse</p>
+                <p style={{color:'var(--muted)',fontSize:'0.78rem',marginTop:'4px'}}>JPG · PNG · WEBP · Max 10 MB</p>
+              </div>
+          }
+        </div>
+        <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={e=>pickFile(e.target.files[0])}/>
+        {uploadErr && <div style={{marginTop:'10px',padding:'8px 12px',background:'var(--danger-bg)',border:'1px solid rgba(231,76,60,.3)',borderRadius:'8px',color:'var(--danger)',fontSize:'0.82rem'}}>{uploadErr}</div>}
+        {uploading && <div style={{marginTop:'12px'}}><div style={{height:'4px',background:'var(--border)',borderRadius:'4px',overflow:'hidden'}}><div style={{height:'100%',background:'linear-gradient(90deg,var(--gold-dark),var(--gold))',width:`${progress}%`,transition:'width .2s',borderRadius:'4px'}}/></div><p style={{color:'var(--muted)',fontSize:'0.75rem',marginTop:'6px',textAlign:'center'}}>Uploading… {progress}%</p></div>}
+        <div style={{display:'flex',gap:'10px',marginTop:'16px',justifyContent:'flex-end'}}>
+          {preview && !uploading && <button onClick={clearFile} className="btn btn-ghost btn-md">✕ Clear</button>}
+          <button onClick={handleUpload} disabled={!file||uploading} className="btn btn-gold btn-md" style={{opacity:!file||uploading?.5:1,minWidth:'180px'}}>
+            {uploading?<span className="spin">✦</span>:'Upload Photo'}
+          </button>
+        </div>
       </div>
 
-      <div style={{marginTop:'48px'}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px'}}>
-          <SectionTitle style={{margin:0}}>Therapists ({therapists.length})</SectionTitle>
+      {/* Therapist list */}
+      <div className="card" style={{overflow:'hidden'}}>
+        <div style={{padding:'16px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid var(--border)'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+            <span style={{fontSize:'1rem'}}>🖼️</span>
+            <span style={{fontWeight:'700',fontSize:'0.95rem'}}>Therapists</span>
+            <span className="badge badge-gray">{therapists.length}</span>
+          </div>
           <div style={{display:'flex',gap:'8px'}}>
-            <span style={{fontSize:'0.75rem',color:'var(--muted)',padding:'4px 10px',background:'rgba(39,174,96,.1)',border:'1px solid var(--success)',borderRadius:'20px',color:'var(--success)'}}>
-              ● {therapists.filter(t=>t.available).length} Visible
-            </span>
-            <span style={{fontSize:'0.75rem',padding:'4px 10px',background:'rgba(136,136,136,.1)',border:'1px solid var(--border)',borderRadius:'20px',color:'var(--muted)'}}>
-              ○ {therapists.filter(t=>!t.available).length} Hidden
-            </span>
+            <span className="badge badge-green">● {therapists.filter(t=>t.available).length} visible</span>
+            <span className="badge badge-gray">○ {therapists.filter(t=>!t.available).length} hidden</span>
           </div>
         </div>
         {loading
-          ? <p style={{color:'var(--muted)',textAlign:'center',padding:'48px 0'}}><span className="spin">✦</span> Loading…</p>
+          ? <div style={{padding:'48px',textAlign:'center',color:'var(--muted)'}}><span className="spin" style={{fontSize:'1.5rem',color:'var(--gold)'}}>✦</span></div>
           : therapists.length===0
-            ? <p style={{color:'var(--muted)',textAlign:'center',padding:'48px 0'}}>No therapists yet. Upload a photo above.</p>
-            : <div style={{border:'1px solid var(--border)',borderRadius:'14px',overflow:'hidden'}}>
-                {/* Header */}
-                <div style={{display:'grid',gridTemplateColumns:'64px 1fr 120px 110px 160px',gap:'0',background:'var(--elevated)',padding:'10px 16px',borderBottom:'1px solid var(--border)'}}>
-                  <div/>
-                  <div style={{fontSize:'0.72rem',color:'var(--muted)',letterSpacing:'1px',fontFamily:'monospace',paddingLeft:'12px'}}>THERAPIST</div>
-                  <div style={{fontSize:'0.72rem',color:'var(--muted)',letterSpacing:'1px',fontFamily:'monospace'}}>ADDED</div>
-                  <div style={{fontSize:'0.72rem',color:'var(--muted)',letterSpacing:'1px',fontFamily:'monospace'}}>VISIBILITY</div>
-                  <div style={{fontSize:'0.72rem',color:'var(--muted)',letterSpacing:'1px',fontFamily:'monospace',textAlign:'right'}}>ACTIONS</div>
+            ? <div style={{padding:'48px',textAlign:'center',color:'var(--muted)',fontSize:'0.9rem'}}>No therapists yet — upload a photo above.</div>
+            : <>
+                <div className="table-head" style={{gridTemplateColumns:'60px 1fr 110px 120px 100px'}}>
+                  <span/>
+                  <span style={{paddingLeft:'12px'}}>Therapist</span>
+                  <span>Added</span>
+                  <span>Visibility</span>
+                  <span style={{textAlign:'right'}}>Actions</span>
                 </div>
-                {therapists.map((t,i)=>(
-                  <div key={t.id} style={{
-                    display:'grid',gridTemplateColumns:'64px 1fr 120px 110px 160px',
-                    alignItems:'center',padding:'12px 16px',
-                    borderBottom:i<therapists.length-1?'1px solid var(--border)':'none',
-                    background:i%2===0?'var(--surface)':'rgba(30,30,30,0.5)',
-                    transition:'background .15s',
-                  }}
-                  onMouseEnter={e=>e.currentTarget.style.background='rgba(212,175,55,0.05)'}
-                  onMouseLeave={e=>e.currentTarget.style.background=i%2===0?'var(--surface)':'rgba(30,30,30,0.5)'}
-                  >
-                    {/* Photo thumbnail */}
-                    <div style={{width:'52px',height:'52px',borderRadius:'10px',overflow:'hidden',background:'var(--elevated)',border:'1px solid var(--border)',flexShrink:0}}>
+                {therapists.map(t=>(
+                  <div key={t.id} className="table-row" style={{gridTemplateColumns:'60px 1fr 110px 120px 100px'}}>
+                    <div style={{width:'48px',height:'48px',borderRadius:'10px',overflow:'hidden',background:'var(--elevated)',border:'1px solid var(--border)',flexShrink:0}}>
                       <img src={t.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
                     </div>
-                    {/* Info */}
                     <div style={{paddingLeft:'12px'}}>
-                      <div style={{fontWeight:'700',color:'var(--gold)',fontSize:'0.92rem'}}>{t.name||'—'}</div>
-                      <div style={{fontSize:'0.7rem',color:'var(--muted)',fontFamily:'monospace',marginTop:'2px'}}>{t.therapistId}</div>
-                      {t.speciality && <div style={{fontSize:'0.72rem',color:'var(--text)',marginTop:'3px'}}>💆 {t.speciality}</div>}
-                      {t.workStart&&t.workEnd && <div style={{fontSize:'0.7rem',color:'var(--muted)',marginTop:'2px'}}>🕐 {t.workStart}–{t.workEnd}</div>}
+                      <div style={{fontWeight:'600',fontSize:'0.9rem',color:'var(--text)'}}>{t.name||<span style={{color:'var(--muted)',fontStyle:'italic'}}>Unnamed</span>}</div>
+                      <div style={{fontSize:'0.68rem',color:'var(--muted)',fontFamily:'monospace',marginTop:'2px'}}>{t.therapistId}</div>
+                      {t.speciality&&<div style={{fontSize:'0.72rem',color:'var(--muted)',marginTop:'3px'}}>💆 {t.speciality}</div>}
                     </div>
-                    {/* Date */}
                     <div style={{fontSize:'0.75rem',color:'var(--muted)'}}>{t.createdAt?.toDate?.()?.toLocaleDateString?.()??'—'}</div>
-                    {/* Toggle */}
                     <div>
-                      <button onClick={()=>toggleAvailable(t)} style={{
-                        padding:'6px 14px',borderRadius:'20px',border:'1px solid',fontSize:'0.72rem',fontWeight:'700',letterSpacing:'1px',cursor:'pointer',
-                        background:t.available?'rgba(39,174,96,.15)':'rgba(136,136,136,.1)',
-                        borderColor:t.available?'var(--success)':'var(--border)',
-                        color:t.available?'var(--success)':'var(--muted)',
-                      }}>
-                        {t.available?'● VISIBLE':'○ HIDDEN'}
+                      <button onClick={()=>toggleAvailable(t)} className={`badge ${t.available?'badge-green':'badge-gray'}`} style={{cursor:'pointer',border:'none',fontFamily:'inherit'}}>
+                        {t.available?'● Visible':'○ Hidden'}
                       </button>
                     </div>
-                    {/* Delete */}
                     <div style={{display:'flex',justifyContent:'flex-end'}}>
-                      <button onClick={()=>handleDelete(t)} style={{padding:'7px 20px',background:'rgba(231,76,60,.1)',border:'1px solid var(--danger)',borderRadius:'8px',color:'var(--danger)',fontSize:'0.78rem',cursor:'pointer'}}>
-                        Delete
-                      </button>
+                      <button onClick={()=>handleDelete(t)} className="btn btn-danger btn-sm">Delete</button>
                     </div>
                   </div>
                 ))}
-              </div>
+              </>
         }
       </div>
     </div>
@@ -412,66 +542,88 @@ function LinkCreator() {
   const isExpired = (l) => l.expiresAt?.toDate?.() < new Date();
 
   return (
-    <div>
-      <SectionTitle>Create Gallery Link</SectionTitle>
-      <form onSubmit={handleCreate} style={{display:'flex',flexDirection:'column',gap:'24px'}}>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(220px,1fr))',gap:'20px'}}>
-          {[
-            ['clientName','Client Name *','Full name','text'],
-            ['clientPhone','Client WhatsApp (optional)','10-digit number','tel'],
-            ['expiryMinutes','Expiry (minutes)','60','number'],
-            ['maxViewsPerImage','Max Views Per Image','2','number'],
-            ['viewDurationSeconds','View Duration (seconds)','3','number'],
-          ].map(([key,label,ph,type])=>(
-            <div key={key} style={{display:'flex',flexDirection:'column',gap:'7px'}}>
-              <label style={labelStyle}>{label}</label>
-              <input type={type} value={form[key]} onChange={e=>setForm(p=>({...p,[key]:e.target.value}))} style={inputStyle} placeholder={ph} required={key==='clientName'}/>
-            </div>
-          ))}
-        </div>
-        <button type="submit" disabled={creating} style={{...goldBtn,alignSelf:'flex-start',minWidth:'220px',padding:'14px 36px',fontSize:'0.92rem',letterSpacing:'1px'}}>
-          {creating?<span className="spin">✦</span>:'✦ Generate Gallery Link'}
-        </button>
-      </form>
+    <div style={{display:'flex',flexDirection:'column',gap:'24px'}}>
 
-      {newLink && (
-        <div className="fade-in" style={{marginTop:'20px',background:'rgba(39,174,96,.06)',border:'1px solid rgba(39,174,96,.3)',borderRadius:'12px',padding:'20px'}}>
-          <p style={{color:'var(--success)',fontWeight:'700',marginBottom:'10px'}}>✓ Link created!</p>
-          <div style={{display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap'}}>
-            <code style={{flex:1,background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'7px',padding:'8px 12px',fontSize:'0.82rem',color:'var(--muted)',wordBreak:'break-all',fontFamily:'monospace'}}>{newLink}</code>
-            <button onClick={()=>copyLink(newLink,'new')} style={{...goldBtn,padding:'8px 16px',fontSize:'0.82rem',whiteSpace:'nowrap'}}>{copied==='new'?'✓ Copied':'Copy'}</button>
+      {/* Create link card */}
+      <div className="card-gold" style={{padding:'24px'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'20px'}}>
+          <span style={{fontSize:'1.1rem'}}>🔗</span>
+          <h2 style={{fontSize:'0.95rem',fontWeight:'700',color:'var(--text)'}}>Generate Gallery Link</h2>
+        </div>
+        <form onSubmit={handleCreate}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:'16px',marginBottom:'20px'}}>
+            {[
+              ['clientName','Client Name','Full name','text'],
+              ['clientPhone','WhatsApp Number','10-digit number','tel'],
+              ['expiryMinutes','Link Expiry (mins)','60','number'],
+              ['maxViewsPerImage','Max Views / Photo','2','number'],
+              ['viewDurationSeconds','View Duration (sec)','3','number'],
+            ].map(([key,label,ph,type])=>(
+              <div key={key}>
+                <label className="form-label">{label}{key==='clientName'&&<span style={{color:'var(--danger)'}}> *</span>}</label>
+                <input type={type} value={form[key]} onChange={e=>setForm(p=>({...p,[key]:e.target.value}))} className="form-input" placeholder={ph} required={key==='clientName'}/>
+              </div>
+            ))}
           </div>
-        </div>
-      )}
+          <button type="submit" disabled={creating} className="btn btn-gold btn-md" style={{minWidth:'200px'}}>
+            {creating?<span className="spin">✦</span>:'✦ Generate Link'}
+          </button>
+        </form>
 
-      <div style={{marginTop:'48px'}}>
-        <SectionTitle>Created Links ({links.length})</SectionTitle>
+        {newLink && (
+          <div className="fade-in" style={{marginTop:'20px',background:'var(--success-bg)',border:'1px solid rgba(46,204,113,.3)',borderRadius:'10px',padding:'16px'}}>
+            <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'10px'}}>
+              <span style={{color:'var(--success)',fontWeight:'700',fontSize:'0.88rem'}}>✓ Link created successfully</span>
+            </div>
+            <div style={{display:'flex',gap:'10px',alignItems:'center'}}>
+              <code style={{flex:1,background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'8px',padding:'10px 12px',fontSize:'0.78rem',color:'var(--muted)',wordBreak:'break-all',fontFamily:'monospace'}}>{newLink}</code>
+              <button onClick={()=>copyLink(newLink,'new')} className="btn btn-gold btn-sm" style={{whiteSpace:'nowrap',minWidth:'80px'}}>{copied==='new'?'✓ Copied':'Copy'}</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Links list */}
+      <div className="card" style={{overflow:'hidden'}}>
+        <div style={{padding:'16px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid var(--border)'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+            <span style={{fontSize:'1rem'}}>📋</span>
+            <span style={{fontWeight:'700',fontSize:'0.95rem'}}>Created Links</span>
+            <span className="badge badge-gray">{links.length}</span>
+          </div>
+          <span className="badge badge-green">● {links.filter(l=>!isExpired(l)).length} active</span>
+        </div>
         {loading
-          ? <p style={{color:'var(--muted)',textAlign:'center',padding:'40px 0'}}><span className="spin">✦</span></p>
+          ? <div style={{padding:'48px',textAlign:'center'}}><span className="spin" style={{fontSize:'1.5rem',color:'var(--gold)'}}>✦</span></div>
           : links.length===0
-            ? <p style={{color:'var(--muted)',textAlign:'center',padding:'40px 0'}}>No links yet.</p>
-            : <div style={{display:'flex',flexDirection:'column',gap:'14px'}}>
-                {links.map(l=>{
+            ? <div style={{padding:'48px',textAlign:'center',color:'var(--muted)',fontSize:'0.9rem'}}>No links yet — generate one above.</div>
+            : <div style={{display:'flex',flexDirection:'column'}}>
+                {links.map((l,i)=>{
                   const expired=isExpired(l); const url=galleryUrl(l.token);
                   return (
-                    <div key={l.id} style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'12px',padding:'18px 20px',opacity:expired?.6:1}}>
-                      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'12px',marginBottom:'10px'}}>
-                        <div>
-                          <span style={{fontWeight:'600',fontSize:'0.95rem'}}>{l.clientName}</span>
-                          {l.clientPhone&&<span style={{color:'var(--muted)',fontSize:'0.85rem'}}> · {l.clientPhone}</span>}
+                    <div key={l.id} style={{padding:'16px 20px',borderBottom:i<links.length-1?'1px solid var(--border)':'none',opacity:expired?.55:1}}>
+                      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'12px',marginBottom:'8px'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+                          <div style={{width:'36px',height:'36px',borderRadius:'50%',background:expired?'var(--elevated)':'var(--gold-glow)',border:`1px solid ${expired?'var(--border)':'var(--border-gold)'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.9rem',flexShrink:0}}>
+                            {expired?'⏱':'👤'}
+                          </div>
+                          <div>
+                            <div style={{fontWeight:'600',fontSize:'0.92rem'}}>{l.clientName}</div>
+                            {l.clientPhone&&<div style={{color:'var(--muted)',fontSize:'0.78rem'}}>📱 {l.clientPhone}</div>}
+                          </div>
                         </div>
-                        <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
-                          <span style={{padding:'3px 10px',borderRadius:'20px',fontSize:'0.68rem',fontWeight:'700',letterSpacing:'1px',background:expired?'#222':'rgba(39,174,96,.15)',color:expired?'var(--muted)':'var(--success)',border:`1px solid ${expired?'var(--border)':'var(--success)'}`}}>{expired?'EXPIRED':'ACTIVE'}</span>
-                          <button onClick={async()=>{if(confirm('Delete this link?')){await db.collection('galleryTokens').doc(l.id).delete();setLinks(p=>p.filter(x=>x.id!==l.id));}}} style={{background:'transparent',border:'none',color:'var(--muted)',fontSize:'0.9rem',cursor:'pointer'}}>✕</button>
+                        <div style={{display:'flex',gap:'8px',alignItems:'center',flexShrink:0}}>
+                          <span className={`badge ${expired?'badge-gray':'badge-green'}`}>{expired?'Expired':'Active'}</span>
+                          <button onClick={async()=>{if(confirm('Delete this link?')){await db.collection('galleryTokens').doc(l.id).delete();setLinks(p=>p.filter(x=>x.id!==l.id));}}} style={{background:'transparent',border:'none',color:'var(--muted)',fontSize:'1rem',cursor:'pointer',padding:'4px',lineHeight:1}}>✕</button>
                         </div>
                       </div>
-                      <div style={{display:'flex',gap:'16px',flexWrap:'wrap',color:'var(--muted)',fontSize:'0.78rem',marginBottom:'10px'}}>
-                        <span>Expires: {l.expiresAt?.toDate?.()?.toLocaleString?.()??'—'}</span>
-                        <span>Max views: {l.maxViewsPerImage} · Duration: {l.viewDurationSeconds}s</span>
+                      <div style={{display:'flex',gap:'16px',flexWrap:'wrap',color:'var(--muted)',fontSize:'0.75rem',marginBottom:'10px',paddingLeft:'46px'}}>
+                        <span>⏳ {l.expiresAt?.toDate?.()?.toLocaleString?.()??'—'}</span>
+                        <span>👁 {l.maxViewsPerImage} views max · {l.viewDurationSeconds}s duration</span>
                       </div>
-                      <div style={{display:'flex',gap:'10px',alignItems:'center',flexWrap:'wrap'}}>
-                        <code style={{flex:1,background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'7px',padding:'8px 12px',fontSize:'0.72rem',color:'var(--muted)',wordBreak:'break-all',fontFamily:'monospace'}}>{url.length>70?url.slice(0,70)+'…':url}</code>
-                        <button onClick={()=>copyLink(url,l.id)} style={{...goldBtn,padding:'8px 14px',fontSize:'0.78rem',whiteSpace:'nowrap'}}>{copied===l.id?'✓':'Copy'}</button>
+                      <div style={{display:'flex',gap:'8px',alignItems:'center',paddingLeft:'46px'}}>
+                        <div style={{flex:1,background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'8px',padding:'8px 12px',fontSize:'0.72rem',color:'var(--muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'monospace'}}>{url}</div>
+                        <button onClick={()=>copyLink(url,l.id)} className="btn btn-gold btn-sm" style={{whiteSpace:'nowrap',minWidth:'70px'}}>{copied===l.id?'✓':'Copy'}</button>
                       </div>
                     </div>
                   );
@@ -492,7 +644,7 @@ function Center({children}) {
 }
 const labelStyle = {color:'var(--muted)',fontSize:'0.76rem',letterSpacing:'1px',textTransform:'uppercase'};
 const inputStyle = {background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'9px',padding:'11px 14px',color:'var(--text)',fontSize:'0.95rem',outline:'none',width:'100%'};
-const goldBtn = {background:'linear-gradient(135deg,var(--gold-dark),var(--gold))',color:'#0a0a0a',border:'none',borderRadius:'10px',fontWeight:'700',cursor:'pointer'};
+const goldBtn = {background:'linear-gradient(135deg,var(--gold-dark),var(--gold))',color:'#0a0a0a',border:'none',borderRadius:'10px',fontWeight:'700',cursor:'pointer',display:'inline-flex',alignItems:'center',justifyContent:'center',gap:'6px',fontFamily:'inherit'};
 
 // ══════════════════════════════════════════════════════
 //  THERAPIST ACCOUNTS — create / manage therapist logins
@@ -563,93 +715,80 @@ function TherapistAccounts() {
   const badgeSt = (on) => ({ display:'inline-block',padding:'3px 10px',borderRadius:'20px',fontSize:'0.75rem',fontWeight:'700',background:on?'rgba(39,174,96,.15)':'rgba(231,76,60,.12)',color:on?'var(--success)':'var(--danger)',border:`1px solid ${on?'var(--success)':'var(--danger)'}` });
 
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:'36px'}}>
+    <div style={{display:'flex',flexDirection:'column',gap:'24px'}}>
 
-      {/* Create form */}
-      <div style={{background:'var(--surface)',border:'1px solid var(--border-gold)',borderRadius:'18px',padding:'32px'}}>
-        <h2 style={{color:'var(--gold)',fontSize:'1.1rem',letterSpacing:'2px',marginBottom:'24px'}}>CREATE THERAPIST ACCOUNT</h2>
-        <form onSubmit={handleCreate} style={{display:'flex',flexWrap:'wrap',gap:'16px',alignItems:'flex-end'}}>
-          <div style={{display:'flex',flexDirection:'column',gap:'8px',flex:'1 1 200px'}}>
-            <label style={{color:'var(--muted)',fontSize:'0.8rem',letterSpacing:'1px'}}>DISPLAY NAME</label>
-            <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}
-              placeholder="e.g. Priya" required
-              style={{...inputStyle,fontSize:'0.95rem'}}/>
+      {/* Create account card */}
+      <div className="card-gold" style={{padding:'24px'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'20px'}}>
+          <span style={{fontSize:'1.1rem'}}>➕</span>
+          <h2 style={{fontSize:'0.95rem',fontWeight:'700',color:'var(--text)'}}>Create Therapist Account</h2>
+        </div>
+        <form onSubmit={handleCreate} style={{display:'flex',gap:'14px',flexWrap:'wrap',alignItems:'flex-end'}}>
+          <div style={{flex:'1 1 180px'}}>
+            <label className="form-label">Display Name <span style={{color:'var(--danger)'}}>*</span></label>
+            <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. Priya" required className="form-input"/>
           </div>
-          <div style={{display:'flex',flexDirection:'column',gap:'8px',flex:'1 1 160px'}}>
-            <label style={{color:'var(--muted)',fontSize:'0.8rem',letterSpacing:'1px'}}>PIN (min 4 chars)</label>
-            <input value={form.pin} onChange={e=>setForm(f=>({...f,pin:e.target.value}))}
-              placeholder="e.g. 1234" required
-              style={{...inputStyle,fontSize:'0.95rem'}}/>
+          <div style={{flex:'1 1 140px'}}>
+            <label className="form-label">PIN <span style={{color:'var(--muted)'}}>(min 4)</span></label>
+            <input value={form.pin} onChange={e=>setForm(f=>({...f,pin:e.target.value}))} placeholder="e.g. 1234" required className="form-input"/>
           </div>
-          <button type="submit" disabled={saving}
-            style={{...goldBtn,padding:'12px 28px',fontSize:'0.9rem',borderRadius:'10px',height:'48px',minWidth:'140px'}}>
-            {saving ? <span className="spin">✦</span> : '+ Create Account'}
+          <button type="submit" disabled={saving} className="btn btn-gold btn-md" style={{minWidth:'148px',height:'42px'}}>
+            {saving?<span className="spin">✦</span>:'+ Create Account'}
           </button>
         </form>
-        {msg && <p style={{marginTop:'16px',color:msg.startsWith('✓')?'var(--success)':'var(--danger)',fontSize:'0.88rem'}}>{msg}</p>}
+        {msg && (
+          <div style={{marginTop:'14px',padding:'10px 14px',borderRadius:'8px',fontSize:'0.84rem',
+            background:msg.startsWith('✓')?'var(--success-bg)':'var(--danger-bg)',
+            border:`1px solid ${msg.startsWith('✓')?'rgba(46,204,113,.3)':'rgba(231,76,60,.3)'}`,
+            color:msg.startsWith('✓')?'var(--success)':'var(--danger)'}}>
+            {msg}
+          </div>
+        )}
       </div>
 
-      {/* Account list */}
-      <div>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px'}}>
-          <h2 style={{color:'var(--gold)',fontSize:'1.1rem',letterSpacing:'2px'}}>EXISTING ACCOUNTS</h2>
-          <span style={{color:'var(--muted)',fontSize:'0.8rem'}}>{accounts.length} therapist{accounts.length!==1?'s':''}</span>
+      {/* Accounts list */}
+      <div className="card" style={{overflow:'hidden'}}>
+        <div style={{padding:'16px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid var(--border)'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+            <span style={{fontSize:'1rem'}}>👤</span>
+            <span style={{fontWeight:'700',fontSize:'0.95rem'}}>Therapist Accounts</span>
+            <span className="badge badge-gray">{accounts.length}</span>
+          </div>
         </div>
         {loading ? (
-          <div style={{textAlign:'center',padding:'40px',color:'var(--muted)'}}><span className="spin" style={{fontSize:'1.5rem',color:'var(--gold)'}}>✦</span></div>
+          <div style={{padding:'48px',textAlign:'center'}}><span className="spin" style={{fontSize:'1.5rem',color:'var(--gold)'}}>✦</span></div>
         ) : accounts.length === 0 ? (
-          <p style={{color:'var(--muted)',textAlign:'center',padding:'40px'}}>No therapist accounts yet.</p>
+          <div style={{padding:'48px',textAlign:'center',color:'var(--muted)',fontSize:'0.9rem'}}>No accounts yet — create one above.</div>
         ) : (
-          <div style={{border:'1px solid var(--border)',borderRadius:'14px',overflow:'hidden'}}>
-            {/* Table header */}
-            <div style={{display:'grid',gridTemplateColumns:'48px 1fr 160px 100px 180px',gap:'0',background:'var(--elevated)',padding:'10px 16px',borderBottom:'1px solid var(--border)'}}>
-              <div/>
-              <div style={{fontSize:'0.72rem',color:'var(--muted)',letterSpacing:'1px',fontFamily:'monospace'}}>NAME / ID</div>
-              <div style={{fontSize:'0.72rem',color:'var(--muted)',letterSpacing:'1px',fontFamily:'monospace'}}>STATUS</div>
-              <div/>
-              <div style={{fontSize:'0.72rem',color:'var(--muted)',letterSpacing:'1px',fontFamily:'monospace',textAlign:'right'}}>ACTIONS</div>
+          <>
+            <div className="table-head" style={{gridTemplateColumns:'52px 1fr 120px 180px'}}>
+              <span/>
+              <span style={{paddingLeft:'12px'}}>Therapist</span>
+              <span>Status</span>
+              <span style={{textAlign:'right'}}>Actions</span>
             </div>
-            {accounts.map((acc,i) => (
-              <div key={acc.id} style={{
-                display:'grid',gridTemplateColumns:'48px 1fr 160px 100px 180px',
-                gap:'0',alignItems:'center',padding:'12px 16px',
-                borderBottom: i<accounts.length-1 ? '1px solid var(--border)' : 'none',
-                background: i%2===0 ? 'var(--surface)' : 'rgba(30,30,30,0.5)',
-                transition:'background .15s',
-              }}
-              onMouseEnter={e=>e.currentTarget.style.background='rgba(212,175,55,0.05)'}
-              onMouseLeave={e=>e.currentTarget.style.background=i%2===0?'var(--surface)':'rgba(30,30,30,0.5)'}
-              >
-                {/* Photo */}
+            {accounts.map(acc=>(
+              <div key={acc.id} className="table-row" style={{gridTemplateColumns:'52px 1fr 120px 180px'}}>
                 {acc.imageUrl
                   ? <img src={acc.imageUrl} alt={acc.name} style={{width:'40px',height:'40px',borderRadius:'50%',objectFit:'cover',border:'2px solid var(--border-gold)'}}/>
-                  : <div style={{width:'40px',height:'40px',borderRadius:'50%',background:'var(--border)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--muted)',fontSize:'1rem'}}>✦</div>
+                  : <div style={{width:'40px',height:'40px',borderRadius:'50%',background:'var(--elevated)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--muted)',fontSize:'1rem'}}>✦</div>
                 }
-                {/* Name + ID */}
                 <div style={{paddingLeft:'12px'}}>
-                  <div style={{fontWeight:'700',color:'var(--text)',fontSize:'0.95rem'}}>{acc.name || '—'}</div>
-                  <div style={{fontSize:'0.72rem',color:'var(--muted)',fontFamily:'monospace',marginTop:'2px'}}>{acc.therapistId}</div>
+                  <div style={{fontWeight:'600',fontSize:'0.9rem'}}>{acc.name||'—'}</div>
+                  <div style={{fontSize:'0.68rem',color:'var(--muted)',fontFamily:'monospace',marginTop:'2px'}}>{acc.therapistId}</div>
                 </div>
-                {/* Status badge */}
                 <div>
-                  <span style={badgeSt(acc.available)}>{acc.available ? 'Available' : 'Unavailable'}</span>
+                  <span className={`badge ${acc.available?'badge-green':'badge-red'}`}>{acc.available?'Available':'Unavailable'}</span>
                 </div>
-                {/* Spacer */}
-                <div/>
-                {/* Actions */}
                 <div style={{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
-                  <button onClick={()=>handleResetPin(acc)}
-                    style={{padding:'7px 14px',background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',fontSize:'0.78rem',whiteSpace:'nowrap'}}>
-                    Reset PIN
-                  </button>
-                  <button onClick={()=>handleDelete(acc)} disabled={deleting===acc.id}
-                    style={{padding:'7px 14px',background:'rgba(231,76,60,.1)',border:'1px solid var(--danger)',borderRadius:'8px',color:'var(--danger)',fontSize:'0.78rem',minWidth:'64px'}}>
-                    {deleting===acc.id ? <span className="spin">✦</span> : 'Delete'}
+                  <button onClick={()=>handleResetPin(acc)} className="btn btn-ghost btn-sm">Reset PIN</button>
+                  <button onClick={()=>handleDelete(acc)} disabled={deleting===acc.id} className="btn btn-danger btn-sm" style={{minWidth:'64px'}}>
+                    {deleting===acc.id?<span className="spin">✦</span>:'Delete'}
                   </button>
                 </div>
               </div>
             ))}
-          </div>
+          </>
         )}
       </div>
     </div>
