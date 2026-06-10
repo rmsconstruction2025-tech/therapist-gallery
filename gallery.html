@@ -59,6 +59,25 @@ const FIREBASE_CONFIG = {
   appId:             "1:826400735387:web:379974d8aa913786f0063e"
 };
 const ADMIN_WHATSAPP = "918148243019";
+
+// ── Sound alert (Web Audio API — no file needed) ──────
+function playAlert(type='new') {
+  try {
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const seqs = {
+      new:    [[880,0.00],[1100,0.18],[880,0.36],[1100,0.54]],
+      accept: [[660,0.00],[880,0.18],[1100,0.36]],
+    };
+    (seqs[type]||seqs.new).forEach(([freq,t])=>{
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value=freq; o.type='sine';
+      g.gain.setValueAtTime(0.25, ctx.currentTime+t);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+t+0.16);
+      o.start(ctx.currentTime+t); o.stop(ctx.currentTime+t+0.18);
+    });
+  } catch(e){}
+}
 // ════════════════════════════════════════════════════════
 
 if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
@@ -258,6 +277,243 @@ function TherapistGallery({ tokenData, clientName, clientPhone, isBlurred }) {
 }
 
 // ══════════════════════════════════════════════════════
+//  BOOKING MODAL
+// ══════════════════════════════════════════════════════
+function BookingModal({ therapist, clientName, onClose }) {
+  const [step,     setStep]     = useState('choose');
+  const [timeLeft, setTimeLeft] = useState(180);
+  const [form,     setForm]     = useState({ date:'', time:'', notes:'' });
+  const [saving,   setSaving]   = useState(false);
+  const timerRef = useRef(null);
+  const unsubRef = useRef(null);
+  const SECS = 180;
+
+  useEffect(()=>{
+    return ()=>{
+      clearInterval(timerRef.current);
+      if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
+    };
+  },[]);
+
+  const getLocation = ()=>new Promise(resolve=>{
+    if(!navigator.geolocation){ resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      p=>resolve({lat:p.coords.latitude, lng:p.coords.longitude}),
+      ()=>resolve(null),
+      {timeout:5000, maximumAge:60000}
+    );
+  });
+
+  const handleBookNow = async ()=>{
+    setStep('loading');
+    try {
+      const loc = await getLocation();
+      const expiresAt = new Date(Date.now() + SECS * 1000);
+      const ref = await db.collection('bookings').add({
+        therapistDocId: therapist.id,
+        therapistId:    therapist.therapistId,
+        therapistName:  therapist.name || therapist.therapistId,
+        clientName,
+        clientLocation: loc,
+        bookingType:    'now',
+        status:         'pending',
+        createdAt:      FieldValue.serverTimestamp(),
+        expiresAt:      firebase.firestore.Timestamp.fromDate(expiresAt),
+      });
+
+      // Countdown timer
+      const endAt = Date.now() + SECS * 1000;
+      timerRef.current = setInterval(()=>{
+        const rem = Math.ceil((endAt - Date.now()) / 1000);
+        if(rem <= 0){
+          clearInterval(timerRef.current);
+          if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
+          db.collection('bookings').doc(ref.id).update({status:'expired'}).catch(()=>{});
+          setStep('declined');
+        } else { setTimeLeft(rem); }
+      }, 500);
+
+      // Watch for therapist response
+      unsubRef.current = db.collection('bookings').doc(ref.id).onSnapshot(snap=>{
+        if(!snap.exists) return;
+        const s = snap.data().status;
+        if(s==='accepted'){
+          clearInterval(timerRef.current);
+          if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
+          playAlert('accept');
+          setStep('accepted');
+        } else if(s==='declined'){
+          clearInterval(timerRef.current);
+          if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
+          setStep('declined');
+        }
+      });
+
+      setStep('waiting');
+    } catch(err){ alert(`Error: ${err.message}`); setStep('choose'); }
+  };
+
+  const handleBookLater = async ()=>{
+    if(!form.date||!form.time) return;
+    setSaving(true);
+    try {
+      const loc = await Promise.race([getLocation(), new Promise(r=>setTimeout(()=>r(null),4000))]);
+      await db.collection('bookings').add({
+        therapistDocId: therapist.id,
+        therapistId:    therapist.therapistId,
+        therapistName:  therapist.name || therapist.therapistId,
+        clientName,
+        clientLocation: loc,
+        bookingType:    'later',
+        scheduledDate:  form.date,
+        scheduledTime:  form.time,
+        notes:          form.notes.trim(),
+        status:         'scheduled',
+        createdAt:      FieldValue.serverTimestamp(),
+      });
+      setStep('later-done');
+    } catch(err){ alert(`Error: ${err.message}`); }
+    finally{ setSaving(false); }
+  };
+
+  const fmtTime = s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+  const urgent = timeLeft < 60;
+
+  const overlay = {position:'fixed',inset:0,background:'rgba(0,0,0,0.93)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'};
+  const card    = {background:'var(--surface)',border:'1px solid rgba(212,175,55,0.4)',borderRadius:'20px',padding:'28px 24px',width:'100%',maxWidth:'380px',position:'relative'};
+  const btnClose = {position:'absolute',top:'14px',right:'16px',background:'none',border:'none',color:'var(--muted)',fontSize:'1.3rem',cursor:'pointer',lineHeight:'1'};
+  const inp     = {background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'10px',padding:'12px 14px',color:'var(--text)',fontSize:'0.95rem',width:'100%',outline:'none'};
+  const lbl     = {color:'var(--muted)',fontSize:'0.7rem',letterSpacing:'1px',textTransform:'uppercase',display:'block',marginBottom:'5px'};
+  const goldBtn = {background:'linear-gradient(135deg,#a07820,#d4af37)',color:'#000',border:'none',borderRadius:'10px',padding:'14px',fontWeight:'700',fontSize:'0.92rem',cursor:'pointer',width:'100%',minHeight:'48px'};
+
+  return (
+    <div style={overlay}>
+      <div className="fade-in" style={card}>
+
+        {/* Therapist avatar + name */}
+        <div style={{textAlign:'center',marginBottom:'20px'}}>
+          <div style={{width:'52px',height:'52px',borderRadius:'50%',overflow:'hidden',border:'2px solid rgba(212,175,55,0.4)',margin:'0 auto 8px'}}>
+            {therapist.imageUrl
+              ? <img src={therapist.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+              : <div style={{width:'100%',height:'100%',background:'var(--elevated)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--gold)',fontSize:'1.4rem'}}>✦</div>
+            }
+          </div>
+          <p style={{color:'var(--gold)',fontWeight:'700',fontSize:'0.95rem'}}>{therapist.name||therapist.therapistId}</p>
+          {therapist.speciality&&<p style={{color:'var(--muted)',fontSize:'0.74rem',marginTop:'2px'}}>{therapist.speciality}</p>}
+        </div>
+
+        {/* ── Choose ── */}
+        {step==='choose'&&(<>
+          <button onClick={onClose} style={btnClose}>✕</button>
+          <h2 style={{textAlign:'center',color:'var(--text)',fontSize:'1rem',fontWeight:'600',marginBottom:'14px'}}>How would you like to book?</h2>
+          <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
+            <button onClick={handleBookNow} style={{...goldBtn,display:'flex',flexDirection:'column',alignItems:'center',gap:'3px',padding:'16px 12px'}}>
+              <span style={{fontSize:'1.5rem',lineHeight:'1'}}>⚡</span>
+              <span>Book Now</span>
+              <span style={{fontSize:'0.7rem',opacity:0.65,fontWeight:'400'}}>Request immediate appointment</span>
+            </button>
+            <button onClick={()=>setStep('later-form')} style={{background:'var(--elevated)',color:'var(--text)',border:'1px solid var(--border)',borderRadius:'10px',padding:'16px 12px',fontWeight:'600',fontSize:'0.9rem',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:'3px'}}>
+              <span style={{fontSize:'1.5rem',lineHeight:'1'}}>📅</span>
+              <span>Book Later</span>
+              <span style={{fontSize:'0.7rem',color:'var(--muted)',fontWeight:'400'}}>Schedule a future appointment</span>
+            </button>
+          </div>
+        </>)}
+
+        {/* ── Loading ── */}
+        {step==='loading'&&(
+          <div style={{textAlign:'center',padding:'20px 0'}}>
+            <span className="spin" style={{fontSize:'2.2rem',color:'var(--gold)',display:'block',marginBottom:'12px'}}>✦</span>
+            <p style={{color:'var(--muted)',fontSize:'0.9rem'}}>Sending request…</p>
+          </div>
+        )}
+
+        {/* ── Waiting ── */}
+        {step==='waiting'&&(
+          <div style={{textAlign:'center'}}>
+            <div style={{fontSize:'2.4rem',marginBottom:'8px'}}>⏳</div>
+            <h2 style={{color:'var(--text)',fontSize:'1.05rem',fontWeight:'700',marginBottom:'4px'}}>Request Sent!</h2>
+            <p style={{color:'var(--muted)',fontSize:'0.82rem',marginBottom:'18px'}}>Waiting for therapist to accept…</p>
+            <div style={{width:'90px',height:'90px',borderRadius:'50%',border:`3px solid ${urgent?'#e74c3c':'rgba(212,175,55,0.5)'}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',background:urgent?'rgba(231,76,60,.07)':'rgba(212,175,55,.04)',transition:'border-color .4s'}}>
+              <span style={{fontSize:'1.5rem',fontWeight:'700',color:urgent?'#e74c3c':'var(--gold)',fontFamily:'monospace'}}>{fmtTime(timeLeft)}</span>
+              <span style={{fontSize:'0.58rem',color:'var(--muted)',letterSpacing:'1px'}}>LEFT</span>
+            </div>
+            <p style={{color:'var(--muted)',fontSize:'0.75rem'}}>Auto-cancels if not accepted within 3 mins</p>
+          </div>
+        )}
+
+        {/* ── Accepted ── */}
+        {step==='accepted'&&(
+          <div style={{textAlign:'center'}}>
+            <div style={{fontSize:'3rem',marginBottom:'10px'}}>✅</div>
+            <h2 style={{color:'#27ae60',fontSize:'1.15rem',fontWeight:'700',marginBottom:'8px'}}>Appointment Confirmed!</h2>
+            <p style={{color:'var(--muted)',fontSize:'0.85rem',marginBottom:'6px'}}>
+              <strong style={{color:'var(--text)'}}>{therapist.name||therapist.therapistId}</strong> has accepted your request.
+            </p>
+            <p style={{color:'var(--muted)',fontSize:'0.78rem',marginBottom:'20px'}}>The spa will contact you shortly to confirm the details.</p>
+            <button onClick={onClose} style={{...goldBtn,background:'#27ae60',color:'#fff'}}>Done ✓</button>
+          </div>
+        )}
+
+        {/* ── Declined / Expired ── */}
+        {step==='declined'&&(
+          <div style={{textAlign:'center'}}>
+            <div style={{fontSize:'3rem',marginBottom:'10px'}}>😔</div>
+            <h2 style={{color:'var(--text)',fontSize:'1.05rem',fontWeight:'700',marginBottom:'8px'}}>Therapist Unavailable</h2>
+            <p style={{color:'var(--muted)',fontSize:'0.85rem',marginBottom:'20px'}}>This therapist couldn't accept right now. Please choose another therapist.</p>
+            <button onClick={onClose} style={goldBtn}>Choose Another Therapist</button>
+          </div>
+        )}
+
+        {/* ── Book Later Form ── */}
+        {step==='later-form'&&(<>
+          <button onClick={()=>setStep('choose')} style={btnClose}>✕</button>
+          <h2 style={{textAlign:'center',color:'var(--text)',fontSize:'1rem',fontWeight:'600',marginBottom:'18px'}}>Schedule Appointment</h2>
+          <div style={{display:'flex',flexDirection:'column',gap:'14px'}}>
+            <div>
+              <label style={lbl}>Date</label>
+              <input type="date" value={form.date} min={new Date().toISOString().split('T')[0]}
+                onChange={e=>setForm(f=>({...f,date:e.target.value}))} style={inp}/>
+            </div>
+            <div>
+              <label style={lbl}>Time</label>
+              <input type="time" value={form.time}
+                onChange={e=>setForm(f=>({...f,time:e.target.value}))} style={inp}/>
+            </div>
+            <div>
+              <label style={lbl}>Notes <span style={{opacity:0.45}}>(optional)</span></label>
+              <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}
+                rows={2} placeholder="Any special requests or preferences…"
+                style={{...inp,resize:'none',fontFamily:'inherit'}}/>
+            </div>
+            <button onClick={handleBookLater} disabled={!form.date||!form.time||saving}
+              style={{...goldBtn,opacity:(!form.date||!form.time)?0.5:1}}>
+              {saving?<span className="spin">✦</span>:'Confirm Booking'}
+            </button>
+          </div>
+        </>)}
+
+        {/* ── Later Done ── */}
+        {step==='later-done'&&(
+          <div style={{textAlign:'center'}}>
+            <div style={{fontSize:'3rem',marginBottom:'10px'}}>🎉</div>
+            <h2 style={{color:'var(--gold)',fontSize:'1.15rem',fontWeight:'700',marginBottom:'8px'}}>Appointment Scheduled!</h2>
+            <p style={{color:'var(--muted)',fontSize:'0.83rem',marginBottom:'10px'}}>Booking with <strong style={{color:'var(--text)'}}>{therapist.name||therapist.therapistId}</strong> submitted.</p>
+            <div style={{background:'var(--elevated)',borderRadius:'10px',padding:'10px 16px',marginBottom:'14px',border:'1px solid rgba(212,175,55,0.3)',display:'inline-block',textAlign:'left'}}>
+              <p style={{color:'var(--gold)',fontSize:'0.88rem',fontWeight:'600'}}>📅 {form.date}</p>
+              <p style={{color:'var(--gold)',fontSize:'0.88rem',fontWeight:'600'}}>🕐 {form.time}</p>
+            </div>
+            <p style={{color:'var(--muted)',fontSize:'0.76rem',marginBottom:'18px'}}>The therapist has been notified. The spa will confirm your appointment.</p>
+            <button onClick={onClose} style={goldBtn}>Done ✓</button>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
 //  THERAPIST CARD
 // ══════════════════════════════════════════════════════
 function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
@@ -267,6 +523,7 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
   const [timeLeft,     setTimeLeft]     = useState(0);
   const [loading,      setLoading]      = useState(false);
   const [canvasUrl,    setCanvasUrl]    = useState('');
+  const [showBooking,  setShowBooking]  = useState(false);
   const timerRef  = useRef(null);
   const canvasRef = useRef(null);
   const videoRef  = useRef(null);
@@ -447,9 +704,10 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
             <p style={{color:'var(--muted)',fontSize:'0.76rem',marginTop:'4px',lineHeight:'1.5',fontStyle:'italic'}}>{therapist.bio}</p>
           )}
         </div>
-        <a href={bookUrl()} target="_blank" rel="noopener noreferrer" style={{background:'linear-gradient(135deg,#1a6e2e,#25a240)',color:'#fff',border:'none',borderRadius:'8px',padding:'11px 16px',fontSize:'0.85rem',fontWeight:'700',textDecoration:'none',display:'block',boxShadow:'0 2px 12px rgba(37,162,64,.3)',textAlign:'center'}}>
-          Book Now via WhatsApp
-        </a>
+        <button onClick={()=>setShowBooking(true)} style={{background:'linear-gradient(135deg,#1a6e2e,#25a240)',color:'#fff',border:'none',borderRadius:'8px',padding:'11px 16px',fontSize:'0.85rem',fontWeight:'700',cursor:'pointer',display:'block',boxShadow:'0 2px 12px rgba(37,162,64,.3)',textAlign:'center',width:'100%'}}>
+          📅 Book Appointment
+        </button>
+        {showBooking&&<BookingModal therapist={therapist} clientName={clientName} onClose={()=>setShowBooking(false)}/>}
       </div>
     </div>
   );

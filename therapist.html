@@ -48,6 +48,25 @@ if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 const FieldValue = firebase.firestore.FieldValue;
 
+// ── Sound alert ───────────────────────────────────────
+function playAlert(type='new') {
+  try {
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const seqs = {
+      new:    [[880,0.00],[1100,0.18],[880,0.36],[1100,0.54]],
+      accept: [[660,0.00],[880,0.18],[1100,0.36]],
+    };
+    (seqs[type]||seqs.new).forEach(([freq,t])=>{
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value=freq; o.type='sine';
+      g.gain.setValueAtTime(0.28, ctx.currentTime+t);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+t+0.16);
+      o.start(ctx.currentTime+t); o.stop(ctx.currentTime+t+0.18);
+    });
+  } catch(e){}
+}
+
 // ── Resize image to base64 ────────────────────────────
 const resizeToBase64 = (f) => new Promise((resolve, reject) => {
   const img = new Image();
@@ -256,7 +275,7 @@ function TherapistLogin({ onLogin }) {
 function TherapistPortal({ session, onLogout }) {
   const [data,        setData]        = useState(null);
   const [loading,     setLoading]     = useState(true);
-  const [saving,      setSaving]      = useState('');   // which field is saving
+  const [saving,      setSaving]      = useState('');
   const [available,   setAvailable]   = useState(false);
   const [name,        setName]        = useState('');
   const [workStart,   setWorkStart]   = useState('09:00');
@@ -270,9 +289,43 @@ function TherapistPortal({ session, onLogout }) {
   const [msgType,     setMsgType]     = useState('success');
   const [cropSrc,     setCropSrc]     = useState(null);
   const [showCrop,    setShowCrop]    = useState(false);
-  const fileRef = useRef(null);
+  // Bookings
+  const [pendingBookings,   setPendingBookings]   = useState([]);
+  const [scheduledBookings, setScheduledBookings] = useState([]);
+  const fileRef     = useRef(null);
+  const seenInitRef = useRef(false);
 
   useEffect(() => { fetchProfile(); }, []);
+
+  // Real-time booking listener
+  useEffect(()=>{
+    const unsub = db.collection('bookings')
+      .where('therapistDocId','==',session.docId)
+      .where('status','in',['pending','scheduled'])
+      .orderBy('createdAt','desc')
+      .onSnapshot(snap=>{
+        if(seenInitRef.current){
+          snap.docChanges().forEach(c=>{ if(c.type==='added') playAlert('new'); });
+        }
+        seenInitRef.current = true;
+        const all = snap.docs.map(d=>({id:d.id,...d.data()}));
+        setPendingBookings(all.filter(b=>b.status==='pending'));
+        setScheduledBookings(all.filter(b=>b.status==='scheduled'));
+      }, err=>console.error('bookings listener:',err));
+    return ()=>unsub();
+  },[session.docId]);
+
+  const acceptBooking = async (b)=>{
+    try {
+      await db.collection('bookings').doc(b.id).update({status:'accepted', acceptedAt:FieldValue.serverTimestamp()});
+      playAlert('accept');
+    } catch(err){ alert(`Error: ${err.message}`); }
+  };
+
+  const declineBooking = async (b)=>{
+    try { await db.collection('bookings').doc(b.id).update({status:'declined'}); }
+    catch(err){ alert(`Error: ${err.message}`); }
+  };
 
   const fetchProfile = async () => {
     setLoading(true);
@@ -382,6 +435,58 @@ function TherapistPortal({ session, onLogout }) {
       {msg && (
         <div style={{marginBottom:'16px',padding:'11px 18px',borderRadius:'10px',background:msgType==='success'?'rgba(39,174,96,.15)':'rgba(231,76,60,.15)',border:`1px solid ${msgType==='success'?'var(--success)':'var(--danger)'}`,color:msgType==='success'?'var(--success)':'var(--danger)',fontSize:'0.85rem',textAlign:'center'}}>
           {msgType==='success'?'✓':'✕'} {msg}
+        </div>
+      )}
+
+      {/* ── BOOKING NOTIFICATIONS ── */}
+      {pendingBookings.map(b=>(
+        <div key={b.id} style={{background:'rgba(212,175,55,0.07)',border:'2px solid var(--gold)',borderRadius:'16px',padding:'20px',marginBottom:'16px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'14px'}}>
+            <span style={{fontSize:'1.3rem',animation:'spin 1.2s linear infinite',display:'inline-block'}}>🔔</span>
+            <span style={{color:'var(--gold)',fontWeight:'700',fontSize:'0.88rem',letterSpacing:'1.5px',textTransform:'uppercase'}}>New Booking Request</span>
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:'6px',marginBottom:'16px'}}>
+            <p style={{fontSize:'1rem',fontWeight:'700',color:'var(--text)'}}>👤 {b.clientName}</p>
+            <p style={{fontSize:'0.8rem',color:'var(--muted)'}}>⚡ Immediate appointment request</p>
+            <p style={{fontSize:'0.76rem',color:'var(--muted)'}}>🕐 {b.createdAt?.toDate?.()?.toLocaleTimeString?.('en-IN')??'Just now'}</p>
+            {b.clientLocation&&(
+              <a href={`https://maps.google.com?q=${b.clientLocation.lat},${b.clientLocation.lng}`} target="_blank" rel="noopener noreferrer"
+                style={{color:'var(--gold)',fontSize:'0.82rem',textDecoration:'none',display:'inline-flex',alignItems:'center',gap:'4px'}}>
+                📍 View Client Location
+              </a>
+            )}
+          </div>
+          <div style={{display:'flex',gap:'10px'}}>
+            <button onClick={()=>acceptBooking(b)} style={{flex:1,background:'var(--success)',color:'#fff',border:'none',borderRadius:'10px',padding:'13px',fontWeight:'700',fontSize:'0.9rem',cursor:'pointer',minHeight:'48px'}}>
+              ✓ Accept
+            </button>
+            <button onClick={()=>declineBooking(b)} style={{flex:1,background:'transparent',color:'var(--danger)',border:'1px solid var(--danger)',borderRadius:'10px',padding:'13px',fontWeight:'600',fontSize:'0.9rem',cursor:'pointer',minHeight:'48px'}}>
+              ✕ Decline
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {scheduledBookings.length>0&&(
+        <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'16px',padding:'20px',marginBottom:'16px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'14px'}}>
+            <span style={{fontSize:'1rem'}}>📅</span>
+            <span style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--text)'}}>Upcoming Appointments</span>
+            <span style={{background:'var(--elevated)',color:'var(--gold)',borderRadius:'12px',padding:'2px 8px',fontSize:'0.7rem',fontWeight:'700'}}>{scheduledBookings.length}</span>
+          </div>
+          {scheduledBookings.map((b,i)=>(
+            <div key={b.id} style={{borderTop:i>0?'1px solid var(--border)':'none',paddingTop:i>0?'12px':'0',marginTop:i>0?'12px':'0'}}>
+              <p style={{fontWeight:'600',color:'var(--text)',fontSize:'0.9rem'}}>👤 {b.clientName}</p>
+              <p style={{color:'var(--gold)',fontSize:'0.82rem',marginTop:'3px'}}>📅 {b.scheduledDate} · 🕐 {b.scheduledTime}</p>
+              {b.clientLocation&&(
+                <a href={`https://maps.google.com?q=${b.clientLocation.lat},${b.clientLocation.lng}`} target="_blank" rel="noopener noreferrer"
+                  style={{color:'var(--muted)',fontSize:'0.76rem',textDecoration:'none',display:'block',marginTop:'3px'}}>
+                  📍 View Location
+                </a>
+              )}
+              {b.notes&&<p style={{color:'var(--muted)',fontSize:'0.76rem',marginTop:'3px',fontStyle:'italic'}}>"{b.notes}"</p>}
+            </div>
+          ))}
         </div>
       )}
 

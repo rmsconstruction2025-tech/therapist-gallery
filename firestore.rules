@@ -34,5 +34,13 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow update, delete: if isAdmin();
     }
+
+    // Bookings: clients create; therapists + admin read & update status
+    match /bookings/{bookingId} {
+      allow create: if true;
+      allow read:   if true;
+      allow update: if true;   // therapist accepts/declines; admin views
+      allow delete: if isAdmin();
+    }
   }
 }

@@ -227,6 +227,25 @@ const db      = firebase.firestore();
 const storage = firebase.storage();
 const FieldValue = firebase.firestore.FieldValue;
 
+// ── Sound alert ───────────────────────────────────────
+function playAlert(type='new') {
+  try {
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const seqs = {
+      new:    [[880,0.00],[1100,0.18],[880,0.36],[1100,0.54]],
+      accept: [[660,0.00],[880,0.18],[1100,0.36]],
+    };
+    (seqs[type]||seqs.new).forEach(([freq,t])=>{
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value=freq; o.type='sine';
+      g.gain.setValueAtTime(0.25, ctx.currentTime+t);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+t+0.16);
+      o.start(ctx.currentTime+t); o.stop(ctx.currentTime+t+0.18);
+    });
+  } catch(e){}
+}
+
 // ── Generate random token ──────────────────────────────
 function genToken() {
   const c = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -319,11 +338,13 @@ function AdminLogin() {
 //  DASHBOARD
 // ══════════════════════════════════════════════════════
 function Dashboard({ user }) {
-  const [tab, setTab] = useState('therapists');
+  const [tab,      setTab]      = useState('therapists');
+  const [newBooks, setNewBooks] = useState(0); // unread booking count
   const tabs = [
     { id:'therapists', icon:'🖼️', label:'Therapist Photos' },
     { id:'links',      icon:'🔗', label:'Gallery Links' },
     { id:'accounts',   icon:'👤', label:'Accounts' },
+    { id:'bookings',   icon:'📋', label:'Bookings' },
   ];
   return (
     <div className="admin-layout">
@@ -381,6 +402,7 @@ function Dashboard({ user }) {
           {tab==='therapists' && <TherapistManager/>}
           {tab==='links'      && <LinkCreator/>}
           {tab==='accounts'   && <TherapistAccounts/>}
+          {tab==='bookings'   && <BookingsPanel/>}
         </div>
       </div>
     </div>
@@ -955,6 +977,103 @@ function TherapistAccounts() {
             ))}
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+//  BOOKINGS PANEL
+// ══════════════════════════════════════════════════════
+function BookingsPanel() {
+  const [bookings,    setBookings]    = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [newCount,    setNewCount]    = useState(0);
+  const seenInitRef = useRef(false);
+
+  useEffect(()=>{
+    const unsub = db.collection('bookings')
+      .orderBy('createdAt','desc')
+      .limit(100)
+      .onSnapshot(snap=>{
+        if(seenInitRef.current){
+          let added = 0;
+          snap.docChanges().forEach(c=>{ if(c.type==='added'){ playAlert('new'); added++; } });
+          if(added>0) setNewCount(n=>n+added);
+        }
+        seenInitRef.current = true;
+        setBookings(snap.docs.map(d=>({id:d.id,...d.data()})));
+        setLoading(false);
+      }, err=>{ console.error(err); setLoading(false); });
+    return ()=>unsub();
+  },[]);
+
+  const statusBadge = s=>{
+    if(s==='accepted'||s==='scheduled') return 'badge-green';
+    if(s==='pending')  return 'badge-gray';
+    return 'badge-red';
+  };
+
+  const pending   = bookings.filter(b=>b.status==='pending').length;
+  const scheduled = bookings.filter(b=>b.status==='scheduled').length;
+  const accepted  = bookings.filter(b=>b.status==='accepted').length;
+
+  return (
+    <div>
+      {/* Stats row */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'12px',marginBottom:'20px'}}>
+        {[
+          {label:'Pending',  value:pending,   color:'var(--gold)'},
+          {label:'Scheduled',value:scheduled, color:'#27ae60'},
+          {label:'Accepted', value:accepted,  color:'#27ae60'},
+        ].map(s=>(
+          <div key={s.label} style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'12px',padding:'14px 16px',textAlign:'center'}}>
+            <p style={{fontSize:'1.6rem',fontWeight:'700',color:s.color}}>{s.value}</p>
+            <p style={{fontSize:'0.7rem',color:'var(--muted)',letterSpacing:'1px',textTransform:'uppercase',marginTop:'2px'}}>{s.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Bookings list */}
+      <div className="card" style={{overflow:'hidden'}}>
+        <div style={{padding:'16px 20px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:'10px'}}>
+          <span>📋</span>
+          <span style={{fontWeight:'700',fontSize:'0.95rem'}}>All Bookings</span>
+          <span className="badge badge-gray">{bookings.length}</span>
+          {pending>0&&<span className="badge badge-gold" style={{background:'var(--gold)',color:'#000',borderColor:'var(--gold)'}}>{pending} pending</span>}
+        </div>
+        {loading
+          ? <div style={{padding:'48px',textAlign:'center'}}><span className="spin" style={{fontSize:'1.5rem',color:'var(--gold)'}}>✦</span></div>
+          : bookings.length===0
+            ? <div style={{padding:'48px',textAlign:'center',color:'var(--muted)',fontSize:'0.9rem'}}>No bookings yet.</div>
+            : bookings.map(b=>(
+                <div key={b.id} className="item-card">
+                  {/* Status indicator */}
+                  <div className="item-avatar" style={{width:'10px',height:'10px',borderRadius:'50%',background:b.status==='accepted'||b.status==='scheduled'?'var(--success)':b.status==='pending'?'var(--gold)':'var(--muted)',flexShrink:0,marginTop:'4px'}}/>
+                  <div className="item-info">
+                    <div className="name">👤 {b.clientName}</div>
+                    <div className="sub">
+                      {b.therapistName||b.therapistId} · {b.bookingType==='now'?'⚡ Immediate':'📅 Scheduled'}
+                      {b.bookingType==='later'&&b.scheduledDate?` · ${b.scheduledDate} ${b.scheduledTime}`:''}
+                    </div>
+                    <div className="meta">
+                      <span className={`badge ${statusBadge(b.status)}`}>{b.status}</span>
+                      {b.clientLocation&&(
+                        <a href={`https://maps.google.com?q=${b.clientLocation.lat},${b.clientLocation.lng}`} target="_blank" rel="noopener noreferrer"
+                          style={{color:'var(--gold)',fontSize:'0.7rem',textDecoration:'none'}}>📍 Map</a>
+                      )}
+                      {b.notes&&<span style={{fontSize:'0.68rem',color:'var(--muted)',fontStyle:'italic'}}>"{b.notes}"</span>}
+                    </div>
+                    <div className="item-actions-mobile" style={{fontSize:'0.7rem',color:'var(--muted)',marginTop:'4px'}}>
+                      {b.createdAt?.toDate?.()?.toLocaleString?.('en-IN')??''}
+                    </div>
+                  </div>
+                  <div className="item-actions-desktop" style={{fontSize:'0.7rem',color:'var(--muted)',textAlign:'right',flexShrink:0}}>
+                    {b.createdAt?.toDate?.()?.toLocaleString?.('en-IN')??''}
+                  </div>
+                </div>
+              ))
+        }
       </div>
     </div>
   );
