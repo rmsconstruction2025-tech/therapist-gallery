@@ -986,94 +986,177 @@ function TherapistAccounts() {
 //  BOOKINGS PANEL
 // ══════════════════════════════════════════════════════
 function BookingsPanel() {
-  const [bookings,    setBookings]    = useState([]);
-  const [loading,     setLoading]     = useState(true);
-  const [newCount,    setNewCount]    = useState(0);
+  const [bookings,  setBookings]  = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [filter,    setFilter]    = useState('all');
+  const [search,    setSearch]    = useState('');
+  const [deleting,  setDeleting]  = useState(null);
   const seenInitRef = useRef(false);
 
   useEffect(()=>{
-    const unsub = db.collection('bookings')
-      .limit(100)
-      .onSnapshot(snap=>{
-        if(seenInitRef.current){
-          let added = 0;
-          snap.docChanges().forEach(c=>{ if(c.type==='added'){ playAlert('new'); added++; } });
-          if(added>0) setNewCount(n=>n+added);
-        }
-        seenInitRef.current = true;
-        const sorted = snap.docs.map(d=>({id:d.id,...d.data()}))
-          .sort((a,b)=>(b.createdAt?.toMillis?.()??0)-(a.createdAt?.toMillis?.()??0));
-        setBookings(sorted);
-        setLoading(false);
-      }, err=>{ console.error(err); setLoading(false); });
+    const unsub = db.collection('bookings').limit(200).onSnapshot(snap=>{
+      if(seenInitRef.current){
+        snap.docChanges().forEach(c=>{ if(c.type==='added') playAlert('new'); });
+      }
+      seenInitRef.current = true;
+      setBookings(snap.docs.map(d=>({id:d.id,...d.data()}))
+        .sort((a,b)=>(b.createdAt?.toMillis?.()??0)-(a.createdAt?.toMillis?.()??0)));
+      setLoading(false);
+    }, err=>{ console.error(err); setLoading(false); });
     return ()=>unsub();
   },[]);
 
-  const statusBadge = s=>{
-    if(s==='accepted'||s==='scheduled') return 'badge-green';
-    if(s==='pending')  return 'badge-gray';
-    return 'badge-red';
+  const handleDelete = async (b)=>{
+    if(!confirm(`Delete booking from ${b.clientName}?`)) return;
+    setDeleting(b.id);
+    try { await db.collection('bookings').doc(b.id).delete(); }
+    catch(err){ alert(`Error: ${err.message}`); }
+    setDeleting(null);
   };
 
-  const pending   = bookings.filter(b=>b.status==='pending').length;
-  const scheduled = bookings.filter(b=>b.status==='scheduled').length;
-  const accepted  = bookings.filter(b=>b.status==='accepted').length;
+  const counts = {
+    all:       bookings.length,
+    pending:   bookings.filter(b=>b.status==='pending').length,
+    accepted:  bookings.filter(b=>b.status==='accepted').length,
+    scheduled: bookings.filter(b=>b.status==='scheduled').length,
+    declined:  bookings.filter(b=>b.status==='declined').length,
+    expired:   bookings.filter(b=>b.status==='expired').length,
+  };
+
+  const TABS = [
+    {id:'all',       label:'All',       color:'var(--text)'},
+    {id:'pending',   label:'Pending',   color:'var(--gold)'},
+    {id:'accepted',  label:'Accepted',  color:'#2ecc71'},
+    {id:'scheduled', label:'Scheduled', color:'#3498db'},
+    {id:'declined',  label:'Declined',  color:'#e74c3c'},
+    {id:'expired',   label:'Expired',   color:'var(--muted)'},
+  ];
+
+  const STATUS_CFG = {
+    pending:   {color:'var(--gold)',   bg:'rgba(212,175,55,0.12)', border:'rgba(212,175,55,0.35)'},
+    accepted:  {color:'#2ecc71',       bg:'rgba(46,204,113,0.12)', border:'rgba(46,204,113,0.35)'},
+    scheduled: {color:'#3498db',       bg:'rgba(52,152,219,0.12)', border:'rgba(52,152,219,0.35)'},
+    declined:  {color:'#e74c3c',       bg:'rgba(231,76,60,0.12)',  border:'rgba(231,76,60,0.35)'},
+    expired:   {color:'var(--muted)',  bg:'rgba(100,100,100,0.1)', border:'rgba(100,100,100,0.25)'},
+  };
+  const cfg = s => STATUS_CFG[s] || STATUS_CFG.expired;
+
+  const timeAgo = b=>{
+    const d=b.createdAt?.toDate?.(); if(!d) return '—';
+    const s=(Date.now()-d)/1000;
+    if(s<60) return 'Just now';
+    if(s<3600) return `${Math.floor(s/60)}m ago`;
+    if(s<86400) return `${Math.floor(s/3600)}h ago`;
+    return d.toLocaleDateString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+  };
+
+  const filtered = bookings
+    .filter(b=>filter==='all'||b.status===filter)
+    .filter(b=>!search||
+      (b.clientName||'').toLowerCase().includes(search.toLowerCase())||
+      (b.therapistName||b.therapistId||'').toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div>
-      {/* Stats row */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'12px',marginBottom:'20px'}}>
-        {[
-          {label:'Pending',  value:pending,   color:'var(--gold)'},
-          {label:'Scheduled',value:scheduled, color:'#27ae60'},
-          {label:'Accepted', value:accepted,  color:'#27ae60'},
-        ].map(s=>(
-          <div key={s.label} style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'12px',padding:'14px 16px',textAlign:'center'}}>
-            <p style={{fontSize:'1.6rem',fontWeight:'700',color:s.color}}>{s.value}</p>
-            <p style={{fontSize:'0.7rem',color:'var(--muted)',letterSpacing:'1px',textTransform:'uppercase',marginTop:'2px'}}>{s.label}</p>
+    <div style={{display:'flex',flexDirection:'column',gap:'16px'}}>
+
+      {/* Stats grid — click to filter */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(100px,1fr))',gap:'10px'}}>
+        {TABS.filter(t=>t.id!=='all').map(t=>(
+          <div key={t.id} onClick={()=>setFilter(f=>f===t.id?'all':t.id)}
+            style={{background:'var(--surface)',border:`1px solid ${filter===t.id?t.color:'var(--border)'}`,borderRadius:'12px',padding:'12px 14px',cursor:'pointer',textAlign:'center',transition:'all .15s',boxShadow:filter===t.id?`0 0 0 1px ${t.color}20`:undefined}}>
+            <p style={{fontSize:'1.5rem',fontWeight:'700',color:t.color}}>{counts[t.id]}</p>
+            <p style={{fontSize:'0.67rem',color:'var(--muted)',letterSpacing:'1px',textTransform:'uppercase',marginTop:'2px'}}>{t.label}</p>
           </div>
         ))}
       </div>
 
-      {/* Bookings list */}
+      {/* Main card */}
       <div className="card" style={{overflow:'hidden'}}>
-        <div style={{padding:'16px 20px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:'10px'}}>
+
+        {/* Header */}
+        <div style={{padding:'14px 18px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:'10px'}}>
           <span>📋</span>
           <span style={{fontWeight:'700',fontSize:'0.95rem'}}>All Bookings</span>
           <span className="badge badge-gray">{bookings.length}</span>
-          {pending>0&&<span className="badge badge-gold" style={{background:'var(--gold)',color:'#000',borderColor:'var(--gold)'}}>{pending} pending</span>}
+          {counts.pending>0&&(
+            <span style={{display:'inline-flex',alignItems:'center',padding:'2px 10px',borderRadius:'20px',fontSize:'0.7rem',fontWeight:'700',background:'rgba(212,175,55,0.15)',color:'var(--gold)',border:'1px solid rgba(212,175,55,0.4)'}}>
+              🔔 {counts.pending} pending
+            </span>
+          )}
         </div>
+
+        {/* Search bar */}
+        <div style={{padding:'10px 14px',borderBottom:'1px solid var(--border)'}}>
+          <input type="text" value={search} onChange={e=>setSearch(e.target.value)}
+            placeholder="🔍  Search client or therapist…"
+            style={{width:'100%',background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'9px',padding:'8px 14px',color:'var(--text)',fontSize:'0.85rem',outline:'none',fontFamily:'inherit'}}/>
+        </div>
+
+        {/* Filter tabs */}
+        <div style={{display:'flex',overflowX:'auto',borderBottom:'1px solid var(--border)',padding:'0 6px',scrollbarWidth:'none'}}>
+          {TABS.map(t=>(
+            <button key={t.id} onClick={()=>setFilter(t.id)}
+              style={{padding:'9px 13px',background:'transparent',border:'none',color:filter===t.id?t.color:'var(--muted)',fontWeight:filter===t.id?'700':'500',fontSize:'0.78rem',cursor:'pointer',whiteSpace:'nowrap',fontFamily:'inherit',borderBottom:filter===t.id?`2px solid ${t.color}`:'2px solid transparent',transition:'all .15s',display:'flex',alignItems:'center',gap:'5px'}}>
+              {t.label}
+              {counts[t.id]>0&&(
+                <span style={{background:filter===t.id?t.color:'var(--elevated)',color:filter===t.id?'#000':'var(--muted)',borderRadius:'10px',padding:'1px 6px',fontSize:'0.65rem',fontWeight:'700',minWidth:'18px',textAlign:'center'}}>
+                  {counts[t.id]}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Booking rows */}
         {loading
           ? <div style={{padding:'48px',textAlign:'center'}}><span className="spin" style={{fontSize:'1.5rem',color:'var(--gold)'}}>✦</span></div>
-          : bookings.length===0
-            ? <div style={{padding:'48px',textAlign:'center',color:'var(--muted)',fontSize:'0.9rem'}}>No bookings yet.</div>
-            : bookings.map(b=>(
-                <div key={b.id} className="item-card">
-                  {/* Status indicator */}
-                  <div className="item-avatar" style={{width:'10px',height:'10px',borderRadius:'50%',background:b.status==='accepted'||b.status==='scheduled'?'var(--success)':b.status==='pending'?'var(--gold)':'var(--muted)',flexShrink:0,marginTop:'4px'}}/>
-                  <div className="item-info">
-                    <div className="name">👤 {b.clientName}</div>
-                    <div className="sub">
-                      {b.therapistName||b.therapistId} · {b.bookingType==='now'?'⚡ Immediate':'📅 Scheduled'}
-                      {b.bookingType==='later'&&b.scheduledDate?` · ${b.scheduledDate} ${b.scheduledTime}`:''}
+          : filtered.length===0
+            ? <div style={{padding:'48px',textAlign:'center',color:'var(--muted)',fontSize:'0.9rem'}}>
+                {search?'No results found.':filter==='all'?'No bookings yet.':`No ${filter} bookings.`}
+              </div>
+            : filtered.map(b=>{
+                const c=cfg(b.status);
+                return (
+                  <div key={b.id} style={{padding:'13px 18px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'flex-start',gap:'12px',transition:'background .1s',cursor:'default'}}
+                    onMouseEnter={e=>e.currentTarget.style.background='rgba(212,175,55,0.025)'}
+                    onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                    {/* Status dot */}
+                    <div style={{width:'8px',height:'8px',borderRadius:'50%',background:c.color,flexShrink:0,marginTop:'7px'}}/>
+                    {/* Info */}
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',marginBottom:'5px'}}>
+                        <span style={{fontWeight:'700',fontSize:'0.9rem'}}>👤 {b.clientName}</span>
+                        <span style={{color:'var(--muted)',fontSize:'0.72rem'}}>→</span>
+                        <span style={{fontSize:'0.82rem',color:'var(--gold)',fontWeight:'600'}}>{b.therapistName||b.therapistId||'—'}</span>
+                      </div>
+                      <div style={{display:'flex',gap:'7px',alignItems:'center',flexWrap:'wrap'}}>
+                        <span style={{display:'inline-flex',alignItems:'center',padding:'2px 9px',borderRadius:'20px',fontSize:'0.69rem',fontWeight:'700',background:c.bg,color:c.color,border:`1px solid ${c.border}`}}>
+                          {b.status}
+                        </span>
+                        <span style={{fontSize:'0.72rem',color:'var(--muted)'}}>
+                          {b.bookingType==='now'?'⚡ Immediate':`📅 ${b.scheduledDate||''} ${b.scheduledTime||''}`}
+                        </span>
+                        {b.clientLocation&&(
+                          <a href={`https://maps.google.com?q=${b.clientLocation.lat},${b.clientLocation.lng}`}
+                            target="_blank" rel="noopener noreferrer"
+                            style={{color:'var(--gold)',fontSize:'0.72rem',textDecoration:'none'}}>📍 Map</a>
+                        )}
+                        {b.notes&&<span style={{fontSize:'0.68rem',color:'var(--muted)',fontStyle:'italic'}}>"{b.notes}"</span>}
+                      </div>
                     </div>
-                    <div className="meta">
-                      <span className={`badge ${statusBadge(b.status)}`}>{b.status}</span>
-                      {b.clientLocation&&(
-                        <a href={`https://maps.google.com?q=${b.clientLocation.lat},${b.clientLocation.lng}`} target="_blank" rel="noopener noreferrer"
-                          style={{color:'var(--gold)',fontSize:'0.7rem',textDecoration:'none'}}>📍 Map</a>
-                      )}
-                      {b.notes&&<span style={{fontSize:'0.68rem',color:'var(--muted)',fontStyle:'italic'}}>"{b.notes}"</span>}
-                    </div>
-                    <div className="item-actions-mobile" style={{fontSize:'0.7rem',color:'var(--muted)',marginTop:'4px'}}>
-                      {b.createdAt?.toDate?.()?.toLocaleString?.('en-IN')??''}
+                    {/* Time + delete */}
+                    <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'6px',flexShrink:0}}>
+                      <span style={{fontSize:'0.68rem',color:'var(--muted)',whiteSpace:'nowrap'}}>{timeAgo(b)}</span>
+                      <button onClick={()=>handleDelete(b)} disabled={deleting===b.id}
+                        style={{background:'transparent',border:'none',color:'var(--subtle)',cursor:'pointer',fontSize:'0.75rem',padding:'2px 4px',lineHeight:1,transition:'color .1s'}}
+                        onMouseEnter={e=>e.currentTarget.style.color='var(--danger)'}
+                        onMouseLeave={e=>e.currentTarget.style.color='var(--subtle)'}>
+                        {deleting===b.id?<span className="spin" style={{fontSize:'0.7rem'}}>✦</span>:'✕'}
+                      </button>
                     </div>
                   </div>
-                  <div className="item-actions-desktop" style={{fontSize:'0.7rem',color:'var(--muted)',textAlign:'right',flexShrink:0}}>
-                    {b.createdAt?.toDate?.()?.toLocaleString?.('en-IN')??''}
-                  </div>
-                </div>
-              ))
+                );
+              })
         }
       </div>
     </div>
