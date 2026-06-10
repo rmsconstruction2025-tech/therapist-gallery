@@ -270,18 +270,17 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
   const timerRef  = useRef(null);
   const canvasRef = useRef(null);
   const videoRef  = useRef(null);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 
-  // Feed the watermarked canvas into a playing <video> so iOS screenshots show black
+  // Feed canvas stream into video (non-iOS only — iOS doesn't support captureStream)
   useEffect(()=>{
-    if (!isVisible || !canvasRef.current || !videoRef.current) return;
+    if (isIOS || !isVisible || !canvasRef.current || !videoRef.current) return;
     try {
       const stream = canvasRef.current.captureStream(1);
       videoRef.current.srcObject = stream;
       videoRef.current.play().catch(()=>{});
-    } catch(e) { /* captureStream not supported — poster fallback still shown */ }
-    return ()=>{
-      try { if(videoRef.current) videoRef.current.srcObject=null; } catch(e){}
-    };
+    } catch(e) {}
+    return ()=>{ try { if(videoRef.current) videoRef.current.srcObject=null; } catch(e){} };
   },[isVisible, canvasUrl]);
 
   const tokenId    = tokenData?.id                  || '';
@@ -301,7 +300,7 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
       const canvas = canvasRef.current;
       if (!canvas) { resolve(therapist.imageUrl); return; }
       const img = new Image();
-      img.crossOrigin = 'anonymous';
+      // Do NOT set crossOrigin for base64 data URLs — it breaks canvas on iOS Safari
       img.onload = ()=>{
         const W=img.naturalWidth||img.width, H=img.naturalHeight||img.height;
         canvas.width=W; canvas.height=H;
@@ -372,11 +371,18 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
       const url=await buildCanvas();
       setCanvasUrl(url);
       setIsVisible(true); setTimeLeft(viewSecs);
-      let rem=viewSecs;
-      timerRef.current=setInterval(()=>{
-        rem-=1; setTimeLeft(rem);
-        if(rem<=0){ clearInterval(timerRef.current); setIsVisible(false); setCanvasUrl(''); }
-      },1000);
+      // Use wall-clock timer so iOS background throttling doesn't break countdown
+      const endAt = Date.now() + viewSecs * 1000;
+      const tick = () => {
+        const rem = Math.ceil((endAt - Date.now()) / 1000);
+        if (rem <= 0) {
+          clearInterval(timerRef.current);
+          setIsVisible(false); setCanvasUrl(''); setTimeLeft(0);
+        } else {
+          setTimeLeft(rem);
+        }
+      };
+      timerRef.current = setInterval(tick, 400); // poll at 400ms for accuracy
     } catch(err){ console.error(err); }
     finally{ setLoading(false); }
   };
@@ -396,16 +402,15 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
         {/* Solid black background — no blurred preview to screenshot */}
         <div style={{position:'absolute',inset:0,background:'#0a0a0a'}}/>
 
-        {/* Watermarked photo — played as live canvas stream so iOS screenshots show black */}
+        {/* Watermarked photo */}
         {isVisible&&canvasUrl&&(
           <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
-            <video
-              ref={videoRef}
-              poster={canvasUrl}
-              muted playsInline autoPlay
-              onContextMenu={e=>e.preventDefault()}
-              style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}
-            />
+            {isIOS
+              /* iOS: show watermarked <img> directly — captureStream not supported */
+              ? <img src={canvasUrl} onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover',display:'block',WebkitUserSelect:'none',userSelect:'none'}}/>
+              /* Android/Desktop: live canvas stream into <video> so screenshots show black */
+              : <video ref={videoRef} poster={canvasUrl} muted playsInline autoPlay onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
+            }
             {/* Countdown */}
             <div style={{position:'absolute',top:'10px',right:'10px',zIndex:10,background:'rgba(0,0,0,.7)',color:'var(--gold)',borderRadius:'20px',padding:'4px 12px',fontSize:'0.85rem',fontWeight:'700'}}>{timeLeft}s</div>
           </div>
