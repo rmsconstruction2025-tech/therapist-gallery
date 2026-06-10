@@ -302,21 +302,26 @@ function TherapistPortal({ session, onLogout }) {
 
   useEffect(() => { fetchProfile(); }, []);
 
-  // Real-time booking listener — simple single-field query (no composite index needed)
+  // Real-time booking listener — no Firestore index required, filter client-side
   useEffect(()=>{
     const unsub = db.collection('bookings')
-      .where('therapistDocId','==',session.docId)
+      .limit(100)
       .onSnapshot(snap=>{
-        const all = snap.docs.map(d=>({id:d.id,...d.data()}))
+        const mine = snap.docs
+          .map(d=>({id:d.id,...d.data()}))
+          .filter(b=> b.therapistId===session.therapistId || b.therapistDocId===session.docId)
           .sort((a,b)=>(b.createdAt?.toMillis?.()??0)-(a.createdAt?.toMillis?.()??0));
-        const pending   = all.filter(b=>b.status==='pending');
-        const scheduled = all.filter(b=>b.status==='scheduled');
+
+        const pending   = mine.filter(b=>b.status==='pending');
+        const scheduled = mine.filter(b=>b.status==='scheduled');
 
         // Play sound on new pending/scheduled booking (after initial load)
         if(seenInitRef.current){
           snap.docChanges().forEach(c=>{
-            if(c.type==='added'){
-              const s = c.doc.data().status;
+            const d = c.doc.data();
+            const isMyBooking = d.therapistId===session.therapistId || d.therapistDocId===session.docId;
+            if(c.type==='added' && isMyBooking){
+              const s = d.status;
               if(s==='pending'||s==='scheduled') playAlert('new');
             }
           });
@@ -326,7 +331,7 @@ function TherapistPortal({ session, onLogout }) {
         setScheduledBookings(scheduled);
       }, err=>console.error('bookings listener error:',err));
     return ()=>unsub();
-  },[session.docId]);
+  },[]);
 
   const acceptBooking = async (b)=>{
     try {
