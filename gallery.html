@@ -269,6 +269,20 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
   const [canvasUrl,    setCanvasUrl]    = useState('');
   const timerRef  = useRef(null);
   const canvasRef = useRef(null);
+  const videoRef  = useRef(null);
+
+  // Feed the watermarked canvas into a playing <video> so iOS screenshots show black
+  useEffect(()=>{
+    if (!isVisible || !canvasRef.current || !videoRef.current) return;
+    try {
+      const stream = canvasRef.current.captureStream(1);
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(()=>{});
+    } catch(e) { /* captureStream not supported — poster fallback still shown */ }
+    return ()=>{
+      try { if(videoRef.current) videoRef.current.srcObject=null; } catch(e){}
+    };
+  },[isVisible, canvasUrl]);
 
   const tokenId    = tokenData?.id                  || '';
   const maxViews   = tokenData?.maxViewsPerImage    ?? 2;
@@ -373,12 +387,13 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
         {/* Blurred base image */}
         <img src={therapist.imageUrl} crossOrigin="anonymous" style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',filter:'blur(14px)',opacity:isVisible?0:1,transition:'opacity .3s'}}/>
 
-        {/* Watermarked canvas — use <video poster> so iOS screenshots render black */}
+        {/* Watermarked photo — played as live canvas stream so iOS screenshots show black */}
         {isVisible&&canvasUrl&&(
           <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
             <video
+              ref={videoRef}
               poster={canvasUrl}
-              muted playsInline preload="none"
+              muted playsInline autoPlay
               onContextMenu={e=>e.preventDefault()}
               style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}
             />
