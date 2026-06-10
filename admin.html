@@ -337,8 +337,7 @@ function LinkCreator() {
   useEffect(()=>{ fetchLinks(); },[]);
 
   const galleryUrl = (token) => {
-    const base = window.location.href.replace('admin.html','gallery.html');
-    return `${base.split('?')[0]}?token=${token}`;
+    return `${window.location.origin}/gallery.html?token=${token}`;
   };
 
   const fetchLinks = async () => {
