@@ -308,26 +308,35 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
         const ctx=canvas.getContext('2d');
         ctx.drawImage(img,0,0,W,H);
         const ts=new Date().toLocaleString('en-IN');
-        // Subtle diagonal watermark — visible but not blocking the photo
+        // Heavy diagonal watermark — repeated across entire photo
         ctx.save();
-        ctx.globalAlpha=0.22; ctx.fillStyle='#ffffff';
-        ctx.font=`bold ${Math.max(12,W*0.025)}px Arial`;
-        ctx.rotate(-Math.PI/8);
-        const step=Math.max(100,W*0.35);
+        ctx.globalAlpha=0.38; ctx.fillStyle='#ffffff';
+        ctx.font=`bold ${Math.max(18,W*0.045)}px Arial`;
+        ctx.rotate(-Math.PI/7);
+        const step=Math.max(90,W*0.32);
         for(let y=-H;y<H*2;y+=step)
-          for(let x=-W;x<W*2;x+=step*1.6){
+          for(let x=-W;x<W*2;x+=step*1.5){
             ctx.fillText(clientName,x,y);
-            ctx.fillText(`+91${clientPhone}`,x,y+Math.max(16,W*0.032));
+            ctx.fillText(`+91${clientPhone}`,x,y+Math.max(22,W*0.042));
           }
         ctx.restore();
-        // Single bottom-right corner stamp (always visible)
+        // Bold top banner
         ctx.save();
-        ctx.globalAlpha=0.75; ctx.fillStyle='#ffffff';
-        ctx.font=`bold ${Math.max(10,W*0.02)}px Arial`;
-        ctx.textAlign='right';
-        const pad=W*0.03;
-        ctx.fillText(`${clientName} | +91${clientPhone}`,W-pad,H-pad-Math.max(14,W*0.025));
-        ctx.fillText(ts,W-pad,H-pad);
+        ctx.fillStyle='rgba(0,0,0,0.55)';
+        ctx.fillRect(0,0,W,Math.max(44,H*0.09));
+        ctx.globalAlpha=1; ctx.fillStyle='#ffcc00';
+        ctx.font=`bold ${Math.max(13,W*0.032)}px Arial`;
+        ctx.textAlign='center';
+        ctx.fillText(`FOR: ${clientName}  |  +91${clientPhone}`,W/2,Math.max(28,H*0.062));
+        ctx.restore();
+        // Bold bottom stamp
+        ctx.save();
+        ctx.fillStyle='rgba(0,0,0,0.55)';
+        ctx.fillRect(0,H-Math.max(44,H*0.09),W,Math.max(44,H*0.09));
+        ctx.globalAlpha=1; ctx.fillStyle='#ffcc00';
+        ctx.font=`bold ${Math.max(11,W*0.026)}px Arial`;
+        ctx.textAlign='center';
+        ctx.fillText(`${clientName} | +91${clientPhone} | ${ts}`,W/2,H-Math.max(14,H*0.025));
         ctx.restore();
         resolve(canvas.toDataURL('image/jpeg',0.92));
       };
@@ -384,8 +393,8 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
       <canvas ref={canvasRef} style={{display:'none'}}/>
       <div style={{position:'relative',aspectRatio:'3/4',background:'#0d0d0d',overflow:'hidden'}}>
 
-        {/* Blurred base image */}
-        <img src={therapist.imageUrl} crossOrigin="anonymous" style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',filter:'blur(14px)',opacity:isVisible?0:1,transition:'opacity .3s'}}/>
+        {/* Solid black background — no blurred preview to screenshot */}
+        <div style={{position:'absolute',inset:0,background:'#0a0a0a'}}/>
 
         {/* Watermarked photo — played as live canvas stream so iOS screenshots show black */}
         {isVisible&&canvasUrl&&(
