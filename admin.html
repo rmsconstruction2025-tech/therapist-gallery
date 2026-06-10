@@ -398,6 +398,30 @@ function TherapistManager() {
     } catch(err) { alert(`Delete failed: ${err.message}`); }
   };
 
+  const [rowUploading, setRowUploading] = useState(null); // therapist id being uploaded
+  const rowFileRef = useRef(null);
+  const rowTargetRef = useRef(null); // which therapist is being updated
+
+  const handleRowPhotoClick = (t) => {
+    rowTargetRef.current = t;
+    rowFileRef.current?.click();
+  };
+
+  const handleRowFileChange = async (e) => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (!f || !f.type.startsWith('image/')) return;
+    const t = rowTargetRef.current;
+    if (!t) return;
+    setRowUploading(t.id);
+    try {
+      const imageUrl = await resizeToBase64(f);
+      await db.collection('therapists').doc(t.id).update({ imageUrl });
+      setTherapists(prev => prev.map(x => x.id===t.id ? {...x, imageUrl} : x));
+    } catch(err) { alert(`Upload failed: ${err.message}`); }
+    setRowUploading(null);
+  };
+
   return (
     <div style={{display:'flex',flexDirection:'column',gap:'24px'}}>
 
@@ -460,10 +484,23 @@ function TherapistManager() {
                   <span>Visibility</span>
                   <span style={{textAlign:'right'}}>Actions</span>
                 </div>
+                <input ref={rowFileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleRowFileChange}/>
                 {therapists.map(t=>(
                   <div key={t.id} className="table-row" style={{gridTemplateColumns:'60px 1fr 110px 120px 100px'}}>
-                    <div style={{width:'48px',height:'48px',borderRadius:'10px',overflow:'hidden',background:'var(--elevated)',border:'1px solid var(--border)',flexShrink:0}}>
-                      <img src={t.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
+                    <div
+                      onClick={()=>rowUploading?null:handleRowPhotoClick(t)}
+                      title="Click to change photo"
+                      style={{width:'48px',height:'48px',borderRadius:'10px',overflow:'hidden',background:'var(--elevated)',border:'1px solid var(--border)',flexShrink:0,cursor:'pointer',position:'relative',group:true}}
+                      onMouseEnter={e=>{e.currentTarget.querySelector('.photo-overlay').style.opacity='1';}}
+                      onMouseLeave={e=>{e.currentTarget.querySelector('.photo-overlay').style.opacity='0';}}
+                    >
+                      {rowUploading===t.id
+                        ? <div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--elevated)'}}><span className="spin" style={{color:'var(--gold)'}}>✦</span></div>
+                        : <>
+                            <img src={t.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}} onError={e=>e.target.style.display='none'}/>
+                            <div className="photo-overlay" style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.6)',display:'flex',alignItems:'center',justifyContent:'center',opacity:0,transition:'opacity .15s',fontSize:'1.1rem'}}>📷</div>
+                          </>
+                      }
                     </div>
                     <div style={{paddingLeft:'12px'}}>
                       <div style={{fontWeight:'600',fontSize:'0.9rem',color:'var(--text)'}}>{t.name||<span style={{color:'var(--muted)',fontStyle:'italic'}}>Unnamed</span>}</div>
