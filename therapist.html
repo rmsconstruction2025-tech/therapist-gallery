@@ -104,27 +104,33 @@ function getACtx() {
   }, {once:true, capture:true, passive:true});
 });
 
+function _playTones(ctx, type) {
+  if (navigator.vibrate) navigator.vibrate(type==='new' ? [200,100,200,100,200] : [150,80,150]);
+  const seqs = {
+    new:    [[1000,0.00,0.18],[1400,0.20,0.18],[1000,0.40,0.18],[1400,0.60,0.18],[1000,0.80,0.18]],
+    accept: [[660,0.00,0.25],[880,0.28,0.25],[1100,0.56,0.25]],
+  };
+  (seqs[type]||seqs.new).forEach(([freq,t,dur])=>{
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value=freq;
+    o.type = type==='new' ? 'sawtooth' : 'square';
+    g.gain.setValueAtTime(0, ctx.currentTime+t);
+    g.gain.linearRampToValueAtTime(0.6, ctx.currentTime+t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+t+dur);
+    o.start(ctx.currentTime+t); o.stop(ctx.currentTime+t+dur+0.02);
+  });
+}
 function playAlert(type='new') {
   try {
     const ctx = getACtx();
     if (!ctx) return;
-    if (ctx.state === 'suspended') { ctx.resume().catch(()=>{}); return; }
-    // Also vibrate on mobile (Android)
-    if (navigator.vibrate) navigator.vibrate(type==='new' ? [200,100,200,100,200] : [150,80,150]);
-    const seqs = {
-      new:    [[1000,0.00,0.18],[1400,0.20,0.18],[1000,0.40,0.18],[1400,0.60,0.18],[1000,0.80,0.18]],
-      accept: [[660,0.00,0.25],[880,0.28,0.25],[1100,0.56,0.25]],
-    };
-    (seqs[type]||seqs.new).forEach(([freq,t,dur])=>{
-      const o=ctx.createOscillator(), g=ctx.createGain();
-      o.connect(g); g.connect(ctx.destination);
-      o.frequency.value=freq;
-      o.type = type==='new' ? 'sawtooth' : 'square'; // sawtooth = maximum loudness
-      g.gain.setValueAtTime(0, ctx.currentTime+t);
-      g.gain.linearRampToValueAtTime(0.6, ctx.currentTime+t+0.01); // high gain
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+t+dur);
-      o.start(ctx.currentTime+t); o.stop(ctx.currentTime+t+dur+0.02);
-    });
+    if (ctx.state === 'suspended') {
+      // Resume then play — fires when user first taps anything
+      ctx.resume().then(() => _playTones(ctx, type)).catch(()=>{});
+      return;
+    }
+    _playTones(ctx, type);
   } catch(e){}
 }
 
