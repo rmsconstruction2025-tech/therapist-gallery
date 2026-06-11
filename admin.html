@@ -986,11 +986,12 @@ function TherapistAccounts() {
 //  BOOKINGS PANEL
 // ══════════════════════════════════════════════════════
 function BookingsPanel() {
-  const [bookings,  setBookings]  = useState([]);
-  const [loading,   setLoading]   = useState(true);
-  const [filter,    setFilter]    = useState('all');
-  const [search,    setSearch]    = useState('');
-  const [deleting,  setDeleting]  = useState(null);
+  const [bookings,   setBookings]   = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [filter,     setFilter]     = useState('all');
+  const [search,     setSearch]     = useState('');
+  const [deleting,   setDeleting]   = useState(null);
+  const [confirming, setConfirming] = useState(null);
   const seenInitRef = useRef(false);
 
   useEffect(()=>{
@@ -1014,30 +1015,59 @@ function BookingsPanel() {
     setDeleting(null);
   };
 
+  const confirmBooking = async (b)=>{
+    setConfirming(b.id);
+    try {
+      await db.collection('bookings').doc(b.id).update({
+        status:'confirmed',
+        confirmedAt: FieldValue.serverTimestamp(),
+      });
+      // Build WhatsApp messages
+      const clientPhone = b.clientPhone ? '91'+b.clientPhone.replace(/\D/g,'').replace(/^91/,'') : null;
+      const therapistPhone = b.therapistPhone ? '91'+b.therapistPhone.replace(/\D/g,'').replace(/^91/,'') : null;
+      const therapistName = b.therapistName || b.therapistId || 'the therapist';
+      const msgToClient = encodeURIComponent(
+        `Hello ${b.clientName}, your appointment with ${therapistName} has been confirmed by Feel Free Spa! We will coordinate the details shortly. Thank you for choosing us!`
+      );
+      const msgToTherapist = encodeURIComponent(
+        `Hello, your appointment with client ${b.clientName} has been confirmed. Please proceed as scheduled. Thank you!`
+      );
+      // Open WhatsApp for client
+      if(clientPhone) window.open(`https://wa.me/${clientPhone}?text=${msgToClient}`, '_blank');
+      // Slight delay then open for therapist
+      if(therapistPhone) setTimeout(()=>window.open(`https://wa.me/${therapistPhone}?text=${msgToTherapist}`, '_blank'), 800);
+    } catch(err){ alert(`Error: ${err.message}`); }
+    setConfirming(null);
+  };
+
   const counts = {
-    all:       bookings.length,
-    pending:   bookings.filter(b=>b.status==='pending').length,
-    accepted:  bookings.filter(b=>b.status==='accepted').length,
-    scheduled: bookings.filter(b=>b.status==='scheduled').length,
-    declined:  bookings.filter(b=>b.status==='declined').length,
-    expired:   bookings.filter(b=>b.status==='expired').length,
+    all:           bookings.length,
+    pending:       bookings.filter(b=>b.status==='pending').length,
+    admin_pending: bookings.filter(b=>b.status==='admin_pending').length,
+    confirmed:     bookings.filter(b=>b.status==='confirmed').length,
+    scheduled:     bookings.filter(b=>b.status==='scheduled').length,
+    declined:      bookings.filter(b=>b.status==='declined').length,
+    expired:       bookings.filter(b=>b.status==='expired').length,
   };
 
   const TABS = [
-    {id:'all',       label:'All',       color:'var(--text)'},
-    {id:'pending',   label:'Pending',   color:'var(--gold)'},
-    {id:'accepted',  label:'Accepted',  color:'#2ecc71'},
-    {id:'scheduled', label:'Scheduled', color:'#3498db'},
-    {id:'declined',  label:'Declined',  color:'#e74c3c'},
-    {id:'expired',   label:'Expired',   color:'var(--muted)'},
+    {id:'all',           label:'All',          color:'var(--text)'},
+    {id:'pending',       label:'Pending',       color:'var(--gold)'},
+    {id:'admin_pending', label:'Needs Confirm', color:'#f39c12'},
+    {id:'scheduled',     label:'Upcoming',      color:'#3498db'},
+    {id:'confirmed',     label:'Confirmed',     color:'#2ecc71'},
+    {id:'declined',      label:'Declined',      color:'#e74c3c'},
+    {id:'expired',       label:'Expired',       color:'var(--muted)'},
   ];
 
   const STATUS_CFG = {
-    pending:   {color:'var(--gold)',   bg:'rgba(212,175,55,0.12)', border:'rgba(212,175,55,0.35)'},
-    accepted:  {color:'#2ecc71',       bg:'rgba(46,204,113,0.12)', border:'rgba(46,204,113,0.35)'},
-    scheduled: {color:'#3498db',       bg:'rgba(52,152,219,0.12)', border:'rgba(52,152,219,0.35)'},
-    declined:  {color:'#e74c3c',       bg:'rgba(231,76,60,0.12)',  border:'rgba(231,76,60,0.35)'},
-    expired:   {color:'var(--muted)',  bg:'rgba(100,100,100,0.1)', border:'rgba(100,100,100,0.25)'},
+    pending:       {color:'var(--gold)',  bg:'rgba(212,175,55,0.12)',  border:'rgba(212,175,55,0.35)', label:'Pending'},
+    admin_pending: {color:'#f39c12',     bg:'rgba(243,156,18,0.12)',  border:'rgba(243,156,18,0.35)', label:'Needs Confirm'},
+    confirmed:     {color:'#2ecc71',     bg:'rgba(46,204,113,0.12)',  border:'rgba(46,204,113,0.35)', label:'Confirmed'},
+    accepted:      {color:'#2ecc71',     bg:'rgba(46,204,113,0.12)',  border:'rgba(46,204,113,0.35)', label:'Accepted'},
+    scheduled:     {color:'#3498db',     bg:'rgba(52,152,219,0.12)',  border:'rgba(52,152,219,0.35)', label:'Upcoming'},
+    declined:      {color:'#e74c3c',     bg:'rgba(231,76,60,0.12)',   border:'rgba(231,76,60,0.35)',  label:'Declined'},
+    expired:       {color:'var(--muted)',bg:'rgba(100,100,100,0.1)',  border:'rgba(100,100,100,0.25)',label:'Expired'},
   };
   const cfg = s => STATUS_CFG[s] || STATUS_CFG.expired;
 
@@ -1060,12 +1090,15 @@ function BookingsPanel() {
     <div style={{display:'flex',flexDirection:'column',gap:'16px'}}>
 
       {/* Stats grid — click to filter */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(100px,1fr))',gap:'10px'}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(90px,1fr))',gap:'8px'}}>
         {TABS.filter(t=>t.id!=='all').map(t=>(
           <div key={t.id} onClick={()=>setFilter(f=>f===t.id?'all':t.id)}
-            style={{background:'var(--surface)',border:`1px solid ${filter===t.id?t.color:'var(--border)'}`,borderRadius:'12px',padding:'12px 14px',cursor:'pointer',textAlign:'center',transition:'all .15s',boxShadow:filter===t.id?`0 0 0 1px ${t.color}20`:undefined}}>
-            <p style={{fontSize:'1.5rem',fontWeight:'700',color:t.color}}>{counts[t.id]}</p>
-            <p style={{fontSize:'0.67rem',color:'var(--muted)',letterSpacing:'1px',textTransform:'uppercase',marginTop:'2px'}}>{t.label}</p>
+            style={{background:'var(--surface)',border:`1px solid ${filter===t.id?t.color:'var(--border)'}`,borderRadius:'12px',padding:'10px 12px',cursor:'pointer',textAlign:'center',transition:'all .15s',boxShadow:filter===t.id?`0 0 0 1px ${t.color}20`:undefined,position:'relative'}}>
+            <p style={{fontSize:'1.4rem',fontWeight:'700',color:t.color}}>{counts[t.id]||0}</p>
+            <p style={{fontSize:'0.6rem',color:'var(--muted)',letterSpacing:'0.5px',textTransform:'uppercase',marginTop:'2px',lineHeight:'1.3'}}>{t.label}</p>
+            {t.id==='admin_pending'&&(counts[t.id]||0)>0&&(
+              <div style={{position:'absolute',top:'6px',right:'6px',width:'8px',height:'8px',borderRadius:'50%',background:'#f39c12',boxShadow:'0 0 6px #f39c12'}}/>
+            )}
           </div>
         ))}
       </div>
@@ -1074,13 +1107,18 @@ function BookingsPanel() {
       <div className="card" style={{overflow:'hidden'}}>
 
         {/* Header */}
-        <div style={{padding:'14px 18px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:'10px'}}>
+        <div style={{padding:'14px 18px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap'}}>
           <span>📋</span>
           <span style={{fontWeight:'700',fontSize:'0.95rem'}}>All Bookings</span>
           <span className="badge badge-gray">{bookings.length}</span>
           {counts.pending>0&&(
             <span style={{display:'inline-flex',alignItems:'center',padding:'2px 10px',borderRadius:'20px',fontSize:'0.7rem',fontWeight:'700',background:'rgba(212,175,55,0.15)',color:'var(--gold)',border:'1px solid rgba(212,175,55,0.4)'}}>
               🔔 {counts.pending} pending
+            </span>
+          )}
+          {counts.admin_pending>0&&(
+            <span style={{display:'inline-flex',alignItems:'center',padding:'2px 10px',borderRadius:'20px',fontSize:'0.7rem',fontWeight:'700',background:'rgba(243,156,18,0.15)',color:'#f39c12',border:'1px solid rgba(243,156,18,0.4)'}}>
+              ⚡ {counts.admin_pending} need your confirmation
             </span>
           )}
         </div>
@@ -1116,43 +1154,90 @@ function BookingsPanel() {
               </div>
             : filtered.map(b=>{
                 const c=cfg(b.status);
+                const clientWaPhone = b.clientPhone ? '91'+b.clientPhone.replace(/\D/g,'').replace(/^91/,'') : null;
+                const therapistWaPhone = b.therapistPhone ? '91'+b.therapistPhone.replace(/\D/g,'').replace(/^91/,'') : null;
+                const therapistName = b.therapistName||b.therapistId||'the therapist';
                 return (
-                  <div key={b.id} style={{padding:'13px 18px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'flex-start',gap:'12px',transition:'background .1s',cursor:'default'}}
-                    onMouseEnter={e=>e.currentTarget.style.background='rgba(212,175,55,0.025)'}
-                    onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-                    {/* Status dot */}
-                    <div style={{width:'8px',height:'8px',borderRadius:'50%',background:c.color,flexShrink:0,marginTop:'7px'}}/>
-                    {/* Info */}
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',marginBottom:'5px'}}>
-                        <span style={{fontWeight:'700',fontSize:'0.9rem'}}>👤 {b.clientName}</span>
-                        <span style={{color:'var(--muted)',fontSize:'0.72rem'}}>→</span>
-                        <span style={{fontSize:'0.82rem',color:'var(--gold)',fontWeight:'600'}}>{b.therapistName||b.therapistId||'—'}</span>
-                      </div>
-                      <div style={{display:'flex',gap:'7px',alignItems:'center',flexWrap:'wrap'}}>
-                        <span style={{display:'inline-flex',alignItems:'center',padding:'2px 9px',borderRadius:'20px',fontSize:'0.69rem',fontWeight:'700',background:c.bg,color:c.color,border:`1px solid ${c.border}`}}>
-                          {b.status}
-                        </span>
-                        <span style={{fontSize:'0.72rem',color:'var(--muted)'}}>
-                          {b.bookingType==='now'?'⚡ Immediate':`📅 ${b.scheduledDate||''} ${b.scheduledTime||''}`}
-                        </span>
-                        {b.clientLocation&&(
-                          <a href={`https://maps.google.com?q=${b.clientLocation.lat},${b.clientLocation.lng}`}
-                            target="_blank" rel="noopener noreferrer"
-                            style={{color:'var(--gold)',fontSize:'0.72rem',textDecoration:'none'}}>📍 Map</a>
+                  <div key={b.id} style={{padding:'14px 18px',borderBottom:'1px solid var(--border)',background:b.status==='admin_pending'?'rgba(243,156,18,0.03)':'transparent',transition:'background .1s',cursor:'default'}}
+                    onMouseEnter={e=>e.currentTarget.style.background=b.status==='admin_pending'?'rgba(243,156,18,0.06)':'rgba(212,175,55,0.025)'}
+                    onMouseLeave={e=>e.currentTarget.style.background=b.status==='admin_pending'?'rgba(243,156,18,0.03)':'transparent'}>
+                    <div style={{display:'flex',alignItems:'flex-start',gap:'12px'}}>
+                      {/* Status dot */}
+                      <div style={{width:'8px',height:'8px',borderRadius:'50%',background:c.color,flexShrink:0,marginTop:'7px'}}/>
+                      {/* Info */}
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',marginBottom:'5px'}}>
+                          <span style={{fontWeight:'700',fontSize:'0.9rem'}}>👤 {b.clientName}</span>
+                          <span style={{color:'var(--muted)',fontSize:'0.72rem'}}>→</span>
+                          <span style={{fontSize:'0.82rem',color:'var(--gold)',fontWeight:'600'}}>{therapistName}</span>
+                        </div>
+                        <div style={{display:'flex',gap:'7px',alignItems:'center',flexWrap:'wrap',marginBottom:'6px'}}>
+                          <span style={{display:'inline-flex',alignItems:'center',padding:'2px 9px',borderRadius:'20px',fontSize:'0.69rem',fontWeight:'700',background:c.bg,color:c.color,border:`1px solid ${c.border}`}}>
+                            {c.label||b.status}
+                          </span>
+                          <span style={{fontSize:'0.72rem',color:'var(--muted)'}}>
+                            {b.bookingType==='now'?'⚡ Immediate':`📅 ${b.scheduledDate||''} ${b.scheduledTime||''}`}
+                          </span>
+                          {b.clientLocation&&(
+                            <a href={`https://maps.google.com?q=${b.clientLocation.lat},${b.clientLocation.lng}`}
+                              target="_blank" rel="noopener noreferrer"
+                              style={{color:'var(--gold)',fontSize:'0.72rem',textDecoration:'none'}}>📍 Map</a>
+                          )}
+                          {b.notes&&<span style={{fontSize:'0.68rem',color:'var(--muted)',fontStyle:'italic'}}>"{b.notes}"</span>}
+                        </div>
+
+                        {/* ── Admin_Pending: Confirm button ── */}
+                        {b.status==='admin_pending'&&(
+                          <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginTop:'8px'}}>
+                            <button onClick={()=>confirmBooking(b)} disabled={confirming===b.id}
+                              style={{background:'linear-gradient(135deg,#27ae60,#2ecc71)',color:'#fff',border:'none',borderRadius:'8px',padding:'9px 18px',fontWeight:'700',fontSize:'0.82rem',cursor:'pointer',minHeight:'38px',display:'inline-flex',alignItems:'center',gap:'6px'}}>
+                              {confirming===b.id?<span className="spin">✦</span>:'✓ Confirm & Send WhatsApp'}
+                            </button>
+                          </div>
                         )}
-                        {b.notes&&<span style={{fontSize:'0.68rem',color:'var(--muted)',fontStyle:'italic'}}>"{b.notes}"</span>}
+
+                        {/* ── Confirmed: WhatsApp resend buttons ── */}
+                        {b.status==='confirmed'&&(
+                          <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginTop:'6px'}}>
+                            {clientWaPhone&&(
+                              <a href={`https://wa.me/${clientWaPhone}?text=${encodeURIComponent('Hello '+b.clientName+', your appointment with '+therapistName+' has been confirmed by Feel Free Spa! We will coordinate the details shortly.')}`}
+                                target="_blank" rel="noopener noreferrer"
+                                style={{display:'inline-flex',alignItems:'center',gap:'5px',background:'#25D366',color:'#fff',borderRadius:'7px',padding:'6px 12px',fontSize:'0.75rem',fontWeight:'700',textDecoration:'none'}}>
+                                💬 Client
+                              </a>
+                            )}
+                            {therapistWaPhone&&(
+                              <a href={`https://wa.me/${therapistWaPhone}?text=${encodeURIComponent('Hello, your appointment with client '+b.clientName+' has been confirmed. Please proceed as scheduled.')}`}
+                                target="_blank" rel="noopener noreferrer"
+                                style={{display:'inline-flex',alignItems:'center',gap:'5px',background:'#25D366',color:'#fff',borderRadius:'7px',padding:'6px 12px',fontSize:'0.75rem',fontWeight:'700',textDecoration:'none'}}>
+                                💬 Therapist
+                              </a>
+                            )}
+                            <span style={{fontSize:'0.7rem',color:'var(--success)',alignSelf:'center'}}>✓ Confirmed</span>
+                          </div>
+                        )}
+
+                        {/* ── Scheduled/Upcoming: WhatsApp to confirm ── */}
+                        {b.status==='scheduled'&&(
+                          <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginTop:'6px',alignItems:'center'}}>
+                            <span style={{fontSize:'0.72rem',color:'#3498db'}}>📅 {b.scheduledDate} {b.scheduledTime}</span>
+                            <button onClick={()=>confirmBooking(b)} disabled={confirming===b.id}
+                              style={{background:'rgba(52,152,219,0.15)',color:'#3498db',border:'1px solid rgba(52,152,219,0.4)',borderRadius:'7px',padding:'5px 12px',fontWeight:'700',fontSize:'0.75rem',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'5px'}}>
+                              {confirming===b.id?<span className="spin">✦</span>:'✓ Confirm Upcoming'}
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                    {/* Time + delete */}
-                    <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'6px',flexShrink:0}}>
-                      <span style={{fontSize:'0.68rem',color:'var(--muted)',whiteSpace:'nowrap'}}>{timeAgo(b)}</span>
-                      <button onClick={()=>handleDelete(b)} disabled={deleting===b.id}
-                        style={{background:'transparent',border:'none',color:'var(--subtle)',cursor:'pointer',fontSize:'0.75rem',padding:'2px 4px',lineHeight:1,transition:'color .1s'}}
-                        onMouseEnter={e=>e.currentTarget.style.color='var(--danger)'}
-                        onMouseLeave={e=>e.currentTarget.style.color='var(--subtle)'}>
-                        {deleting===b.id?<span className="spin" style={{fontSize:'0.7rem'}}>✦</span>:'✕'}
-                      </button>
+                      {/* Time + delete */}
+                      <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'6px',flexShrink:0}}>
+                        <span style={{fontSize:'0.68rem',color:'var(--muted)',whiteSpace:'nowrap'}}>{timeAgo(b)}</span>
+                        <button onClick={()=>handleDelete(b)} disabled={deleting===b.id}
+                          style={{background:'transparent',border:'none',color:'var(--subtle)',cursor:'pointer',fontSize:'0.75rem',padding:'2px 4px',lineHeight:1,transition:'color .1s'}}
+                          onMouseEnter={e=>e.currentTarget.style.color='var(--danger)'}
+                          onMouseLeave={e=>e.currentTarget.style.color='var(--subtle)'}>
+                          {deleting===b.id?<span className="spin" style={{fontSize:'0.7rem'}}>✦</span>:'✕'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );

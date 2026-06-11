@@ -529,12 +529,20 @@ function BookingModal({ therapist, clientName, clientPhone, onClose }) {
         {step==='accepted'&&(
           <div style={{textAlign:'center'}}>
             <div style={{fontSize:'3rem',marginBottom:'10px'}}>✅</div>
-            <h2 style={{color:'#27ae60',fontSize:'1.15rem',fontWeight:'700',marginBottom:'8px'}}>Appointment Confirmed!</h2>
-            <p style={{color:'var(--muted)',fontSize:'0.85rem',marginBottom:'6px'}}>
+            <h2 style={{color:'#27ae60',fontSize:'1.15rem',fontWeight:'700',marginBottom:'8px'}}>Therapist Accepted!</h2>
+            <p style={{color:'var(--muted)',fontSize:'0.85rem',marginBottom:'12px'}}>
               <strong style={{color:'var(--text)'}}>{therapist.name||therapist.therapistId}</strong> has accepted your request.
             </p>
-            <p style={{color:'var(--muted)',fontSize:'0.78rem',marginBottom:'20px'}}>The spa will contact you shortly to confirm the details.</p>
-            <button onClick={onClose} style={{...goldBtn,background:'#27ae60',color:'#fff'}}>Done ✓</button>
+            <div style={{background:'rgba(212,175,55,0.08)',border:'1px solid var(--border-gold)',borderRadius:'12px',padding:'14px',marginBottom:'16px',textAlign:'left'}}>
+              <p style={{color:'var(--gold)',fontSize:'0.85rem',fontWeight:'700',marginBottom:'5px'}}>⏳ Next: Admin Confirmation</p>
+              <p style={{color:'var(--muted)',fontSize:'0.8rem',lineHeight:'1.6'}}>Admin will verify and confirm your appointment. Confirmation will be sent to your WhatsApp.</p>
+            </div>
+            <a href={`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent('Hi, my booking with '+(therapist.name||therapist.therapistId)+' has been accepted. Kindly confirm my appointment. — '+clientName)}`}
+              target="_blank" rel="noopener noreferrer"
+              style={{display:'block',background:'#25D366',color:'#fff',borderRadius:'10px',padding:'13px',fontWeight:'700',textDecoration:'none',marginBottom:'10px',fontSize:'0.9rem',textAlign:'center'}}>
+              💬 Contact Admin on WhatsApp
+            </a>
+            <button onClick={onClose} style={{...goldBtn,background:'transparent',border:'1px solid var(--border)',color:'var(--muted)'}}>Close</button>
           </div>
         )}
 
@@ -586,7 +594,12 @@ function BookingModal({ therapist, clientName, clientPhone, onClose }) {
               <p style={{color:'var(--gold)',fontSize:'0.88rem',fontWeight:'600'}}>📅 {form.date}</p>
               <p style={{color:'var(--gold)',fontSize:'0.88rem',fontWeight:'600'}}>🕐 {form.time}</p>
             </div>
-            <p style={{color:'var(--muted)',fontSize:'0.76rem',marginBottom:'18px'}}>The therapist has been notified. The spa will confirm your appointment.</p>
+            <p style={{color:'var(--muted)',fontSize:'0.76rem',marginBottom:'14px'}}>Your appointment is listed as <strong style={{color:'var(--gold)'}}>upcoming</strong>. Admin and therapist have been notified.</p>
+            <a href={`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent('Hi, I just scheduled an upcoming appointment with '+(therapist.name||therapist.therapistId)+' for '+form.date+' at '+form.time+'. Please confirm. — '+clientName)}`}
+              target="_blank" rel="noopener noreferrer"
+              style={{display:'block',background:'#25D366',color:'#fff',borderRadius:'10px',padding:'12px',fontWeight:'700',textDecoration:'none',marginBottom:'10px',fontSize:'0.88rem',textAlign:'center'}}>
+              💬 Contact Admin on WhatsApp
+            </a>
             <button onClick={onClose} style={goldBtn}>Done ✓</button>
           </div>
         )}

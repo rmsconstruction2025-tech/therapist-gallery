@@ -295,6 +295,7 @@ function TherapistPortal({ session, onLogout }) {
   const [saving,      setSaving]      = useState('');
   const [available,   setAvailable]   = useState(false);
   const [name,        setName]        = useState('');
+  const [phone,       setPhone]       = useState('');
   const [workStart,   setWorkStart]   = useState('09:00');
   const [workEnd,     setWorkEnd]     = useState('18:00');
   const [speciality,  setSpeciality]  = useState('');
@@ -380,7 +381,11 @@ function TherapistPortal({ session, onLogout }) {
 
   const acceptBooking = async (b)=>{
     try {
-      await db.collection('bookings').doc(b.id).update({status:'accepted', acceptedAt:FieldValue.serverTimestamp()});
+      await db.collection('bookings').doc(b.id).update({
+        status:'admin_pending',
+        acceptedAt:FieldValue.serverTimestamp(),
+        therapistPhone: data?.phone||'',
+      });
       playAlert('accept');
     } catch(err){ alert(`Error: ${err.message}`); }
   };
@@ -403,6 +408,7 @@ function TherapistPortal({ session, onLogout }) {
         setWorkEnd(d.workEnd || '18:00');
         setSpeciality(d.speciality || '');
         setBio(d.bio || '');
+        setPhone(d.phone || '');
       }
     } finally { setLoading(false); }
   };
@@ -555,7 +561,7 @@ function TherapistPortal({ session, onLogout }) {
               : <div style={{padding:'8px'}}>
                   {allBookings.map(b=>{
                     const dist=(myGPS&&b.clientLocation)?haversineKm(myGPS.lat,myGPS.lng,b.clientLocation.lat,b.clientLocation.lng):null;
-                    const sc={pending:{c:'var(--gold)',bg:'rgba(212,175,55,0.1)',t:'Pending'},accepted:{c:'var(--success)',bg:'rgba(39,174,96,0.1)',t:'Accepted'},declined:{c:'var(--danger)',bg:'rgba(231,76,60,0.1)',t:'Declined'},expired:{c:'var(--muted)',bg:'rgba(100,100,100,0.08)',t:'Expired'},scheduled:{c:'#4a9eff',bg:'rgba(74,158,255,0.1)',t:'Scheduled'}}[b.status]||{c:'var(--muted)',bg:'rgba(100,100,100,0.08)',t:b.status};
+                    const sc={pending:{c:'var(--gold)',bg:'rgba(212,175,55,0.1)',t:'Pending'},admin_pending:{c:'#f39c12',bg:'rgba(243,156,18,0.1)',t:'Awaiting Admin'},confirmed:{c:'var(--success)',bg:'rgba(39,174,96,0.1)',t:'Confirmed'},accepted:{c:'var(--success)',bg:'rgba(39,174,96,0.1)',t:'Accepted'},declined:{c:'var(--danger)',bg:'rgba(231,76,60,0.1)',t:'Declined'},expired:{c:'var(--muted)',bg:'rgba(100,100,100,0.08)',t:'Expired'},scheduled:{c:'#4a9eff',bg:'rgba(74,158,255,0.1)',t:'Upcoming'}}[b.status]||{c:'var(--muted)',bg:'rgba(100,100,100,0.08)',t:b.status};
                     return(
                       <div key={b.id} style={{borderRadius:'12px',padding:'12px',marginBottom:'8px',background:sc.bg,border:`1px solid ${sc.c}33`}}>
                         <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'6px'}}>
@@ -647,6 +653,19 @@ function TherapistPortal({ session, onLogout }) {
                     {saving==='speciality'?<span className="spin">✦</span>:'Save'}
                   </button>
                 </div>
+              </div>
+              <div>
+                <label style={labelSt}>WhatsApp Number (for admin)</label>
+                <div style={{display:'flex',gap:'8px',marginTop:'6px'}}>
+                  <div style={{display:'flex',flex:1}}>
+                    <span style={{background:'var(--elevated)',border:'1px solid var(--border)',borderRight:'none',borderRadius:'10px 0 0 10px',padding:'12px 10px',color:'var(--muted)',fontSize:'0.88rem',whiteSpace:'nowrap'}}>+91</span>
+                    <input type="tel" value={phone} onChange={e=>setPhone(e.target.value.replace(/\D/g,'').slice(0,10))} style={{...inputSt,borderRadius:'0 10px 10px 0',borderLeft:'none',flex:1}} placeholder="9876543210" maxLength={10}/>
+                  </div>
+                  <button onClick={()=>save('phone',{phone:phone.trim()},'Phone')} disabled={saving==='phone'} style={{...goldBtn,padding:'11px 16px',fontSize:'0.82rem',flexShrink:0}}>
+                    {saving==='phone'?<span className="spin">✦</span>:'Save'}
+                  </button>
+                </div>
+                <p style={{color:'var(--muted)',fontSize:'0.7rem',marginTop:'4px'}}>Used by admin to send you booking confirmations</p>
               </div>
               <div>
                 <label style={labelSt}>Short Bio</label>
