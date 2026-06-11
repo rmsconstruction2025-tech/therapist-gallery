@@ -63,28 +63,36 @@ let _setNotifStatus = null; // set by component
 
 async function setupPushNotifications(docId, setStatus) {
   if (setStatus) _setNotifStatus = setStatus;
+  const report = (msg) => { console.log('[FCM]', msg); if (_setNotifStatus) _setNotifStatus(msg); };
   try {
-    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-      if (_setNotifStatus) _setNotifStatus('unsupported');
-      return;
-    }
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) { report('unsupported'); return; }
     const current = Notification.permission;
-    if (_setNotifStatus) _setNotifStatus(current);
-    if (current === 'denied') { console.log('Push permission denied — user must allow in browser settings'); return; }
-    const perm = await Notification.requestPermission();
-    if (_setNotifStatus) _setNotifStatus(perm);
-    if (perm !== 'granted') { console.log('Push permission not granted'); return; }
+    report('perm:' + current);
+    if (current === 'denied') { report('denied'); return; }
+    const perm = current === 'granted' ? 'granted' : await Notification.requestPermission();
+    report('perm:' + perm);
+    if (perm !== 'granted') { report('not-granted'); return; }
+    report('registering-sw');
     const sw = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    await sw.update(); // force fresh SW
+    report('getting-token');
     const token = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: sw });
     if (token) {
+      report('saving-token');
       await db.collection('therapists').doc(docId).update({ fcmToken: token });
-      console.log('Push notifications enabled ✓');
+      report('granted');
+      console.log('FCM token saved ✓', token.slice(0,20)+'...');
+    } else {
+      report('no-token');
     }
     messaging.onTokenRefresh(async () => {
       const newToken = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: sw });
       if (newToken) await db.collection('therapists').doc(docId).update({ fcmToken: newToken });
     });
-  } catch(e) { console.warn('Push setup skipped:', e.message); }
+  } catch(e) {
+    report('error:' + e.message);
+    console.error('[FCM] Error:', e);
+  }
 }
 
 // ── Persistent Audio Context (mobile-safe) ───────────
@@ -754,10 +762,10 @@ function TherapistPortal({ session, onLogout }) {
                   <span style={{fontSize:'1.3rem'}}>{notifStatus==='granted'?'🔔':'🔕'}</span>
                   <div>
                     <p style={{fontWeight:600,fontSize:'0.88rem',margin:0,color: notifStatus==='granted'?'#22c55e':'#ef4444'}}>
-                      {notifStatus==='granted' ? 'Notifications ON' : notifStatus==='denied' ? 'Notifications BLOCKED' : 'Notifications OFF'}
+                      {notifStatus==='granted' ? '✅ Notifications ON' : notifStatus==='denied' ? '🚫 Notifications BLOCKED' : `⚙️ ${notifStatus||'Checking...'}`}
                     </p>
                     <p style={{fontSize:'0.72rem',color:'var(--muted)',margin:0,marginTop:'2px'}}>
-                      {notifStatus==='granted' ? 'You will get alerts for new bookings' : notifStatus==='denied' ? 'Allow in browser Settings → Site Settings → Notifications' : 'Tap Enable to get booking alerts'}
+                      {notifStatus==='granted' ? 'You will receive push alerts for new bookings' : notifStatus==='denied' ? 'Go to Chrome Settings → Site Settings → Notifications → Allow' : 'Tap Enable — must allow browser permission'}
                     </p>
                   </div>
                 </div>
