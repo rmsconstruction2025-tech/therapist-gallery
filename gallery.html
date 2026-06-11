@@ -303,15 +303,62 @@ function BookingModal({ therapist, clientName, clientPhone, onClose }) {
   const [mapUrl,       setMapUrl]       = useState('');
   const [locError,     setLocError]     = useState('');
   const [gpsLoading,   setGpsLoading]   = useState(false);
-  const timerRef = useRef(null);
-  const unsubRef = useRef(null);
+  const timerRef    = useRef(null);
+  const unsubRef    = useRef(null);
+  const bookingIdRef = useRef(null);
   const SECS = 180;
 
+  // ── Cleanup on unmount ──
   useEffect(()=>{
     return ()=>{
       clearInterval(timerRef.current);
       if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
     };
+  },[]);
+
+  // ── Resume from sessionStorage if page was refreshed mid-wait ──
+  useEffect(()=>{
+    try {
+      const pending = JSON.parse(sessionStorage.getItem('pendingBooking')||'null');
+      if(!pending || pending.therapistId !== therapist.id) return;
+      bookingIdRef.current = pending.bookingId;
+      const rem = Math.ceil((pending.endAt - Date.now()) / 1000);
+      if(rem <= 0){
+        db.collection('bookings').doc(pending.bookingId).update({status:'expired'}).catch(()=>{});
+        sessionStorage.removeItem('pendingBooking');
+        setStep('expired');
+        return;
+      }
+      setTimeLeft(rem);
+      setStep('waiting');
+      const endAt = pending.endAt;
+      timerRef.current = setInterval(()=>{
+        const remaining = Math.ceil((endAt - Date.now()) / 1000);
+        if(remaining <= 0){
+          clearInterval(timerRef.current);
+          if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
+          db.collection('bookings').doc(pending.bookingId).update({status:'expired'}).catch(()=>{});
+          sessionStorage.removeItem('pendingBooking');
+          setStep('expired');
+        } else { setTimeLeft(remaining); }
+      }, 500);
+      unsubRef.current = db.collection('bookings').doc(pending.bookingId).onSnapshot(snap=>{
+        if(!snap.exists) return;
+        const s = snap.data().status;
+        if(s==='accepted'||s==='admin_pending'||s==='confirmed'){
+          clearInterval(timerRef.current);
+          if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
+          sessionStorage.removeItem('pendingBooking');
+          playAlert('accept');
+          setStep('accepted');
+        } else if(s==='declined'){
+          clearInterval(timerRef.current);
+          if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
+          sessionStorage.removeItem('pendingBooking');
+          setStep('declined');
+        }
+      });
+    } catch(e){}
   },[]);
 
   const getGPS = ()=>new Promise(resolve=>{
@@ -341,15 +388,24 @@ function BookingModal({ therapist, clientName, clientPhone, onClose }) {
         expiresAt:      firebase.firestore.Timestamp.fromDate(expiresAt),
       });
 
-      // Countdown timer
+      // Save booking to sessionStorage so refresh restores the timer
+      bookingIdRef.current = ref.id;
       const endAt = Date.now() + SECS * 1000;
+      sessionStorage.setItem('pendingBooking', JSON.stringify({
+        bookingId: ref.id,
+        endAt,
+        therapistId: therapist.id,
+      }));
+
+      // Countdown timer
       timerRef.current = setInterval(()=>{
         const rem = Math.ceil((endAt - Date.now()) / 1000);
         if(rem <= 0){
           clearInterval(timerRef.current);
           if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
           db.collection('bookings').doc(ref.id).update({status:'expired'}).catch(()=>{});
-          setStep('declined');
+          sessionStorage.removeItem('pendingBooking');
+          setStep('expired');
         } else { setTimeLeft(rem); }
       }, 500);
 
@@ -360,11 +416,13 @@ function BookingModal({ therapist, clientName, clientPhone, onClose }) {
         if(s==='accepted'||s==='admin_pending'||s==='confirmed'){
           clearInterval(timerRef.current);
           if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
+          sessionStorage.removeItem('pendingBooking');
           playAlert('accept');
           setStep('accepted');
         } else if(s==='declined'){
           clearInterval(timerRef.current);
           if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
+          sessionStorage.removeItem('pendingBooking');
           setStep('declined');
         }
       });
@@ -413,6 +471,27 @@ function BookingModal({ therapist, clientName, clientPhone, onClose }) {
       setStep('later-done');
     } catch(err){ alert(`Error: ${err.message}`); }
     finally{ setSaving(false); }
+  };
+
+  // ── Expired option handlers ──
+  const handleBookWithAdmin = async ()=>{
+    if(!bookingIdRef.current) return;
+    setSaving(true);
+    try {
+      await db.collection('bookings').doc(bookingIdRef.current).update({
+        status: 'admin_pending',
+        needsTherapistAssignment: true,
+        adminRequestedAt: FieldValue.serverTimestamp(),
+      });
+      sessionStorage.removeItem('pendingBooking');
+      setStep('admin-sent');
+    } catch(e){ alert('Error: ' + e.message); }
+    finally{ setSaving(false); }
+  };
+
+  const handleChooseAnother = ()=>{
+    sessionStorage.removeItem('pendingBooking');
+    onClose();
   };
 
   const fmtTime = s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
@@ -546,13 +625,67 @@ function BookingModal({ therapist, clientName, clientPhone, onClose }) {
           </div>
         )}
 
-        {/* ── Declined / Expired ── */}
+        {/* ── Declined ── */}
         {step==='declined'&&(
           <div style={{textAlign:'center'}}>
             <div style={{fontSize:'3rem',marginBottom:'10px'}}>😔</div>
             <h2 style={{color:'var(--text)',fontSize:'1.05rem',fontWeight:'700',marginBottom:'8px'}}>Therapist Unavailable</h2>
-            <p style={{color:'var(--muted)',fontSize:'0.85rem',marginBottom:'20px'}}>This therapist couldn't accept right now. Please choose another therapist.</p>
-            <button onClick={onClose} style={goldBtn}>Choose Another Therapist</button>
+            <p style={{color:'var(--muted)',fontSize:'0.85rem',marginBottom:'20px'}}>This therapist couldn't accept right now.</p>
+            <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
+              <button onClick={handleBookWithAdmin} disabled={saving}
+                style={{...goldBtn,display:'flex',flexDirection:'column',alignItems:'center',gap:'3px',padding:'16px 12px'}}>
+                {saving?<span className="spin">✦</span>:<>
+                  <span style={{fontSize:'1.4rem',lineHeight:'1'}}>👨‍💼</span>
+                  <span>Book with Admin</span>
+                  <span style={{fontSize:'0.7rem',opacity:0.65,fontWeight:'400'}}>We'll assign the best available therapist</span>
+                </>}
+              </button>
+              <button onClick={handleChooseAnother}
+                style={{background:'var(--elevated)',color:'var(--text)',border:'1px solid var(--border)',borderRadius:'10px',padding:'16px 12px',fontWeight:'600',fontSize:'0.9rem',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:'3px',width:'100%',minHeight:'48px'}}>
+                <span style={{fontSize:'1.4rem',lineHeight:'1'}}>🔄</span>
+                <span>Choose Another Therapist</span>
+                <span style={{fontSize:'0.7rem',color:'var(--muted)',fontWeight:'400'}}>Go back and select someone else</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Expired (timer ran out) ── */}
+        {step==='expired'&&(
+          <div style={{textAlign:'center'}}>
+            <div style={{fontSize:'2.8rem',marginBottom:'10px'}}>⏰</div>
+            <h2 style={{color:'var(--text)',fontSize:'1.05rem',fontWeight:'700',marginBottom:'6px'}}>Time's Up</h2>
+            <p style={{color:'var(--muted)',fontSize:'0.82rem',marginBottom:'22px',lineHeight:'1.5'}}>
+              <strong style={{color:'var(--text)'}}>{therapist.name||therapist.therapistId}</strong> didn't respond in time. What would you like to do?
+            </p>
+            <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
+              <button onClick={handleBookWithAdmin} disabled={saving}
+                style={{...goldBtn,display:'flex',flexDirection:'column',alignItems:'center',gap:'3px',padding:'16px 12px'}}>
+                {saving?<span className="spin">✦</span>:<>
+                  <span style={{fontSize:'1.4rem',lineHeight:'1'}}>👨‍💼</span>
+                  <span>Book with Admin</span>
+                  <span style={{fontSize:'0.7rem',opacity:0.65,fontWeight:'400'}}>We'll assign the best available therapist</span>
+                </>}
+              </button>
+              <button onClick={handleChooseAnother}
+                style={{background:'var(--elevated)',color:'var(--text)',border:'1px solid var(--border)',borderRadius:'10px',padding:'16px 12px',fontWeight:'600',fontSize:'0.9rem',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:'3px',width:'100%',minHeight:'48px'}}>
+                <span style={{fontSize:'1.4rem',lineHeight:'1'}}>🔄</span>
+                <span>Choose Another Therapist</span>
+                <span style={{fontSize:'0.7rem',color:'var(--muted)',fontWeight:'400'}}>Go back and select someone else</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Admin Sent ── */}
+        {step==='admin-sent'&&(
+          <div style={{textAlign:'center'}}>
+            <div style={{fontSize:'3rem',marginBottom:'10px'}}>✅</div>
+            <h2 style={{color:'#27ae60',fontSize:'1.1rem',fontWeight:'700',marginBottom:'8px'}}>Request Sent to Admin!</h2>
+            <p style={{color:'var(--muted)',fontSize:'0.83rem',marginBottom:'16px',lineHeight:'1.6'}}>
+              Our admin will assign the best available therapist and contact you on WhatsApp to confirm.
+            </p>
+            <button onClick={onClose} style={{...goldBtn,background:'transparent',border:'1px solid var(--border)',color:'var(--muted)'}}>Done ✓</button>
           </div>
         )}
 
@@ -645,6 +778,11 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
     db.collection('viewCounts').doc(countDocId).get().then(snap=>{
       if (snap.exists) { const c=snap.data().count||0; setViewCount(c); if(c>=maxViews) setLimitReached(true); }
     });
+    // Auto-reopen booking modal if this therapist has a pending booking in sessionStorage
+    try {
+      const pending = JSON.parse(sessionStorage.getItem('pendingBooking')||'null');
+      if(pending && pending.therapistId === therapist.id) setShowBooking(true);
+    } catch(e){}
     return ()=>clearInterval(timerRef.current);
   },[]);
 
