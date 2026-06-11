@@ -78,17 +78,18 @@ function playAlert(type='new') {
     // Also vibrate on mobile (Android)
     if (navigator.vibrate) navigator.vibrate(type==='new' ? [200,100,200,100,200] : [150,80,150]);
     const seqs = {
-      new:    [[940,0.00,0.45],[1200,0.22,0.45],[940,0.44,0.45],[1200,0.66,0.45]],
-      accept: [[660,0.00,0.35],[880,0.20,0.35],[1100,0.40,0.35]],
+      new:    [[1000,0.00,0.18],[1400,0.20,0.18],[1000,0.40,0.18],[1400,0.60,0.18],[1000,0.80,0.18]],
+      accept: [[660,0.00,0.25],[880,0.28,0.25],[1100,0.56,0.25]],
     };
     (seqs[type]||seqs.new).forEach(([freq,t,dur])=>{
       const o=ctx.createOscillator(), g=ctx.createGain();
       o.connect(g); g.connect(ctx.destination);
-      o.frequency.value=freq; o.type='square'; // 'square' is louder on phone speakers
+      o.frequency.value=freq;
+      o.type = type==='new' ? 'sawtooth' : 'square'; // sawtooth = maximum loudness
       g.gain.setValueAtTime(0, ctx.currentTime+t);
-      g.gain.linearRampToValueAtTime(0.35, ctx.currentTime+t+0.02);
+      g.gain.linearRampToValueAtTime(0.6, ctx.currentTime+t+0.01); // high gain
       g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+t+dur);
-      o.start(ctx.currentTime+t); o.stop(ctx.currentTime+t+dur+0.05);
+      o.start(ctx.currentTime+t); o.stop(ctx.currentTime+t+dur+0.02);
     });
   } catch(e){}
 }
@@ -353,11 +354,11 @@ function TherapistPortal({ session, onLogout }) {
     return ()=>navigator.geolocation.clearWatch(watch);
   },[]);
 
-  // Repeating alert (Uber/Rapido style) — plays every 3.5s while pending booking exists
+  // Repeating alert — plays every 1s while pending booking exists
   useEffect(()=>{
     if(hasNewPending){
       playAlert('new');
-      alertIntervalRef.current = setInterval(()=>playAlert('new'), 3500);
+      alertIntervalRef.current = setInterval(()=>playAlert('new'), 1000);
     } else {
       clearInterval(alertIntervalRef.current);
       alertIntervalRef.current = null;
