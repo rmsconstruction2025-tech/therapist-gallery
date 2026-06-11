@@ -7,10 +7,15 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Therapists: admin full control; public can read (available filter done client-side)
+    // Therapists: admin full control; public can read; therapists can update own profile fields
     match /therapists/{therapistId} {
       allow read: if true;
-      allow create, update, delete: if isAdmin();
+      allow create, delete: if isAdmin();
+      // Admin: full update. Therapist (no Firebase auth): can only touch safe profile fields
+      allow update: if isAdmin()
+        || request.resource.data.diff(resource.data)
+             .affectedKeys()
+             .hasOnly(['available','name','bio','speciality','workStart','workEnd','imageUrl','updatedAt','phone','fcmToken']);
     }
 
     // Gallery tokens: admin full control; clients can read to validate & update name/phone
@@ -41,6 +46,11 @@ service cloud.firestore {
       allow read:   if true;
       allow update: if true;   // therapist accepts/declines; admin views
       allow delete: if isAdmin();
+    }
+
+    // Earnings: therapists add/read/delete their own session earnings
+    match /earnings/{earnId} {
+      allow read, write: if true;
     }
   }
 }

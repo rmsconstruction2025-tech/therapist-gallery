@@ -274,23 +274,24 @@ function App() {
 //  LOGIN
 // ══════════════════════════════════════════════════════
 function TherapistLogin({ onLogin }) {
-  const [therapistId, setTherapistId] = useState('');
-  const [pin,         setPin]         = useState('');
-  const [err,         setErr]         = useState('');
-  const [loading,     setLoading]     = useState(false);
+  const [email,    setEmail]    = useState('');
+  const [password, setPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [err,      setErr]      = useState('');
+  const [loading,  setLoading]  = useState(false);
 
   const handle = async (e) => {
     e.preventDefault(); setErr('');
-    if (!therapistId.trim() || !pin.trim()) { setErr('Enter your Therapist ID and PIN.'); return; }
+    if (!email.trim() || !password.trim()) { setErr('Enter your email and password.'); return; }
     setLoading(true);
     try {
       const snap = await db.collection('therapists')
-        .where('therapistId', '==', therapistId.trim().toUpperCase())
-        .where('pin', '==', pin.trim())
+        .where('email', '==', email.trim().toLowerCase())
+        .where('password', '==', password.trim())
         .get();
-      if (snap.empty) { setErr('Invalid Therapist ID or PIN.'); return; }
+      if (snap.empty) { setErr('Incorrect email or password.'); return; }
       const doc = snap.docs[0];
-      onLogin({ docId: doc.id, therapistId: doc.data().therapistId, name: doc.data().name || '' });
+      onLogin({ docId: doc.id, therapistId: doc.data().therapistId||doc.id, name: doc.data().name || '' });
     } catch(err) { setErr(`Error: ${err.message}`); }
     finally { setLoading(false); }
   };
@@ -300,42 +301,54 @@ function TherapistLogin({ onLogin }) {
       <div className="fade-in" style={{background:'var(--surface)',border:'1px solid var(--border-gold)',borderRadius:'20px',padding:'52px 44px',width:'100%',maxWidth:'420px',textAlign:'center',boxShadow:'0 0 30px rgba(212,175,55,.1)'}}>
         <div style={{fontSize:'2.4rem',color:'var(--gold)',marginBottom:'16px'}}>✦</div>
         <h1 style={{fontSize:'1.75rem',fontWeight:'700',color:'var(--gold)',letterSpacing:'3px',marginBottom:'8px'}}>Feel Free Spa</h1>
-        <p style={{color:'var(--muted)',fontSize:'0.85rem',marginBottom:'40px'}}>Therapist Login</p>
+        <p style={{color:'var(--muted)',fontSize:'0.85rem',marginBottom:'40px'}}>Therapist Portal</p>
 
         <form onSubmit={handle} style={{display:'flex',flexDirection:'column',gap:'20px',textAlign:'left'}}>
           <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
-            <label style={labelSt}>Therapist ID</label>
+            <label style={labelSt}>Email</label>
             <input
-              type="text"
-              value={therapistId}
-              onChange={e=>setTherapistId(e.target.value)}
+              type="email"
+              value={email}
+              onChange={e=>setEmail(e.target.value)}
               style={inputSt}
-              placeholder="e.g. TH_1234_ABCDE"
-              autoComplete="username"
+              placeholder="your.email@example.com"
+              autoComplete="email"
               required
             />
           </div>
           <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
-            <label style={labelSt}>PIN</label>
-            <input
-              type="password"
-              value={pin}
-              onChange={e=>setPin(e.target.value)}
-              style={inputSt}
-              placeholder="Enter your PIN"
-              autoComplete="current-password"
-              required
-            />
+            <label style={labelSt}>Password</label>
+            <div style={{position:'relative'}}>
+              <input
+                type={showPass?'text':'password'}
+                value={password}
+                onChange={e=>setPassword(e.target.value)}
+                style={{...inputSt,paddingRight:'46px'}}
+                placeholder="Enter your password"
+                autoComplete="current-password"
+                required
+              />
+              <button type="button" onClick={()=>setShowPass(v=>!v)}
+                style={{position:'absolute',right:'12px',top:'50%',transform:'translateY(-50%)',background:'transparent',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:'1.1rem',padding:'4px',display:'flex',alignItems:'center',lineHeight:'1'}}>
+                {showPass?'🙈':'👁️'}
+              </button>
+            </div>
           </div>
-          {err && <p style={{color:'var(--danger)',fontSize:'0.84rem',textAlign:'center'}}>{err}</p>}
-          <button type="submit" disabled={loading} style={{...goldBtn,padding:'15px',fontSize:'0.95rem',letterSpacing:'2px',textTransform:'uppercase',marginTop:'8px'}}>
-            {loading ? <span className="spin">✦</span> : 'Login'}
+          {err && (
+            <div style={{background:'rgba(231,76,60,0.08)',border:'1px solid rgba(231,76,60,0.25)',borderRadius:'8px',padding:'10px 14px',color:'var(--danger)',fontSize:'0.84rem',textAlign:'center'}}>
+              {err}
+            </div>
+          )}
+          <button type="submit" disabled={loading} style={{...goldBtn,padding:'15px',fontSize:'0.95rem',letterSpacing:'2px',textTransform:'uppercase',marginTop:'8px',width:'100%',justifyContent:'center',display:'flex',alignItems:'center',gap:'8px'}}>
+            {loading ? <span className="spin">✦</span> : 'Sign In →'}
           </button>
         </form>
 
-        <p style={{marginTop:'24px',color:'var(--muted)',fontSize:'0.78rem'}}>
-          Contact your admin for your Therapist ID and PIN.
-        </p>
+        <div style={{marginTop:'24px',padding:'12px 16px',background:'rgba(212,175,55,0.05)',border:'1px solid rgba(212,175,55,0.15)',borderRadius:'10px'}}>
+          <p style={{color:'var(--muted)',fontSize:'0.77rem',lineHeight:'1.5',margin:0}}>
+            🔑 Contact your admin to get your login email and password.
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -569,6 +582,7 @@ function TherapistPortal({ session, onLogout }) {
 
   const tabs = [
     { id:'bookings', icon:'🗺️', label:'Bookings',  badge: pendingBookings.length + newScheduledCount },
+    { id:'earnings', icon:'💰', label:'Earnings',  badge: 0 },
     { id:'profile',  icon:'👤', label:'Profile',   badge: completion<100?1:0 },
     { id:'schedule', icon:'🕐', label:'Schedule',  badge: 0 },
   ];
@@ -676,6 +690,9 @@ function TherapistPortal({ session, onLogout }) {
             }
           </div>
         </>)}
+
+        {/* ══ EARNINGS TAB ══ */}
+        {activeTab==='earnings'&&<EarningsTab session={session}/>}
 
         {/* ══ PROFILE TAB ══ */}
         {activeTab==='profile'&&(<div style={{display:'flex',flexDirection:'column',gap:'16px'}}>
@@ -862,6 +879,209 @@ function TherapistPortal({ session, onLogout }) {
         ))}
       </nav>
 
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+//  EARNINGS TAB
+// ══════════════════════════════════════════════════════
+function EarningsTab({ session }) {
+  const [entries,  setEntries]  = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving,   setSaving]   = useState(false);
+  const [filter,   setFilter]   = useState('month');
+  const [form,     setForm]     = useState({
+    date:        new Date().toISOString().split('T')[0],
+    serviceType: 'Massage',
+    amount:      '',
+    clientName:  '',
+    duration:    '60 min',
+    notes:       ''
+  });
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const snap = await db.collection('earnings')
+        .where('therapistDocId', '==', session.docId)
+        .limit(200).get();
+      const docs = snap.docs.map(d=>({id:d.id,...d.data()}))
+        .sort((a,b)=>{ if(a.date&&b.date) return b.date.localeCompare(a.date); return 0; });
+      setEntries(docs);
+    } catch(e) { console.error('earnings load error:', e); }
+    setLoading(false);
+  };
+
+  useEffect(()=>{ load(); },[]);
+
+  const handleAdd = async (e) => {
+    e.preventDefault();
+    if (!form.amount || isNaN(Number(form.amount)) || Number(form.amount) <= 0) {
+      alert('Please enter a valid amount.'); return;
+    }
+    setSaving(true);
+    try {
+      await db.collection('earnings').add({
+        therapistDocId: session.docId,
+        therapistId:    session.therapistId,
+        date:           form.date,
+        serviceType:    form.serviceType,
+        amount:         Number(form.amount),
+        clientName:     form.clientName.trim(),
+        duration:       form.duration,
+        notes:          form.notes.trim(),
+        createdAt:      FieldValue.serverTimestamp()
+      });
+      setForm(f=>({...f, amount:'', clientName:'', notes:'', date: new Date().toISOString().split('T')[0]}));
+      setShowForm(false);
+      load();
+    } catch(e) { alert(`Error saving: ${e.message}`); }
+    setSaving(false);
+  };
+
+  const handleDelete = async (entry) => {
+    if (!confirm('Delete this earning entry?')) return;
+    try {
+      await db.collection('earnings').doc(entry.id).delete();
+      setEntries(prev=>prev.filter(e=>e.id!==entry.id));
+    } catch(e) { alert(`Error: ${e.message}`); }
+  };
+
+  // Aggregates
+  const now        = new Date();
+  const weekStart  = new Date(now); weekStart.setDate(now.getDate()-now.getDay()); weekStart.setHours(0,0,0,0);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const inWeek  = e => e.date && new Date(e.date) >= weekStart;
+  const inMonth = e => e.date && new Date(e.date) >= monthStart;
+
+  const weekTotal  = entries.filter(inWeek).reduce((s,e)=>s+(e.amount||0),0);
+  const monthTotal = entries.filter(inMonth).reduce((s,e)=>s+(e.amount||0),0);
+  const avgSession = entries.length ? Math.round(entries.reduce((s,e)=>s+(e.amount||0),0)/entries.length) : 0;
+
+  const filtered = filter==='week' ? entries.filter(inWeek) : filter==='month' ? entries.filter(inMonth) : entries;
+
+  const SVC_ICON  = {'Massage':'💆','Facial':'✨','Body Wrap':'🌿','Head Massage':'💭','Other':'💰'};
+  const SVC_COLOR = {'Massage':'#d4af37','Facial':'#a78bfa','Body Wrap':'#34d399','Head Massage':'#63b3ed','Other':'#64748b'};
+  const sc  = s => SVC_COLOR[s] || '#64748b';
+  const fmt = n => Number(n||0).toLocaleString('en-IN');
+  const eInSt = {...inputSt, marginTop:'5px'};
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:'14px'}}>
+
+      {/* Summary card */}
+      <div style={{background:'var(--surface)',border:'1px solid var(--border-gold)',borderRadius:'16px',padding:'18px'}}>
+        <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'16px'}}>
+          <div>
+            <p style={{fontSize:'0.65rem',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'1.5px',marginBottom:'4px'}}>This Week</p>
+            <p style={{fontSize:'1.8rem',fontWeight:'700',color:'var(--gold)',margin:0,lineHeight:'1'}}>₹{loading?'—':fmt(weekTotal)}</p>
+          </div>
+          <button onClick={()=>setShowForm(v=>!v)}
+            style={{background:showForm?'rgba(231,76,60,0.1)':'rgba(212,175,55,0.1)',border:`1px solid ${showForm?'rgba(231,76,60,0.3)':'rgba(212,175,55,0.35)'}`,borderRadius:'10px',padding:'9px 14px',color:showForm?'var(--danger)':'var(--gold)',fontSize:'0.83rem',fontWeight:'700',cursor:'pointer'}}>
+            {showForm?'✕ Cancel':'+ Add Entry'}
+          </button>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'8px'}}>
+          {[['This Month',`₹${fmt(monthTotal)}`],['Sessions',String(entries.length)],['Avg / Session',`₹${fmt(avgSession)}`]].map(([l,v])=>(
+            <div key={l} style={{background:'var(--elevated)',borderRadius:'10px',padding:'9px 10px',textAlign:'center'}}>
+              <p style={{fontSize:'0.9rem',fontWeight:'700',color:'var(--text)',margin:0}}>{loading?'—':v}</p>
+              <p style={{fontSize:'0.62rem',color:'var(--muted)',margin:'3px 0 0',lineHeight:'1.2'}}>{l}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Add entry form */}
+      {showForm&&(
+        <div className="fade-in" style={{background:'var(--surface)',border:'1px solid var(--border-gold)',borderRadius:'16px',padding:'18px'}}>
+          <p style={{fontWeight:'700',fontSize:'0.82rem',color:'var(--gold)',marginBottom:'14px',letterSpacing:'1.5px',textTransform:'uppercase'}}>New Earning Entry</p>
+          <form onSubmit={handleAdd} style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
+              <div>
+                <label style={labelSt}>Date</label>
+                <input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))} style={{...eInSt,colorScheme:'dark'}} required/>
+              </div>
+              <div>
+                <label style={labelSt}>Service</label>
+                <select value={form.serviceType} onChange={e=>setForm(f=>({...f,serviceType:e.target.value}))} style={eInSt}>
+                  {['Massage','Facial','Body Wrap','Head Massage','Other'].map(s=><option key={s}>{s}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
+              <div>
+                <label style={labelSt}>Amount ₹ <span style={{color:'var(--danger)'}}>*</span></label>
+                <input type="number" min="1" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} style={eInSt} placeholder="1200" required/>
+              </div>
+              <div>
+                <label style={labelSt}>Duration</label>
+                <select value={form.duration} onChange={e=>setForm(f=>({...f,duration:e.target.value}))} style={eInSt}>
+                  {['30 min','45 min','60 min','90 min','120 min'].map(d=><option key={d}>{d}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label style={labelSt}>Client Name <span style={{fontSize:'0.65rem',color:'var(--muted)'}}>(optional)</span></label>
+              <input type="text" value={form.clientName} onChange={e=>setForm(f=>({...f,clientName:e.target.value}))} style={eInSt} placeholder="First name only"/>
+            </div>
+            <div>
+              <label style={labelSt}>Notes <span style={{fontSize:'0.65rem',color:'var(--muted)'}}>(optional)</span></label>
+              <input type="text" value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))} style={eInSt} placeholder="Any notes…"/>
+            </div>
+            <button type="submit" disabled={saving} style={{...goldBtn,padding:'14px',fontSize:'0.9rem',width:'100%',marginTop:'2px',justifyContent:'center',display:'flex',alignItems:'center',gap:'8px'}}>
+              {saving?<span className="spin">✦</span>:'Save Entry ✓'}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* Filter pills */}
+      <div style={{display:'flex',gap:'7px'}}>
+        {[['week','This Week'],['month','This Month'],['all','All Time']].map(([k,l])=>(
+          <button key={k} onClick={()=>setFilter(k)}
+            style={{padding:'6px 14px',borderRadius:'20px',border:`1px solid ${filter===k?'rgba(212,175,55,0.4)':'var(--border)'}`,background:filter===k?'rgba(212,175,55,0.1)':'transparent',color:filter===k?'var(--gold)':'var(--muted)',fontSize:'0.75rem',fontWeight:filter===k?'700':'500',cursor:'pointer'}}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {/* Entries list */}
+      <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+        {loading
+          ? <div style={{textAlign:'center',padding:'32px',color:'var(--muted)'}}><span className="spin" style={{color:'var(--gold)'}}>✦</span></div>
+          : filtered.length===0
+            ? <div style={{textAlign:'center',padding:'32px',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'16px'}}>
+                <p style={{fontSize:'1.5rem',marginBottom:'8px'}}>💰</p>
+                <p style={{color:'var(--muted)',fontSize:'0.85rem'}}>No entries{filter!=='all'?` for this ${filter}`:''}</p>
+                <p style={{color:'var(--muted)',fontSize:'0.75rem',marginTop:'4px'}}>Tap "+ Add Entry" above to record</p>
+              </div>
+            : filtered.map(e=>(
+                <div key={e.id} style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'13px',padding:'12px 14px',display:'flex',alignItems:'center',gap:'10px'}}>
+                  <div style={{width:'3px',height:'42px',background:sc(e.serviceType),borderRadius:'3px',flexShrink:0}}/>
+                  <div style={{width:'34px',height:'34px',background:`${sc(e.serviceType)}18`,borderRadius:'9px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.05rem',flexShrink:0}}>
+                    {SVC_ICON[e.serviceType]||'💰'}
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'2px'}}>
+                      <span style={{fontSize:'0.88rem',fontWeight:'700',color:'var(--text)'}}>{e.serviceType}</span>
+                      <span style={{fontSize:'0.95rem',fontWeight:'700',color:'var(--gold)',flexShrink:0,marginLeft:'8px'}}>₹{fmt(e.amount)}</span>
+                    </div>
+                    <p style={{fontSize:'0.7rem',color:'var(--muted)',margin:0}}>
+                      {e.date} · {e.duration}{e.clientName?` · ${e.clientName}`:''}
+                    </p>
+                    {e.notes&&<p style={{fontSize:'0.68rem',color:'var(--muted)',margin:'2px 0 0',fontStyle:'italic'}}>"{e.notes}"</p>}
+                  </div>
+                  <button onClick={()=>handleDelete(e)}
+                    style={{background:'transparent',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:'0.9rem',padding:'4px 6px',flexShrink:0,borderRadius:'6px'}}
+                    onMouseEnter={el=>el.currentTarget.style.color='var(--danger)'}
+                    onMouseLeave={el=>el.currentTarget.style.color='var(--muted)'}>✕</button>
+                </div>
+              ))
+        }
+      </div>
     </div>
   );
 }

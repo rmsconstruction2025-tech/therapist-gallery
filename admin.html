@@ -338,9 +338,10 @@ function AdminLogin() {
 //  DASHBOARD
 // ══════════════════════════════════════════════════════
 function Dashboard({ user }) {
-  const [tab,      setTab]      = useState('therapists');
+  const [tab,      setTab]      = useState('dashboard');
   const [newBooks, setNewBooks] = useState(0); // unread booking count
   const tabs = [
+    { id:'dashboard',  icon:'📊', label:'Dashboard' },
     { id:'therapists', icon:'🖼️', label:'Therapist Photos' },
     { id:'links',      icon:'🔗', label:'Gallery Links' },
     { id:'accounts',   icon:'👤', label:'Accounts' },
@@ -399,10 +400,143 @@ function Dashboard({ user }) {
         </nav>
 
         <div className="content">
+          {tab==='dashboard'  && <DashboardTab/>}
           {tab==='therapists' && <TherapistManager/>}
           {tab==='links'      && <LinkCreator/>}
           {tab==='accounts'   && <TherapistAccounts/>}
           {tab==='bookings'   && <BookingsPanel/>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+//  DASHBOARD TAB
+// ══════════════════════════════════════════════════════
+function DashboardTab() {
+  const [bookings,   setBookings]   = useState([]);
+  const [therapists, setTherapists] = useState([]);
+  const [loadingB,   setLoadingB]   = useState(true);
+
+  useEffect(()=>{
+    const unsub = db.collection('bookings').limit(200).onSnapshot(snap=>{
+      setBookings(snap.docs.map(d=>({id:d.id,...d.data()}))
+        .sort((a,b)=>(b.createdAt?.toMillis?.()??0)-(a.createdAt?.toMillis?.()??0)));
+      setLoadingB(false);
+    });
+    return ()=>unsub();
+  },[]);
+
+  useEffect(()=>{
+    db.collection('therapists').get()
+      .then(snap=>setTherapists(snap.docs.map(d=>({id:d.id,...d.data()}))));
+  },[]);
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayCount    = bookings.filter(b=>{ const d=b.createdAt?.toDate?.(); return d&&d>=today; }).length;
+  const pendingCount  = bookings.filter(b=>b.status==='pending'||b.status==='admin_pending').length;
+  const confirmedCount= bookings.filter(b=>b.status==='confirmed').length;
+  const onlineCount   = therapists.filter(t=>t.available).length;
+
+  const STATUS_CFG = {
+    pending:       {color:'var(--gold)',  bg:'rgba(212,175,55,0.12)',  label:'Pending'},
+    admin_pending: {color:'#f39c12',     bg:'rgba(243,156,18,0.12)',  label:'Needs Confirm'},
+    confirmed:     {color:'#2ecc71',     bg:'rgba(46,204,113,0.12)',  label:'Confirmed'},
+    accepted:      {color:'#2ecc71',     bg:'rgba(46,204,113,0.12)',  label:'Accepted'},
+    scheduled:     {color:'#3498db',     bg:'rgba(52,152,219,0.12)',  label:'Upcoming'},
+    declined:      {color:'#e74c3c',     bg:'rgba(231,76,60,0.12)',   label:'Declined'},
+    expired:       {color:'var(--muted)',bg:'rgba(100,100,100,0.1)',  label:'Expired'},
+  };
+  const cfg = s => STATUS_CFG[s] || STATUS_CFG.expired;
+
+  const timeAgo = b=>{
+    const d=b.createdAt?.toDate?.(); if(!d) return '—';
+    const s=(Date.now()-d)/1000;
+    if(s<60) return 'Just now';
+    if(s<3600) return `${Math.floor(s/60)}m ago`;
+    if(s<86400) return `${Math.floor(s/3600)}h ago`;
+    return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+  };
+
+  const stats = [
+    { label:'Today',     value:todayCount,     color:'var(--gold)', icon:'📅', sub:`${bookings.length} total` },
+    { label:'Online',    value:onlineCount,    color:'#2ecc71',     icon:'👤', sub:`of ${therapists.length} therapists` },
+    { label:'Needs Action', value:pendingCount, color:pendingCount>0?'#e74c3c':'var(--muted)', icon:'⚡', sub:pendingCount>0?'pending review':'all clear' },
+    { label:'Confirmed', value:confirmedCount, color:'#3498db',     icon:'✓',  sub:'total confirmed' },
+  ];
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:'20px'}}>
+      <div>
+        <h1 style={{fontSize:'1.05rem',fontWeight:'700',color:'var(--text)',marginBottom:'3px'}}>Overview</h1>
+        <p style={{fontSize:'0.78rem',color:'var(--muted)'}}>{new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</p>
+      </div>
+
+      {/* Stat cards */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))',gap:'12px'}}>
+        {stats.map(s=>(
+          <div key={s.label} className="card" style={{padding:'16px 18px'}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'}}>
+              <span style={{fontSize:'0.62rem',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'1px'}}>{s.label}</span>
+              <div style={{width:'26px',height:'26px',borderRadius:'7px',background:`${s.color}18`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.82rem'}}>{s.icon}</div>
+            </div>
+            <p style={{fontSize:'1.9rem',fontWeight:'700',color:s.color,lineHeight:'1',margin:'0 0 4px'}}>{loadingB?'—':s.value}</p>
+            <p style={{fontSize:'0.66rem',color:'var(--muted)',margin:0}}>{s.sub}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Two columns */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'14px'}}>
+
+        {/* Recent bookings */}
+        <div className="card" style={{overflow:'hidden'}}>
+          <div style={{padding:'12px 16px',borderBottom:'1px solid var(--border)'}}>
+            <span style={{fontWeight:'700',fontSize:'0.85rem'}}>Recent Bookings</span>
+          </div>
+          {loadingB
+            ? <div style={{padding:'32px',textAlign:'center'}}><span className="spin" style={{color:'var(--gold)'}}>✦</span></div>
+            : bookings.length===0
+              ? <p style={{padding:'24px',textAlign:'center',color:'var(--muted)',fontSize:'0.8rem'}}>No bookings yet</p>
+              : bookings.slice(0,7).map(b=>{
+                  const c=cfg(b.status);
+                  return (
+                    <div key={b.id} style={{padding:'9px 14px',display:'flex',alignItems:'center',gap:'9px',borderBottom:'1px solid var(--border)'}}>
+                      <div style={{width:'7px',height:'7px',borderRadius:'50%',background:c.color,flexShrink:0}}/>
+                      <div style={{flex:1,minWidth:0}}>
+                        <p style={{fontSize:'0.82rem',fontWeight:'600',color:'var(--text)',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{b.clientName||'—'}</p>
+                        <p style={{fontSize:'0.68rem',color:'var(--muted)',margin:'2px 0 0'}}>{timeAgo(b)}</p>
+                      </div>
+                      <span style={{fontSize:'0.62rem',fontWeight:'700',padding:'2px 7px',borderRadius:'20px',background:c.bg,color:c.color,border:`1px solid ${c.color}40`,flexShrink:0,whiteSpace:'nowrap'}}>{c.label}</span>
+                    </div>
+                  );
+                })
+          }
+        </div>
+
+        {/* Therapist status */}
+        <div className="card" style={{overflow:'hidden'}}>
+          <div style={{padding:'12px 16px',borderBottom:'1px solid var(--border)'}}>
+            <span style={{fontWeight:'700',fontSize:'0.85rem'}}>Therapists</span>
+          </div>
+          {therapists.length===0
+            ? <p style={{padding:'24px',textAlign:'center',color:'var(--muted)',fontSize:'0.8rem'}}>No therapists yet</p>
+            : therapists.slice(0,8).map(t=>(
+                <div key={t.id} style={{padding:'9px 14px',display:'flex',alignItems:'center',gap:'9px',borderBottom:'1px solid var(--border)'}}>
+                  <div style={{position:'relative',flexShrink:0}}>
+                    <div style={{width:'30px',height:'30px',borderRadius:'50%',overflow:'hidden',background:'var(--elevated)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--gold)',fontSize:'0.75rem'}}>
+                      {t.imageUrl?<img src={t.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>e.target.style.display='none'}/>:'✦'}
+                    </div>
+                    <div style={{position:'absolute',bottom:'-1px',right:'-1px',width:'9px',height:'9px',borderRadius:'50%',background:t.available?'#2ecc71':'#444',border:'2px solid var(--card)'}}/>
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <p style={{fontSize:'0.82rem',fontWeight:'600',color:'var(--text)',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.name||t.therapistId||'—'}</p>
+                    <p style={{fontSize:'0.68rem',color:t.available?'#2ecc71':'var(--muted)',margin:'2px 0 0',fontWeight:t.available?'600':'400'}}>{t.available?'● Online':'○ Offline'}</p>
+                  </div>
+                </div>
+              ))
+          }
         </div>
       </div>
     </div>
@@ -833,7 +967,7 @@ const goldBtn = {background:'linear-gradient(135deg,var(--gold-dark),var(--gold)
 function TherapistAccounts() {
   const [accounts, setAccounts]   = useState([]);
   const [loading,  setLoading]    = useState(true);
-  const [form,     setForm]       = useState({ name:'', pin:'' });
+  const [form,     setForm]       = useState({ name:'', email:'', password:'' });
   const [saving,   setSaving]     = useState(false);
   const [msg,      setMsg]        = useState('');
   const [deleting, setDeleting]   = useState(null);
@@ -841,10 +975,9 @@ function TherapistAccounts() {
   const load = async () => {
     setLoading(true);
     try {
-      const snap = await db.collection('therapists')
-        .where('pin', '>=', '')   // only docs with a pin field
-        .get();
-      setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const snap = await db.collection('therapists').orderBy('createdAt','desc').get();
+      // Show only accounts that have an email field (login accounts)
+      setAccounts(snap.docs.map(d=>({id:d.id,...d.data()})).filter(a=>a.email));
     } catch(e) { console.error(e); }
     setLoading(false);
   };
@@ -853,28 +986,37 @@ function TherapistAccounts() {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.pin.trim()) { setMsg('Name and PIN are required.'); return; }
-    if (form.pin.length < 4) { setMsg('PIN must be at least 4 characters.'); return; }
+    if (!form.name.trim() || !form.email.trim() || !form.password.trim()) {
+      setMsg('Name, email and password are all required.'); return;
+    }
+    if (form.password.length < 6) { setMsg('Password must be at least 6 characters.'); return; }
+    if (!/\S+@\S+\.\S+/.test(form.email)) { setMsg('Enter a valid email address.'); return; }
     setSaving(true); setMsg('');
     try {
+      // Check for duplicate email
+      const existing = await db.collection('therapists')
+        .where('email','==',form.email.trim().toLowerCase()).get();
+      if (!existing.empty) { setMsg('An account with this email already exists.'); setSaving(false); return; }
+
       const therapistId = `TH_${Date.now().toString(36).toUpperCase()}_${Math.random().toString(36).slice(2,6).toUpperCase()}`;
       await db.collection('therapists').add({
         therapistId,
         name:      form.name.trim(),
-        pin:       form.pin.trim(),
+        email:     form.email.trim().toLowerCase(),
+        password:  form.password.trim(),
         available: false,
         imageUrl:  '',
         createdAt: FieldValue.serverTimestamp()
       });
-      setMsg(`✓ Account created! ID: ${therapistId}`);
-      setForm({ name:'', pin:'' });
+      setMsg(`✓ Account created for ${form.email.trim().toLowerCase()}`);
+      setForm({ name:'', email:'', password:'' });
       load();
     } catch(e) { setMsg(`Error: ${e.message}`); }
     setSaving(false);
   };
 
   const handleDelete = async (acc) => {
-    if (!window.confirm(`Delete therapist "${acc.name}" (${acc.therapistId})? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete account "${acc.name}" (${acc.email})? This cannot be undone.`)) return;
     setDeleting(acc.id);
     try {
       await db.collection('therapists').doc(acc.id).delete();
@@ -883,17 +1025,14 @@ function TherapistAccounts() {
     setDeleting(null);
   };
 
-  const handleResetPin = async (acc) => {
-    const newPin = prompt(`New PIN for "${acc.name}":`);
-    if (!newPin || newPin.length < 4) { alert('PIN must be at least 4 characters.'); return; }
+  const handleResetPassword = async (acc) => {
+    const newPass = prompt(`New password for "${acc.name}" (${acc.email}):`);
+    if (!newPass || newPass.length < 6) { alert('Password must be at least 6 characters.'); return; }
     try {
-      await db.collection('therapists').doc(acc.id).update({ pin: newPin.trim() });
-      alert('PIN updated.');
+      await db.collection('therapists').doc(acc.id).update({ password: newPass.trim() });
+      alert('Password updated.');
     } catch(e) { alert(`Error: ${e.message}`); }
   };
-
-  const cardSt = { background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'14px',padding:'20px',display:'flex',flexDirection:'column',gap:'10px' };
-  const badgeSt = (on) => ({ display:'inline-block',padding:'3px 10px',borderRadius:'20px',fontSize:'0.75rem',fontWeight:'700',background:on?'rgba(39,174,96,.15)':'rgba(231,76,60,.12)',color:on?'var(--success)':'var(--danger)',border:`1px solid ${on?'var(--success)':'var(--danger)'}` });
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:'24px'}}>
@@ -905,13 +1044,17 @@ function TherapistAccounts() {
           <h2 style={{fontSize:'0.95rem',fontWeight:'700',color:'var(--text)'}}>Create Therapist Account</h2>
         </div>
         <form onSubmit={handleCreate} style={{display:'flex',gap:'14px',flexWrap:'wrap',alignItems:'flex-end'}}>
-          <div style={{flex:'1 1 180px'}}>
+          <div style={{flex:'1 1 160px'}}>
             <label className="form-label">Display Name <span style={{color:'var(--danger)'}}>*</span></label>
             <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. Priya" required className="form-input"/>
           </div>
-          <div style={{flex:'1 1 140px'}}>
-            <label className="form-label">PIN <span style={{color:'var(--muted)'}}>(min 4)</span></label>
-            <input value={form.pin} onChange={e=>setForm(f=>({...f,pin:e.target.value}))} placeholder="e.g. 1234" required className="form-input"/>
+          <div style={{flex:'1 1 200px'}}>
+            <label className="form-label">Email <span style={{color:'var(--danger)'}}>*</span></label>
+            <input type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="priya@feelfreespa.in" required className="form-input"/>
+          </div>
+          <div style={{flex:'1 1 150px'}}>
+            <label className="form-label">Password <span style={{color:'var(--muted)'}}>(min 6)</span></label>
+            <input type="text" value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder="Set a password" required className="form-input"/>
           </div>
           <button type="submit" disabled={saving} className="btn btn-gold btn-md" style={{minWidth:'148px',height:'42px'}}>
             {saving?<span className="spin">✦</span>:'+ Create Account'}
@@ -954,13 +1097,13 @@ function TherapistAccounts() {
                 {/* Info */}
                 <div className="item-info">
                   <div className="name">{acc.name||'—'}</div>
-                  <div className="sub">{acc.therapistId}</div>
+                  <div className="sub">{acc.email}</div>
                   <div className="meta">
                     <span className={`badge ${acc.available?'badge-green':'badge-red'}`}>{acc.available?'Available':'Unavailable'}</span>
                   </div>
                   {/* Mobile actions */}
                   <div className="item-actions-mobile">
-                    <button onClick={()=>handleResetPin(acc)} className="btn btn-ghost btn-sm">Reset PIN</button>
+                    <button onClick={()=>handleResetPassword(acc)} className="btn btn-ghost btn-sm">Reset Password</button>
                     <button onClick={()=>handleDelete(acc)} disabled={deleting===acc.id} className="btn btn-danger btn-sm">
                       {deleting===acc.id?<span className="spin">✦</span>:'Delete'}
                     </button>
@@ -968,7 +1111,7 @@ function TherapistAccounts() {
                 </div>
                 {/* Desktop actions */}
                 <div className="item-actions item-actions-desktop">
-                  <button onClick={()=>handleResetPin(acc)} className="btn btn-ghost btn-sm">Reset PIN</button>
+                  <button onClick={()=>handleResetPassword(acc)} className="btn btn-ghost btn-sm">Reset Password</button>
                   <button onClick={()=>handleDelete(acc)} disabled={deleting===acc.id} className="btn btn-danger btn-sm" style={{minWidth:'64px'}}>
                     {deleting===acc.id?<span className="spin">✦</span>:'Delete'}
                   </button>
