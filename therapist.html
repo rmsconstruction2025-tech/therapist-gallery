@@ -368,8 +368,18 @@ function TherapistPortal({ session, onLogout }) {
   const [available,   setAvailable]   = useState(false);
   const [name,        setName]        = useState('');
   const [phone,       setPhone]       = useState('');
-  const [workStart,   setWorkStart]   = useState('09:00');
-  const [workEnd,     setWorkEnd]     = useState('18:00');
+  const DAYS = ['mon','tue','wed','thu','fri','sat','sun'];
+  const DAY_LABELS = {mon:'Monday',tue:'Tuesday',wed:'Wednesday',thu:'Thursday',fri:'Friday',sat:'Saturday',sun:'Sunday'};
+  const defaultHours = () => ({
+    mon:{on:true, start:'09:00',end:'18:00'},
+    tue:{on:true, start:'09:00',end:'18:00'},
+    wed:{on:true, start:'09:00',end:'18:00'},
+    thu:{on:true, start:'09:00',end:'18:00'},
+    fri:{on:true, start:'09:00',end:'18:00'},
+    sat:{on:false,start:'09:00',end:'18:00'},
+    sun:{on:false,start:'09:00',end:'18:00'},
+  });
+  const [workingHours, setWorkingHours] = useState(defaultHours);
   const [speciality,  setSpeciality]  = useState('');
   const [bio,         setBio]         = useState('');
   const [preview,     setPreview]     = useState(null);
@@ -493,8 +503,7 @@ function TherapistPortal({ session, onLogout }) {
         setData(d);
         setName(d.name || '');
         setAvailable(d.available ?? false);
-        setWorkStart(d.workStart || '09:00');
-        setWorkEnd(d.workEnd || '18:00');
+        setWorkingHours(d.workingHours || defaultHours());
         setSpeciality(d.speciality || '');
         setBio(d.bio || '');
         setPhone(d.phone || '');
@@ -559,7 +568,8 @@ function TherapistPortal({ session, onLogout }) {
   // Profile completion score
   const completion = React.useMemo(() => {
     if (!data) return 0;
-    const checks = [!!data.imageUrl, !!data.name, !!(data.workStart&&data.workEnd), !!data.speciality, !!data.bio];
+    const hasHours = data.workingHours && Object.values(data.workingHours).some(d=>d.on);
+    const checks = [!!data.imageUrl, !!data.name, !!hasHours, !!data.speciality, !!data.bio];
     return Math.round((checks.filter(Boolean).length / checks.length) * 100);
   }, [data]);
 
@@ -732,27 +742,42 @@ function TherapistPortal({ session, onLogout }) {
             </div>
           </div>
 
-          {/* Working Hours */}
+          {/* Working Hours — weekly */}
           <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'16px',padding:'20px'}}>
             <SectionTitle>Working Hours</SectionTitle>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'14px'}}>
-              <div>
-                <label style={{...labelSt,display:'block',marginBottom:'6px'}}>Start Time</label>
-                <input type="time" value={workStart} onChange={e=>setWorkStart(e.target.value)} style={{...inputSt,colorScheme:'dark'}}/>
-              </div>
-              <div>
-                <label style={{...labelSt,display:'block',marginBottom:'6px'}}>End Time</label>
-                <input type="time" value={workEnd} onChange={e=>setWorkEnd(e.target.value)} style={{...inputSt,colorScheme:'dark'}}/>
-              </div>
+            <div style={{display:'flex',flexDirection:'column',gap:'10px',marginBottom:'16px'}}>
+              {DAYS.map(day=>{
+                const dh = workingHours[day] || {on:false,start:'09:00',end:'18:00'};
+                const setDay = patch => setWorkingHours(prev=>({...prev,[day]:{...prev[day],...patch}}));
+                return (
+                  <div key={day} style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px 12px',background:'rgba(255,255,255,0.03)',borderRadius:'10px',border:`1px solid ${dh.on?'rgba(212,175,55,.3)':'var(--border)'}`}}>
+                    {/* Day toggle */}
+                    <button onClick={()=>setDay({on:!dh.on})} style={{
+                      minWidth:'88px',padding:'5px 10px',borderRadius:'20px',border:'none',cursor:'pointer',fontSize:'0.75rem',fontWeight:'700',letterSpacing:'0.3px',fontFamily:'inherit',
+                      background: dh.on ? 'var(--gold)' : 'rgba(255,255,255,0.06)',
+                      color: dh.on ? '#1a1209' : 'var(--muted)',
+                      transition:'all 0.2s',
+                    }}>
+                      {DAY_LABELS[day].slice(0,3).toUpperCase()}
+                    </button>
+                    {dh.on ? (
+                      <>
+                        <input type="time" value={dh.start} onChange={e=>setDay({start:e.target.value})}
+                          style={{flex:1,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:'8px',padding:'7px 10px',color:'var(--text)',fontSize:'0.85rem',fontFamily:'inherit',colorScheme:'dark',minWidth:0}}/>
+                        <span style={{color:'var(--muted)',fontSize:'0.8rem',flexShrink:0}}>to</span>
+                        <input type="time" value={dh.end} onChange={e=>setDay({end:e.target.value})}
+                          style={{flex:1,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:'8px',padding:'7px 10px',color:'var(--text)',fontSize:'0.85rem',fontFamily:'inherit',colorScheme:'dark',minWidth:0}}/>
+                      </>
+                    ) : (
+                      <span style={{color:'var(--muted)',fontSize:'0.82rem',flex:1}}>Day off</span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-            <button onClick={()=>save('hours',{workStart,workEnd},'Hours')} disabled={saving==='hours'} style={{...goldBtn,padding:'13px',fontSize:'0.9rem',width:'100%'}}>
+            <button onClick={()=>save('hours',{workingHours},'Working Hours')} disabled={saving==='hours'} style={{...goldBtn,padding:'13px',fontSize:'0.9rem',width:'100%'}}>
               {saving==='hours'?<span className="spin">✦</span>:'Save Working Hours'}
             </button>
-            {data?.workStart&&data?.workEnd&&(
-              <p style={{marginTop:'12px',fontSize:'0.82rem',color:'var(--gold)',background:'rgba(212,175,55,.06)',borderRadius:'8px',padding:'8px 12px',textAlign:'center'}}>
-                Currently set: {fmt(data.workStart)} — {fmt(data.workEnd)}
-              </p>
-            )}
           </div>
 
           {/* Therapist ID + Logout */}

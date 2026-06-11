@@ -15,7 +15,7 @@ service cloud.firestore {
       allow update: if isAdmin()
         || request.resource.data.diff(resource.data)
              .affectedKeys()
-             .hasOnly(['available','name','bio','speciality','workStart','workEnd','imageUrl','updatedAt','phone','fcmToken']);
+             .hasOnly(['available','name','bio','speciality','workStart','workEnd','workingHours','imageUrl','updatedAt','phone','fcmToken']);
     }
 
     // Gallery tokens: admin full control; clients can read to validate & update name/phone
