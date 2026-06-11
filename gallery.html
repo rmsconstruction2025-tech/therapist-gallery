@@ -92,11 +92,41 @@ function getTokenFromUrl() {
 //  APP
 // ══════════════════════════════════════════════════════
 function App() {
-  const [status,    setStatus]    = useState('loading'); // loading|invalid|expired|info|gallery
-  const [tokenData, setTokenData] = useState(null);
-  const [client,    setClient]    = useState({name:'',phone:''});
-  const [isBlurred, setIsBlurred] = useState(false);
+  const [status,      setStatus]      = useState('loading'); // loading|invalid|expired|info|gallery
+  const [tokenData,   setTokenData]   = useState(null);
+  const [client,      setClient]      = useState({name:'',phone:''});
+  const [isBlurred,   setIsBlurred]   = useState(false);
+  const [isDuplicate, setIsDuplicate] = useState(false);
   const tokenStr = getTokenFromUrl();
+
+  // ── Multi-tab / multi-window guard ──
+  // If this link is already open in another tab/window, block this one.
+  useEffect(() => {
+    if (!tokenStr) return;
+    let bc;
+    let guardTimeout;
+    try {
+      bc = new BroadcastChannel(`ffs_gallery_${tokenStr}`);
+      bc.onmessage = (e) => {
+        if (e.data === 'tab_opened') {
+          // Another tab just opened the same link — tell it we're already here
+          bc.postMessage('tab_taken');
+        } else if (e.data === 'tab_taken') {
+          // Primary tab responded — this window is a duplicate
+          clearTimeout(guardTimeout);
+          setIsDuplicate(true);
+        }
+      };
+      // Announce this tab opened
+      bc.postMessage('tab_opened');
+      // If no 'tab_taken' arrives within 300ms, we are the primary tab
+      guardTimeout = setTimeout(() => {}, 300);
+    } catch(e) { /* BroadcastChannel not supported — fail silently */ }
+    return () => {
+      clearTimeout(guardTimeout);
+      if (bc) bc.close();
+    };
+  }, [tokenStr]);
 
   // Privacy protection
   useEffect(() => {
@@ -155,6 +185,16 @@ function App() {
       } catch(err) { console.error(err); setStatus('invalid'); }
     })();
   }, [tokenStr]);
+
+  // Block duplicate tab/window
+  if (isDuplicate) return (
+    <FullScreen>
+      <div style={{fontSize:'3rem',marginBottom:'16px'}}>🔒</div>
+      <h2 style={msgTitle}>Already Open</h2>
+      <p style={msgSub}>This gallery link is already open in another window or tab. Please use that window to continue.</p>
+      <p style={{color:'var(--muted)',fontSize:'0.78rem',marginTop:'16px',opacity:0.6}}>Close the other window first, then refresh this page.</p>
+    </FullScreen>
+  );
 
   if (status==='loading') return <FullScreen><span className="spin" style={{fontSize:'2.5rem',color:'var(--gold)'}}>✦</span><p style={{color:'var(--muted)',marginTop:'16px'}}>Validating access…</p></FullScreen>;
   if (status==='invalid') return <FullScreen><div style={{fontSize:'3rem',color:'var(--gold)',marginBottom:'16px'}}>⚠</div><h2 style={msgTitle}>Invalid Link</h2><p style={msgSub}>This gallery link is invalid.</p></FullScreen>;
