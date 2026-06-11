@@ -986,11 +986,13 @@ function TherapistAccounts() {
 //  BOOKINGS PANEL
 // ══════════════════════════════════════════════════════
 function BookingsPanel() {
-  const [bookings,         setBookings]         = useState([]);
-  const [loading,          setLoading]          = useState(true);
-  const [filter,           setFilter]           = useState('all');
-  const [therapistList,    setTherapistList]    = useState([]);
-  const [selectedTherapist,setSelectedTherapist]= useState({});
+  const [bookings,          setBookings]          = useState([]);
+  const [loading,           setLoading]           = useState(true);
+  const [filter,            setFilter]            = useState('all');
+  const [therapistList,     setTherapistList]     = useState([]);
+  const [selectedTherapist, setSelectedTherapist] = useState({});
+  const [expandedRows,      setExpandedRows]      = useState({});
+  const toggleRow = id => setExpandedRows(prev=>({...prev,[id]:!prev[id]}));
   const [search,     setSearch]     = useState('');
   const [deleting,   setDeleting]   = useState(null);
   const [confirming, setConfirming] = useState(null);
@@ -1187,117 +1189,145 @@ function BookingsPanel() {
                 {search?'No results found.':filter==='all'?'No bookings yet.':`No ${filter} bookings.`}
               </div>
             : filtered.map(b=>{
-                const c=cfg(b.status);
-                const clientWaPhone = b.clientPhone ? '91'+b.clientPhone.replace(/\D/g,'').replace(/^91/,'') : null;
+                const c   = cfg(b.status);
+                const exp = !!expandedRows[b.id];
+                const clientWaPhone    = b.clientPhone    ? '91'+b.clientPhone.replace(/\D/g,'').replace(/^91/,'')    : null;
                 const therapistWaPhone = b.therapistPhone ? '91'+b.therapistPhone.replace(/\D/g,'').replace(/^91/,'') : null;
-                const therapistName = b.therapistName||b.therapistId||'the therapist';
+                const therapistName    = b.therapistName||b.therapistId||'the therapist';
+                const needsAction      = b.status==='admin_pending'||b.status==='scheduled';
                 return (
-                  <div key={b.id} style={{padding:'14px 18px',borderBottom:'1px solid var(--border)',background:b.status==='admin_pending'?'rgba(243,156,18,0.03)':'transparent',transition:'background .1s',cursor:'default'}}
-                    onMouseEnter={e=>e.currentTarget.style.background=b.status==='admin_pending'?'rgba(243,156,18,0.06)':'rgba(212,175,55,0.025)'}
-                    onMouseLeave={e=>e.currentTarget.style.background=b.status==='admin_pending'?'rgba(243,156,18,0.03)':'transparent'}>
-                    <div style={{display:'flex',alignItems:'flex-start',gap:'12px'}}>
+                  <div key={b.id} style={{borderBottom:'1px solid var(--border)'}}>
+
+                    {/* ── Summary row (always visible, click to expand) ── */}
+                    <div onClick={()=>toggleRow(b.id)}
+                      style={{padding:'11px 16px',display:'flex',alignItems:'center',gap:'10px',cursor:'pointer',
+                        background: exp ? 'rgba(212,175,55,0.05)' : b.status==='admin_pending'?'rgba(243,156,18,0.03)':'transparent',
+                        transition:'background .12s'}}
+                      onMouseEnter={e=>e.currentTarget.style.background='rgba(212,175,55,0.05)'}
+                      onMouseLeave={e=>e.currentTarget.style.background=exp?'rgba(212,175,55,0.05)':b.status==='admin_pending'?'rgba(243,156,18,0.03)':'transparent'}>
+
                       {/* Status dot */}
-                      <div style={{width:'8px',height:'8px',borderRadius:'50%',background:c.color,flexShrink:0,marginTop:'7px'}}/>
-                      {/* Info */}
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',marginBottom:'5px'}}>
-                          <span style={{fontWeight:'700',fontSize:'0.9rem'}}>👤 {b.clientName}</span>
-                          <span style={{color:'var(--muted)',fontSize:'0.72rem'}}>→</span>
-                          <span style={{fontSize:'0.82rem',color:'var(--gold)',fontWeight:'600'}}>{therapistName}</span>
-                        </div>
-                        <div style={{display:'flex',gap:'7px',alignItems:'center',flexWrap:'wrap',marginBottom:'6px'}}>
-                          <span style={{display:'inline-flex',alignItems:'center',padding:'2px 9px',borderRadius:'20px',fontSize:'0.69rem',fontWeight:'700',background:c.bg,color:c.color,border:`1px solid ${c.border}`}}>
-                            {c.label||b.status}
+                      <div style={{width:'8px',height:'8px',borderRadius:'50%',background:c.color,flexShrink:0}}/>
+
+                      {/* Client → Therapist + badges */}
+                      <div style={{flex:1,minWidth:0,display:'flex',alignItems:'center',gap:'7px',flexWrap:'wrap'}}>
+                        <span style={{fontWeight:'700',fontSize:'0.88rem'}}>👤 {b.clientName}</span>
+                        <span style={{color:'var(--muted)',fontSize:'0.7rem'}}>→</span>
+                        <span style={{fontSize:'0.82rem',color:'var(--gold)',fontWeight:'600'}}>{therapistName}</span>
+                        <span style={{display:'inline-flex',padding:'2px 8px',borderRadius:'20px',fontSize:'0.66rem',fontWeight:'700',background:c.bg,color:c.color,border:`1px solid ${c.border}`}}>
+                          {c.label||b.status}
+                        </span>
+                        <span style={{fontSize:'0.7rem',color:'var(--muted)'}}>
+                          {b.bookingType==='now'?'⚡ Now':`📅 ${b.scheduledDate||''} ${b.scheduledTime||''}`}
+                        </span>
+                        {b.status==='admin_pending'&&b.needsTherapistAssignment&&(
+                          <span style={{fontSize:'0.62rem',background:'rgba(243,156,18,0.18)',color:'#f39c12',border:'1px solid rgba(243,156,18,0.4)',borderRadius:'10px',padding:'1px 7px',fontWeight:'700'}}>
+                            ASSIGN
                           </span>
-                          <span style={{fontSize:'0.72rem',color:'var(--muted)'}}>
-                            {b.bookingType==='now'?'⚡ Immediate':`📅 ${b.scheduledDate||''} ${b.scheduledTime||''}`}
-                          </span>
-                          {b.clientLocation&&(
-                            <a href={`https://maps.google.com?q=${b.clientLocation.lat},${b.clientLocation.lng}`}
-                              target="_blank" rel="noopener noreferrer"
-                              style={{color:'var(--gold)',fontSize:'0.72rem',textDecoration:'none'}}>📍 Map</a>
-                          )}
-                          {b.notes&&<span style={{fontSize:'0.68rem',color:'var(--muted)',fontStyle:'italic'}}>"{b.notes}"</span>}
-                        </div>
-
-                        {/* ── Admin_Pending ── */}
-                        {b.status==='admin_pending'&&(
-                          <div style={{marginTop:'8px'}}>
-                            {b.needsTherapistAssignment ? (
-                              /* Client chose "Book with Admin" — need to assign therapist */
-                              <div>
-                                <p style={{fontSize:'0.72rem',color:'#f39c12',marginBottom:'7px',fontWeight:'600'}}>⚡ Client requested admin booking — assign a therapist:</p>
-                                <div style={{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center'}}>
-                                  <select
-                                    value={selectedTherapist[b.id]||''}
-                                    onChange={e=>setSelectedTherapist(prev=>({...prev,[b.id]:e.target.value}))}
-                                    style={{background:'var(--elevated)',color:'var(--text)',border:'1px solid rgba(212,175,55,0.5)',borderRadius:'8px',padding:'8px 12px',fontSize:'0.8rem',flex:1,minWidth:'150px',cursor:'pointer'}}>
-                                    <option value=''>— Select Therapist —</option>
-                                    {therapistList.map(t=>(
-                                      <option key={t.id} value={t.id}>{t.name||t.therapistId}{t.available===false?' (unavailable)':''}</option>
-                                    ))}
-                                  </select>
-                                  <button onClick={()=>assignAndConfirm(b)} disabled={confirming===b.id||!selectedTherapist[b.id]}
-                                    style={{background:'linear-gradient(135deg,#27ae60,#2ecc71)',color:'#fff',border:'none',borderRadius:'8px',padding:'9px 16px',fontWeight:'700',fontSize:'0.8rem',cursor:'pointer',minHeight:'38px',display:'inline-flex',alignItems:'center',gap:'6px',opacity:!selectedTherapist[b.id]?0.5:1}}>
-                                    {confirming===b.id?<span className="spin">✦</span>:'✓ Assign & Confirm'}
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              /* Normal flow — therapist accepted, admin confirms */
-                              <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
-                                <button onClick={()=>confirmBooking(b)} disabled={confirming===b.id}
-                                  style={{background:'linear-gradient(135deg,#27ae60,#2ecc71)',color:'#fff',border:'none',borderRadius:'8px',padding:'9px 18px',fontWeight:'700',fontSize:'0.82rem',cursor:'pointer',minHeight:'38px',display:'inline-flex',alignItems:'center',gap:'6px'}}>
-                                  {confirming===b.id?<span className="spin">✦</span>:'✓ Confirm & Send WhatsApp'}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* ── Confirmed: WhatsApp resend buttons ── */}
-                        {b.status==='confirmed'&&(
-                          <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginTop:'6px'}}>
-                            {clientWaPhone&&(
-                              <a href={`https://wa.me/${clientWaPhone}?text=${encodeURIComponent('Hello '+b.clientName+', your appointment with '+therapistName+' has been confirmed by Feel Free Spa! We will coordinate the details shortly.')}`}
-                                target="_blank" rel="noopener noreferrer"
-                                style={{display:'inline-flex',alignItems:'center',gap:'5px',background:'#25D366',color:'#fff',borderRadius:'7px',padding:'6px 12px',fontSize:'0.75rem',fontWeight:'700',textDecoration:'none'}}>
-                                💬 Client
-                              </a>
-                            )}
-                            {therapistWaPhone&&(
-                              <a href={`https://wa.me/${therapistWaPhone}?text=${encodeURIComponent('Hello, your appointment with client '+b.clientName+' has been confirmed. Please proceed as scheduled.')}`}
-                                target="_blank" rel="noopener noreferrer"
-                                style={{display:'inline-flex',alignItems:'center',gap:'5px',background:'#25D366',color:'#fff',borderRadius:'7px',padding:'6px 12px',fontSize:'0.75rem',fontWeight:'700',textDecoration:'none'}}>
-                                💬 Therapist
-                              </a>
-                            )}
-                            <span style={{fontSize:'0.7rem',color:'var(--success)',alignSelf:'center'}}>✓ Confirmed</span>
-                          </div>
-                        )}
-
-                        {/* ── Scheduled/Upcoming: WhatsApp to confirm ── */}
-                        {b.status==='scheduled'&&(
-                          <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginTop:'6px',alignItems:'center'}}>
-                            <span style={{fontSize:'0.72rem',color:'#3498db'}}>📅 {b.scheduledDate} {b.scheduledTime}</span>
-                            <button onClick={()=>confirmBooking(b)} disabled={confirming===b.id}
-                              style={{background:'rgba(52,152,219,0.15)',color:'#3498db',border:'1px solid rgba(52,152,219,0.4)',borderRadius:'7px',padding:'5px 12px',fontWeight:'700',fontSize:'0.75rem',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'5px'}}>
-                              {confirming===b.id?<span className="spin">✦</span>:'✓ Confirm Upcoming'}
-                            </button>
-                          </div>
                         )}
                       </div>
-                      {/* Time + delete */}
-                      <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'6px',flexShrink:0}}>
-                        <span style={{fontSize:'0.68rem',color:'var(--muted)',whiteSpace:'nowrap'}}>{timeAgo(b)}</span>
-                        <button onClick={()=>handleDelete(b)} disabled={deleting===b.id}
-                          style={{background:'transparent',border:'none',color:'var(--subtle)',cursor:'pointer',fontSize:'0.75rem',padding:'2px 4px',lineHeight:1,transition:'color .1s'}}
-                          onMouseEnter={e=>e.currentTarget.style.color='var(--danger)'}
+
+                      {/* Right: time • chevron • delete */}
+                      <div style={{display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
+                        <span style={{fontSize:'0.67rem',color:'var(--muted)',whiteSpace:'nowrap'}}>{timeAgo(b)}</span>
+                        <span style={{color:'var(--muted)',fontSize:'0.62rem',display:'inline-block',transition:'transform .2s',transform:exp?'rotate(180deg)':'rotate(0deg)'}}>▼</span>
+                        <button onClick={e=>{e.stopPropagation();handleDelete(b);}} disabled={deleting===b.id}
+                          style={{background:'transparent',border:'none',color:'var(--subtle)',cursor:'pointer',fontSize:'0.75rem',padding:'4px',lineHeight:1,transition:'color .1s'}}
+                          onMouseEnter={e=>{e.stopPropagation();e.currentTarget.style.color='var(--danger)';}}
                           onMouseLeave={e=>e.currentTarget.style.color='var(--subtle)'}>
                           {deleting===b.id?<span className="spin" style={{fontSize:'0.7rem'}}>✦</span>:'✕'}
                         </button>
                       </div>
                     </div>
+
+                    {/* ── Expanded details + actions ── */}
+                    {exp&&(
+                      <div style={{padding:'10px 16px 14px 34px',borderTop:'1px solid rgba(212,175,55,0.1)',background:'rgba(212,175,55,0.02)'}}>
+
+                        {/* Detail chips */}
+                        <div style={{display:'flex',gap:'10px',flexWrap:'wrap',marginBottom:'12px'}}>
+                          {clientWaPhone&&(
+                            <a href={`https://wa.me/${clientWaPhone}?text=${encodeURIComponent('Hello '+b.clientName+', regarding your Feel Free Spa booking…')}`}
+                              target="_blank" rel="noopener noreferrer"
+                              style={{display:'inline-flex',alignItems:'center',gap:'5px',background:'rgba(37,211,102,0.12)',color:'#25D366',border:'1px solid rgba(37,211,102,0.3)',borderRadius:'7px',padding:'5px 11px',fontSize:'0.75rem',fontWeight:'600',textDecoration:'none'}}>
+                              💬 {b.clientPhone}
+                            </a>
+                          )}
+                          {b.clientLocation&&(
+                            <a href={`https://maps.google.com?q=${b.clientLocation.lat},${b.clientLocation.lng}`}
+                              target="_blank" rel="noopener noreferrer"
+                              style={{display:'inline-flex',alignItems:'center',gap:'5px',background:'rgba(212,175,55,0.1)',color:'var(--gold)',border:'1px solid rgba(212,175,55,0.3)',borderRadius:'7px',padding:'5px 11px',fontSize:'0.75rem',fontWeight:'600',textDecoration:'none'}}>
+                              📍 View Location
+                            </a>
+                          )}
+                          {b.notes&&(
+                            <span style={{fontSize:'0.75rem',color:'var(--muted)',fontStyle:'italic',alignSelf:'center'}}>📝 "{b.notes}"</span>
+                          )}
+                        </div>
+
+                        {/* Action buttons */}
+                        {b.status==='admin_pending'&&(
+                          b.needsTherapistAssignment ? (
+                            <div>
+                              <p style={{fontSize:'0.72rem',color:'#f39c12',marginBottom:'7px',fontWeight:'600'}}>⚡ Assign a therapist:</p>
+                              <div style={{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center'}}>
+                                <select value={selectedTherapist[b.id]||''} onChange={e=>setSelectedTherapist(prev=>({...prev,[b.id]:e.target.value}))}
+                                  style={{background:'var(--elevated)',color:'var(--text)',border:'1px solid rgba(212,175,55,0.5)',borderRadius:'8px',padding:'8px 12px',fontSize:'0.8rem',flex:1,minWidth:'150px',cursor:'pointer'}}>
+                                  <option value=''>— Select Therapist —</option>
+                                  {therapistList.map(t=>(
+                                    <option key={t.id} value={t.id}>{t.name||t.therapistId}{t.available===false?' (unavailable)':''}</option>
+                                  ))}
+                                </select>
+                                <button onClick={()=>assignAndConfirm(b)} disabled={confirming===b.id||!selectedTherapist[b.id]}
+                                  style={{background:'linear-gradient(135deg,#27ae60,#2ecc71)',color:'#fff',border:'none',borderRadius:'8px',padding:'9px 16px',fontWeight:'700',fontSize:'0.8rem',cursor:'pointer',minHeight:'38px',display:'inline-flex',alignItems:'center',gap:'6px',opacity:!selectedTherapist[b.id]?0.5:1}}>
+                                  {confirming===b.id?<span className="spin">✦</span>:'✓ Assign & Confirm'}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button onClick={()=>confirmBooking(b)} disabled={confirming===b.id}
+                              style={{background:'linear-gradient(135deg,#27ae60,#2ecc71)',color:'#fff',border:'none',borderRadius:'8px',padding:'9px 18px',fontWeight:'700',fontSize:'0.82rem',cursor:'pointer',minHeight:'38px',display:'inline-flex',alignItems:'center',gap:'6px'}}>
+                              {confirming===b.id?<span className="spin">✦</span>:'✓ Confirm & Send WhatsApp'}
+                            </button>
+                          )
+                        )}
+
+                        {b.status==='confirmed'&&(
+                          <div style={{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center'}}>
+                            {clientWaPhone&&(
+                              <a href={`https://wa.me/${clientWaPhone}?text=${encodeURIComponent('Hello '+b.clientName+', your appointment with '+therapistName+' has been confirmed by Feel Free Spa!')}`}
+                                target="_blank" rel="noopener noreferrer"
+                                style={{display:'inline-flex',alignItems:'center',gap:'5px',background:'#25D366',color:'#fff',borderRadius:'7px',padding:'6px 12px',fontSize:'0.75rem',fontWeight:'700',textDecoration:'none'}}>
+                                💬 Resend to Client
+                              </a>
+                            )}
+                            {therapistWaPhone&&(
+                              <a href={`https://wa.me/${therapistWaPhone}?text=${encodeURIComponent('Hello, your appointment with client '+b.clientName+' has been confirmed. Please proceed.')}`}
+                                target="_blank" rel="noopener noreferrer"
+                                style={{display:'inline-flex',alignItems:'center',gap:'5px',background:'rgba(37,211,102,0.15)',color:'#25D366',border:'1px solid rgba(37,211,102,0.4)',borderRadius:'7px',padding:'6px 12px',fontSize:'0.75rem',fontWeight:'700',textDecoration:'none'}}>
+                                💬 Resend to Therapist
+                              </a>
+                            )}
+                          </div>
+                        )}
+
+                        {b.status==='scheduled'&&(
+                          <button onClick={()=>confirmBooking(b)} disabled={confirming===b.id}
+                            style={{background:'rgba(52,152,219,0.15)',color:'#3498db',border:'1px solid rgba(52,152,219,0.4)',borderRadius:'7px',padding:'8px 16px',fontWeight:'700',fontSize:'0.78rem',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'6px',minHeight:'36px'}}>
+                            {confirming===b.id?<span className="spin">✦</span>:'✓ Confirm Upcoming & WhatsApp'}
+                          </button>
+                        )}
+
+                        {(b.status==='pending')&&(
+                          <p style={{fontSize:'0.72rem',color:'var(--muted)',fontStyle:'italic',margin:0}}>⏳ Waiting for therapist to accept…</p>
+                        )}
+                        {(b.status==='declined'||b.status==='expired')&&(
+                          <p style={{fontSize:'0.72rem',color:'var(--muted)',fontStyle:'italic',margin:0}}>
+                            {b.status==='declined'?'😔 Therapist declined.':'⏰ Timer expired — no response.'}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })
