@@ -277,34 +277,6 @@ function TherapistLogin({ onLogin }) {
 // ══════════════════════════════════════════════════════
 //  THERAPIST PORTAL (after login)
 // ══════════════════════════════════════════════════════
-// ── DEBUG: shows raw Firestore data so we can diagnose ID mismatch ──
-function DebugPanel({ session }) {
-  const [rows, setRows] = useState([]);
-  useEffect(()=>{
-    const unsub = db.collection('bookings').limit(20).onSnapshot(snap=>{
-      setRows(snap.docs.map(d=>({id:d.id,...d.data()})));
-    });
-    return ()=>unsub();
-  },[]);
-  return (
-    <div style={{background:'#1a0a00',border:'1px solid orange',borderRadius:'10px',padding:'14px',marginBottom:'16px',fontSize:'0.72rem',fontFamily:'monospace',overflowX:'auto'}}>
-      <p style={{color:'orange',fontWeight:'700',marginBottom:'6px'}}>🔍 DEBUG (remove after fix)</p>
-      <p style={{color:'#fff'}}>session.docId: <b style={{color:'#ffd700'}}>{session.docId}</b></p>
-      <p style={{color:'#fff'}}>session.therapistId: <b style={{color:'#ffd700'}}>{session.therapistId}</b></p>
-      <p style={{color:'#aaa',marginTop:'8px'}}>Last 20 bookings in Firestore:</p>
-      {rows.length===0 && <p style={{color:'#888'}}>— none —</p>}
-      {rows.map(r=>(
-        <div key={r.id} style={{borderTop:'1px solid #333',marginTop:'6px',paddingTop:'6px',color: (r.therapistId===session.therapistId||r.therapistDocId===session.docId)?'#4f4':'#f88'}}>
-          <span>{(r.therapistId===session.therapistId||r.therapistDocId===session.docId)?'✅ MATCH':'❌ NO MATCH'}</span>
-          {' | '}status:{r.status}
-          {' | '}therapistId:<b>{r.therapistId}</b>
-          {' | '}therapistDocId:<b>{r.therapistDocId}</b>
-          {' | '}client:{r.clientName}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function TherapistPortal({ session, onLogout }) {
   const [data,        setData]        = useState(null);
@@ -502,9 +474,6 @@ function TherapistPortal({ session, onLogout }) {
           {msgType==='success'?'✓':'✕'} {msg}
         </div>
       )}
-
-      {/* ── DEBUG PANEL (remove after fix) ── */}
-      <DebugPanel session={session}/>
 
       {/* ── BOOKING NOTIFICATIONS ── */}
       {pendingBookings.map(b=>(
