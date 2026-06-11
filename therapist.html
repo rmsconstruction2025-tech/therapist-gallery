@@ -278,6 +278,17 @@ function TherapistLogin({ onLogin }) {
 //  THERAPIST PORTAL (after login)
 // ══════════════════════════════════════════════════════
 
+// Distance between two GPS coords (km)
+function haversineKm(lat1,lng1,lat2,lng2){
+  const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.asin(Math.sqrt(a));
+}
+function fmtDist(km){
+  if(km<1) return `${Math.round(km*1000)} m`;
+  return `${km.toFixed(1)} km`;
+}
+
 function TherapistPortal({ session, onLogout }) {
   const [data,        setData]        = useState(null);
   const [loading,     setLoading]     = useState(true);
@@ -298,12 +309,26 @@ function TherapistPortal({ session, onLogout }) {
   // Bookings
   const [pendingBookings,   setPendingBookings]   = useState([]);
   const [scheduledBookings, setScheduledBookings] = useState([]);
+  const [allBookings,       setAllBookings]       = useState([]);
   const [hasNewPending,     setHasNewPending]     = useState(false);
+  // Therapist GPS for distance calc
+  const [myGPS, setMyGPS] = useState(null);
   const fileRef        = useRef(null);
   const seenInitRef    = useRef(false);
   const alertIntervalRef = useRef(null);
 
   useEffect(() => { fetchProfile(); }, []);
+
+  // Get therapist GPS location for distance calculation
+  useEffect(()=>{
+    if(!navigator.geolocation) return;
+    const watch = navigator.geolocation.watchPosition(
+      p=>setMyGPS({lat:p.coords.latitude,lng:p.coords.longitude}),
+      ()=>{},
+      {enableHighAccuracy:true,maximumAge:30000}
+    );
+    return ()=>navigator.geolocation.clearWatch(watch);
+  },[]);
 
   // Repeating alert (Uber/Rapido style) — plays every 3.5s while pending booking exists
   useEffect(()=>{
@@ -334,6 +359,7 @@ function TherapistPortal({ session, onLogout }) {
 
         const pending   = mine.filter(b=>b.status==='pending');
         const scheduled = mine.filter(b=>b.status==='scheduled');
+        setAllBookings(mine);
 
         // Trigger repeating alert on new booking arrival (after initial load)
         if(seenInitRef.current){
@@ -475,8 +501,12 @@ function TherapistPortal({ session, onLogout }) {
         </div>
       )}
 
-      {/* ── BOOKING NOTIFICATIONS ── */}
-      {pendingBookings.map(b=>(
+      {/* ── INCOMING BOOKING ALERTS ── */}
+      {pendingBookings.map(b=>{
+        const dist = (myGPS&&b.clientLocation)
+          ? haversineKm(myGPS.lat,myGPS.lng,b.clientLocation.lat,b.clientLocation.lng)
+          : null;
+        return (
         <div key={b.id} className="booking-alert" style={{background:'rgba(212,175,55,0.07)',border:'2px solid var(--gold)',borderRadius:'16px',padding:'20px',marginBottom:'16px'}}>
           <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'14px'}}>
             <span style={{fontSize:'1.3rem',animation:'spin 1.2s linear infinite',display:'inline-block'}}>🔔</span>
@@ -484,12 +514,15 @@ function TherapistPortal({ session, onLogout }) {
           </div>
           <div style={{display:'flex',flexDirection:'column',gap:'6px',marginBottom:'16px'}}>
             <p style={{fontSize:'1rem',fontWeight:'700',color:'var(--text)'}}>👤 {b.clientName}</p>
+            {dist!==null&&(
+              <p style={{fontSize:'0.88rem',color:'var(--gold)',fontWeight:'600'}}>📏 {fmtDist(dist)} away</p>
+            )}
             <p style={{fontSize:'0.8rem',color:'var(--muted)'}}>⚡ Immediate appointment request</p>
             <p style={{fontSize:'0.76rem',color:'var(--muted)'}}>🕐 {b.createdAt?.toDate?.()?.toLocaleTimeString?.('en-IN')??'Just now'}</p>
             {b.clientLocation&&(
               <a href={`https://maps.google.com?q=${b.clientLocation.lat},${b.clientLocation.lng}`} target="_blank" rel="noopener noreferrer"
                 style={{color:'var(--gold)',fontSize:'0.82rem',textDecoration:'none',display:'inline-flex',alignItems:'center',gap:'4px'}}>
-                📍 View Client Location
+                📍 Open Client Location
               </a>
             )}
           </div>
@@ -502,30 +535,97 @@ function TherapistPortal({ session, onLogout }) {
             </button>
           </div>
         </div>
-      ))}
+        );
+      })}
 
-      {scheduledBookings.length>0&&(
-        <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'16px',padding:'20px',marginBottom:'16px'}}>
-          <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'14px'}}>
-            <span style={{fontSize:'1rem'}}>📅</span>
-            <span style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--text)'}}>Upcoming Appointments</span>
-            <span style={{background:'var(--elevated)',color:'var(--gold)',borderRadius:'12px',padding:'2px 8px',fontSize:'0.7rem',fontWeight:'700'}}>{scheduledBookings.length}</span>
+      {/* ══ TRACK BOOKINGS ══ */}
+      <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'18px',marginBottom:'20px',overflow:'hidden'}}>
+        {/* Section header */}
+        <div style={{padding:'16px 20px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+            <span style={{fontSize:'1.1rem'}}>🗺️</span>
+            <span style={{fontWeight:'700',fontSize:'0.95rem',color:'var(--text)',letterSpacing:'0.5px'}}>Track Bookings</span>
           </div>
-          {scheduledBookings.map((b,i)=>(
-            <div key={b.id} style={{borderTop:i>0?'1px solid var(--border)':'none',paddingTop:i>0?'12px':'0',marginTop:i>0?'12px':'0'}}>
-              <p style={{fontWeight:'600',color:'var(--text)',fontSize:'0.9rem'}}>👤 {b.clientName}</p>
-              <p style={{color:'var(--gold)',fontSize:'0.82rem',marginTop:'3px'}}>📅 {b.scheduledDate} · 🕐 {b.scheduledTime}</p>
-              {b.clientLocation&&(
-                <a href={`https://maps.google.com?q=${b.clientLocation.lat},${b.clientLocation.lng}`} target="_blank" rel="noopener noreferrer"
-                  style={{color:'var(--muted)',fontSize:'0.76rem',textDecoration:'none',display:'block',marginTop:'3px'}}>
-                  📍 View Location
-                </a>
-              )}
-              {b.notes&&<p style={{color:'var(--muted)',fontSize:'0.76rem',marginTop:'3px',fontStyle:'italic'}}>"{b.notes}"</p>}
-            </div>
-          ))}
+          <span style={{background:'var(--elevated)',color:'var(--gold)',borderRadius:'12px',padding:'3px 10px',fontSize:'0.72rem',fontWeight:'700'}}>
+            {allBookings.length}
+          </span>
         </div>
-      )}
+
+        {allBookings.length===0?(
+          <div style={{textAlign:'center',padding:'32px 20px',color:'var(--muted)',fontSize:'0.85rem'}}>
+            No bookings yet
+          </div>
+        ):(
+          <div style={{padding:'0 8px 8px'}}>
+            {allBookings.map((b,i)=>{
+              const dist = (myGPS&&b.clientLocation)
+                ? haversineKm(myGPS.lat,myGPS.lng,b.clientLocation.lat,b.clientLocation.lng)
+                : null;
+              const statusCfg = {
+                pending:   {color:'var(--gold)',   bg:'rgba(212,175,55,0.12)', label:'Pending'},
+                accepted:  {color:'var(--success)',bg:'rgba(39,174,96,0.12)',  label:'Accepted'},
+                declined:  {color:'var(--danger)', bg:'rgba(231,76,60,0.12)',  label:'Declined'},
+                expired:   {color:'var(--muted)',  bg:'rgba(100,100,100,0.1)',label:'Expired'},
+                scheduled: {color:'#4a9eff',       bg:'rgba(74,158,255,0.1)',  label:'Scheduled'},
+              }[b.status]||{color:'var(--muted)',bg:'rgba(100,100,100,0.1)',label:b.status};
+
+              return (
+                <div key={b.id} style={{
+                  borderRadius:'12px',padding:'14px 12px',marginTop:'8px',
+                  background:statusCfg.bg,border:`1px solid ${statusCfg.color}33`
+                }}>
+                  {/* Top row: name + status badge */}
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'8px'}}>
+                    <p style={{fontWeight:'700',color:'var(--text)',fontSize:'0.95rem'}}>👤 {b.clientName}</p>
+                    <span style={{background:statusCfg.bg,color:statusCfg.color,border:`1px solid ${statusCfg.color}`,borderRadius:'8px',padding:'2px 9px',fontSize:'0.68rem',fontWeight:'700',letterSpacing:'0.5px',textTransform:'uppercase'}}>
+                      {statusCfg.label}
+                    </span>
+                  </div>
+
+                  {/* Distance */}
+                  {dist!==null&&(
+                    <p style={{fontSize:'0.85rem',color:statusCfg.color,fontWeight:'600',marginBottom:'5px'}}>
+                      📏 {fmtDist(dist)} from you
+                    </p>
+                  )}
+
+                  {/* Time */}
+                  <p style={{fontSize:'0.76rem',color:'var(--muted)',marginBottom:'5px'}}>
+                    🕐 {b.createdAt?.toDate?.()?.toLocaleString?.('en-IN')??'—'}
+                    {b.bookingType==='later'&&b.scheduledDate&&` · 📅 ${b.scheduledDate} ${b.scheduledTime}`}
+                  </p>
+
+                  {/* Location link */}
+                  {b.clientLocation&&(
+                    <a href={`https://maps.google.com?q=${b.clientLocation.lat},${b.clientLocation.lng}`}
+                      target="_blank" rel="noopener noreferrer"
+                      style={{color:statusCfg.color,fontSize:'0.78rem',textDecoration:'none',display:'inline-flex',alignItems:'center',gap:'4px',marginBottom:'5px'}}>
+                      📍 Open in Maps
+                    </a>
+                  )}
+
+                  {/* Notes */}
+                  {b.notes&&<p style={{color:'var(--muted)',fontSize:'0.74rem',fontStyle:'italic',marginTop:'4px'}}>"{b.notes}"</p>}
+
+                  {/* Accept/Decline for pending */}
+                  {b.status==='pending'&&(
+                    <div style={{display:'flex',gap:'8px',marginTop:'10px'}}>
+                      <button onClick={()=>acceptBooking(b)}
+                        style={{flex:1,background:'var(--success)',color:'#fff',border:'none',borderRadius:'8px',padding:'10px',fontWeight:'700',fontSize:'0.85rem',cursor:'pointer',minHeight:'44px'}}>
+                        ✓ Accept
+                      </button>
+                      <button onClick={()=>declineBooking(b)}
+                        style={{flex:1,background:'transparent',color:'var(--danger)',border:'1px solid var(--danger)',borderRadius:'8px',padding:'10px',fontWeight:'600',fontSize:'0.85rem',cursor:'pointer',minHeight:'44px'}}>
+                        ✕ Decline
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* ── DUTY STATUS — big card at top ── */}
       <div style={{background:available?'rgba(39,174,96,.08)':'rgba(100,100,100,.07)',border:`2px solid ${available?'var(--success)':'var(--border)'}`,borderRadius:'18px',padding:'22px 20px',marginBottom:'20px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'16px'}}>

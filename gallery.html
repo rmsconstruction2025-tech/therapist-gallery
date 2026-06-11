@@ -279,11 +279,30 @@ function TherapistGallery({ tokenData, clientName, clientPhone, isBlurred }) {
 // ══════════════════════════════════════════════════════
 //  BOOKING MODAL
 // ══════════════════════════════════════════════════════
-function BookingModal({ therapist, clientName, onClose }) {
-  const [step,     setStep]     = useState('choose');
-  const [timeLeft, setTimeLeft] = useState(180);
-  const [form,     setForm]     = useState({ date:'', time:'', notes:'' });
-  const [saving,   setSaving]   = useState(false);
+
+// Parse Google Maps URL → {lat, lng} or null
+function parseGoogleMapsUrl(url) {
+  const patterns = [
+    /@(-?\d+\.?\d*),(-?\d+\.?\d*)/,
+    /\?q=(-?\d+\.?\d*),(-?\d+\.?\d*)/,
+    /ll=(-?\d+\.?\d*),(-?\d+\.?\d*)/,
+    /place\/[^/]+\/@(-?\d+\.?\d*),(-?\d+\.?\d*)/,
+  ];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return { lat: parseFloat(m[1]), lng: parseFloat(m[2]) };
+  }
+  return null;
+}
+
+function BookingModal({ therapist, clientName, clientPhone, onClose }) {
+  const [step,         setStep]         = useState('choose');
+  const [timeLeft,     setTimeLeft]     = useState(180);
+  const [form,         setForm]         = useState({ date:'', time:'', notes:'' });
+  const [saving,       setSaving]       = useState(false);
+  const [mapUrl,       setMapUrl]       = useState('');
+  const [locError,     setLocError]     = useState('');
+  const [gpsLoading,   setGpsLoading]   = useState(false);
   const timerRef = useRef(null);
   const unsubRef = useRef(null);
   const SECS = 180;
@@ -295,25 +314,26 @@ function BookingModal({ therapist, clientName, onClose }) {
     };
   },[]);
 
-  const getLocation = ()=>new Promise(resolve=>{
+  const getGPS = ()=>new Promise(resolve=>{
     if(!navigator.geolocation){ resolve(null); return; }
     navigator.geolocation.getCurrentPosition(
       p=>resolve({lat:p.coords.latitude, lng:p.coords.longitude}),
       ()=>resolve(null),
-      {timeout:5000, maximumAge:60000}
+      {timeout:6000, maximumAge:60000}
     );
   });
 
-  const handleBookNow = async ()=>{
+  // Submit "Book Now" after location is chosen
+  const submitBookNow = async (loc)=>{
     setStep('loading');
     try {
-      const loc = await getLocation();
       const expiresAt = new Date(Date.now() + SECS * 1000);
       const ref = await db.collection('bookings').add({
         therapistDocId: therapist.id,
         therapistId:    therapist.therapistId,
         therapistName:  therapist.name || therapist.therapistId,
         clientName,
+        clientPhone,          // stored for admin only — never shown to therapist
         clientLocation: loc,
         bookingType:    'now',
         status:         'pending',
@@ -353,16 +373,35 @@ function BookingModal({ therapist, clientName, onClose }) {
     } catch(err){ alert(`Error: ${err.message}`); setStep('choose'); }
   };
 
+  // "Book Now" button → show location step first
+  const handleBookNow = ()=>{ setLocError(''); setStep('location'); };
+
+  const handleUseGPS = async ()=>{
+    setGpsLoading(true); setLocError('');
+    const loc = await getGPS();
+    setGpsLoading(false);
+    if(loc){ submitBookNow(loc); }
+    else { setLocError('Could not get location. Please enter a Google Maps link below.'); }
+  };
+
+  const handleUseMapUrl = ()=>{
+    if(!mapUrl.trim()){ setLocError('Please paste a Google Maps link.'); return; }
+    const parsed = parseGoogleMapsUrl(mapUrl.trim());
+    if(parsed){ submitBookNow(parsed); }
+    else { setLocError('Invalid link. Open Google Maps → Share → Copy Link, then paste here.'); }
+  };
+
   const handleBookLater = async ()=>{
     if(!form.date||!form.time) return;
     setSaving(true);
     try {
-      const loc = await Promise.race([getLocation(), new Promise(r=>setTimeout(()=>r(null),4000))]);
+      const loc = await Promise.race([getGPS(), new Promise(r=>setTimeout(()=>r(null),4000))]);
       await db.collection('bookings').add({
         therapistDocId: therapist.id,
         therapistId:    therapist.therapistId,
         therapistName:  therapist.name || therapist.therapistId,
         clientName,
+        clientPhone,          // stored for admin only — never shown to therapist
         clientLocation: loc,
         bookingType:    'later',
         scheduledDate:  form.date,
@@ -379,12 +418,12 @@ function BookingModal({ therapist, clientName, onClose }) {
   const fmtTime = s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
   const urgent = timeLeft < 60;
 
-  const overlay = {position:'fixed',inset:0,background:'rgba(0,0,0,0.93)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'};
-  const card    = {background:'var(--surface)',border:'1px solid rgba(212,175,55,0.4)',borderRadius:'20px',padding:'28px 24px',width:'100%',maxWidth:'380px',position:'relative'};
+  const overlay  = {position:'fixed',inset:0,background:'rgba(0,0,0,0.93)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'};
+  const card     = {background:'var(--surface)',border:'1px solid rgba(212,175,55,0.4)',borderRadius:'20px',padding:'28px 24px',width:'100%',maxWidth:'380px',position:'relative'};
   const btnClose = {position:'absolute',top:'14px',right:'16px',background:'none',border:'none',color:'var(--muted)',fontSize:'1.3rem',cursor:'pointer',lineHeight:'1'};
-  const inp     = {background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'10px',padding:'12px 14px',color:'var(--text)',fontSize:'0.95rem',width:'100%',outline:'none'};
-  const lbl     = {color:'var(--muted)',fontSize:'0.7rem',letterSpacing:'1px',textTransform:'uppercase',display:'block',marginBottom:'5px'};
-  const goldBtn = {background:'linear-gradient(135deg,#a07820,#d4af37)',color:'#000',border:'none',borderRadius:'10px',padding:'14px',fontWeight:'700',fontSize:'0.92rem',cursor:'pointer',width:'100%',minHeight:'48px'};
+  const inp      = {background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'10px',padding:'12px 14px',color:'var(--text)',fontSize:'0.95rem',width:'100%',outline:'none'};
+  const lbl      = {color:'var(--muted)',fontSize:'0.7rem',letterSpacing:'1px',textTransform:'uppercase',display:'block',marginBottom:'5px'};
+  const goldBtn  = {background:'linear-gradient(135deg,#a07820,#d4af37)',color:'#000',border:'none',borderRadius:'10px',padding:'14px',fontWeight:'700',fontSize:'0.92rem',cursor:'pointer',width:'100%',minHeight:'48px'};
 
   return (
     <div style={overlay}>
@@ -418,6 +457,50 @@ function BookingModal({ therapist, clientName, onClose }) {
               <span style={{fontSize:'0.7rem',color:'var(--muted)',fontWeight:'400'}}>Schedule a future appointment</span>
             </button>
           </div>
+        </>)}
+
+        {/* ── Location Step ── */}
+        {step==='location'&&(<>
+          <button onClick={()=>setStep('choose')} style={btnClose}>✕</button>
+          <h2 style={{textAlign:'center',color:'var(--text)',fontSize:'1rem',fontWeight:'600',marginBottom:'6px'}}>Where should the therapist come?</h2>
+          <p style={{textAlign:'center',color:'var(--muted)',fontSize:'0.78rem',marginBottom:'18px'}}>Share your location so the therapist can reach you</p>
+
+          {/* GPS option */}
+          <button onClick={handleUseGPS} disabled={gpsLoading}
+            style={{...goldBtn,display:'flex',alignItems:'center',justifyContent:'center',gap:'10px',marginBottom:'14px'}}>
+            {gpsLoading
+              ? <><span className="spin">✦</span> Getting location…</>
+              : <>📍 Use My Current Location</>
+            }
+          </button>
+
+          {/* Divider */}
+          <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'14px'}}>
+            <div style={{flex:1,height:'1px',background:'var(--border)'}}/>
+            <span style={{color:'var(--muted)',fontSize:'0.75rem'}}>OR</span>
+            <div style={{flex:1,height:'1px',background:'var(--border)'}}/>
+          </div>
+
+          {/* Maps URL option */}
+          <div style={{marginBottom:'10px'}}>
+            <label style={lbl}>Paste Google Maps Link</label>
+            <input
+              type="url"
+              value={mapUrl}
+              onChange={e=>{setMapUrl(e.target.value);setLocError('');}}
+              placeholder="https://maps.google.com/…"
+              style={{...inp,marginBottom:'10px'}}
+            />
+            <p style={{color:'var(--muted)',fontSize:'0.72rem',marginBottom:'10px'}}>
+              Open Google Maps → long-press your location → Share → Copy link
+            </p>
+            <button onClick={handleUseMapUrl}
+              style={{background:'var(--elevated)',color:'var(--text)',border:'1px solid var(--border-gold)',borderRadius:'10px',padding:'12px',fontWeight:'600',fontSize:'0.88rem',cursor:'pointer',width:'100%',minHeight:'44px'}}>
+              🗺️ Use This Location
+            </button>
+          </div>
+
+          {locError&&<p style={{color:'var(--danger)',fontSize:'0.78rem',marginTop:'8px',textAlign:'center'}}>{locError}</p>}
         </>)}
 
         {/* ── Loading ── */}
@@ -707,7 +790,7 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
         <button onClick={()=>setShowBooking(true)} style={{background:'linear-gradient(135deg,#1a6e2e,#25a240)',color:'#fff',border:'none',borderRadius:'8px',padding:'11px 16px',fontSize:'0.85rem',fontWeight:'700',cursor:'pointer',display:'block',boxShadow:'0 2px 12px rgba(37,162,64,.3)',textAlign:'center',width:'100%'}}>
           📅 Book Appointment
         </button>
-        {showBooking&&<BookingModal therapist={therapist} clientName={clientName} onClose={()=>setShowBooking(false)}/>}
+        {showBooking&&<BookingModal therapist={therapist} clientName={clientName} clientPhone={clientPhone} onClose={()=>setShowBooking(false)}/>}
       </div>
     </div>
   );
