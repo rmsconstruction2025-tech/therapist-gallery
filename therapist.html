@@ -85,10 +85,7 @@ async function setupPushNotifications(docId, setStatus) {
     } else {
       report('no-token');
     }
-    messaging.onTokenRefresh(async () => {
-      const newToken = await messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: sw });
-      if (newToken) await db.collection('therapists').doc(docId).update({ fcmToken: newToken });
-    });
+    // Token refresh handled automatically by Firebase SDK
   } catch(e) {
     report('error:' + e.message);
     console.error('[FCM] Error:', e);
