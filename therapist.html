@@ -365,10 +365,10 @@ function TherapistPortal({ session, onLogout }) {
     return ()=>{ clearInterval(alertIntervalRef.current); alertIntervalRef.current=null; };
   },[hasNewPending]);
 
-  // Stop alert when no more pending AND no unread scheduled
+  // Stop repeating alert when no more pending bookings
   useEffect(()=>{
-    if(pendingBookings.length===0 && newScheduledCount===0) setHasNewPending(false);
-  },[pendingBookings.length, newScheduledCount]);
+    if(pendingBookings.length===0) setHasNewPending(false);
+  },[pendingBookings.length]);
 
   // Real-time booking listener — no Firestore index required, filter client-side
   useEffect(()=>{
@@ -384,16 +384,18 @@ function TherapistPortal({ session, onLogout }) {
         const scheduled = mine.filter(b=>b.status==='scheduled');
         setAllBookings(mine);
 
-        // Trigger repeating alert on new booking arrival (after initial load)
+        // Trigger alert on new booking arrival (after initial load)
         if(seenInitRef.current){
           snap.docChanges().forEach(c=>{
             const d = c.doc.data();
             const isMyBooking = d.therapistId===session.therapistId || d.therapistDocId===session.docId;
             if(c.type==='added' && isMyBooking){
               if(d.status==='pending'){
+                // Book Now → start repeating long alert
                 setHasNewPending(true);
               } else if(d.status==='scheduled'){
-                setHasNewPending(true);
+                // Book Later → single short beep only, no loop
+                playAlert('accept');
                 setNewScheduledCount(n=>n+1);
               }
             }
