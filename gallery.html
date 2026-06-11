@@ -374,6 +374,54 @@ function BookingModal({ therapist, clientName, clientPhone, onClose }) {
   const submitBookNow = async (loc)=>{
     setStep('loading');
     try {
+      // ── Duplicate guard: one active booking per client at a time ──
+      const dupSnap = await db.collection('bookings')
+        .where('clientPhone', '==', clientPhone)
+        .where('status', 'in', ['pending','accepted','admin_pending'])
+        .limit(1).get();
+      if(!dupSnap.empty){
+        const dup     = dupSnap.docs[0];
+        const dupData = dup.data();
+        const expiresMs = dupData.expiresAt?.toMillis?.() || 0;
+        if(expiresMs > Date.now()){
+          // An active booking already exists — resume it instead of creating another
+          bookingIdRef.current = dup.id;
+          const rem = Math.ceil((expiresMs - Date.now()) / 1000);
+          sessionStorage.setItem('pendingBooking', JSON.stringify({
+            bookingId: dup.id, endAt: expiresMs, therapistId: therapist.id,
+          }));
+          setTimeLeft(rem);
+          timerRef.current = setInterval(()=>{
+            const r2 = Math.ceil((expiresMs - Date.now()) / 1000);
+            if(r2 <= 0){
+              clearInterval(timerRef.current);
+              if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
+              db.collection('bookings').doc(dup.id).update({status:'expired'}).catch(()=>{});
+              sessionStorage.removeItem('pendingBooking');
+              setStep('expired');
+            } else { setTimeLeft(r2); }
+          }, 500);
+          unsubRef.current = db.collection('bookings').doc(dup.id).onSnapshot(snap=>{
+            if(!snap.exists) return;
+            const s = snap.data().status;
+            if(s==='accepted'||s==='admin_pending'||s==='confirmed'){
+              clearInterval(timerRef.current);
+              if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
+              sessionStorage.removeItem('pendingBooking');
+              playAlert('accept');
+              setStep('accepted');
+            } else if(s==='declined'){
+              clearInterval(timerRef.current);
+              if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
+              sessionStorage.removeItem('pendingBooking');
+              setStep('declined');
+            }
+          });
+          setStep('waiting');
+          return;
+        }
+      }
+
       const expiresAt = new Date(Date.now() + SECS * 1000);
       const ref = await db.collection('bookings').add({
         therapistDocId: therapist.id,
@@ -453,6 +501,14 @@ function BookingModal({ therapist, clientName, clientPhone, onClose }) {
     if(!form.date||!form.time) return;
     setSaving(true);
     try {
+      // Duplicate guard: check for existing scheduled booking same client+date+time
+      const dupSnap = await db.collection('bookings')
+        .where('clientPhone','==',clientPhone)
+        .where('status','in',['scheduled','confirmed'])
+        .where('scheduledDate','==',form.date)
+        .where('scheduledTime','==',form.time)
+        .limit(1).get();
+      if(!dupSnap.empty){ alert('You already have a booking for this date and time.'); setSaving(false); return; }
       const loc = await Promise.race([getGPS(), new Promise(r=>setTimeout(()=>r(null),4000))]);
       await db.collection('bookings').add({
         therapistDocId: therapist.id,
