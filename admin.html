@@ -967,7 +967,7 @@ const goldBtn = {background:'linear-gradient(135deg,var(--gold-dark),var(--gold)
 function TherapistAccounts() {
   const [accounts, setAccounts]   = useState([]);
   const [loading,  setLoading]    = useState(true);
-  const [form,     setForm]       = useState({ name:'', email:'', password:'' });
+  const [form,     setForm]       = useState({ name:'', pin:'' });
   const [saving,   setSaving]     = useState(false);
   const [msg,      setMsg]        = useState('');
   const [deleting, setDeleting]   = useState(null);
@@ -975,9 +975,10 @@ function TherapistAccounts() {
   const load = async () => {
     setLoading(true);
     try {
-      const snap = await db.collection('therapists').orderBy('createdAt','desc').get();
-      // Show only accounts that have an email field (login accounts)
-      setAccounts(snap.docs.map(d=>({id:d.id,...d.data()})).filter(a=>a.email));
+      const snap = await db.collection('therapists')
+        .where('pin', '>=', '')
+        .get();
+      setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch(e) { console.error(e); }
     setLoading(false);
   };
@@ -986,37 +987,28 @@ function TherapistAccounts() {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.email.trim() || !form.password.trim()) {
-      setMsg('Name, email and password are all required.'); return;
-    }
-    if (form.password.length < 6) { setMsg('Password must be at least 6 characters.'); return; }
-    if (!/\S+@\S+\.\S+/.test(form.email)) { setMsg('Enter a valid email address.'); return; }
+    if (!form.name.trim() || !form.pin.trim()) { setMsg('Name and PIN are required.'); return; }
+    if (form.pin.length < 4) { setMsg('PIN must be at least 4 characters.'); return; }
     setSaving(true); setMsg('');
     try {
-      // Check for duplicate email
-      const existing = await db.collection('therapists')
-        .where('email','==',form.email.trim().toLowerCase()).get();
-      if (!existing.empty) { setMsg('An account with this email already exists.'); setSaving(false); return; }
-
       const therapistId = `TH_${Date.now().toString(36).toUpperCase()}_${Math.random().toString(36).slice(2,6).toUpperCase()}`;
       await db.collection('therapists').add({
         therapistId,
         name:      form.name.trim(),
-        email:     form.email.trim().toLowerCase(),
-        password:  form.password.trim(),
+        pin:       form.pin.trim(),
         available: false,
         imageUrl:  '',
         createdAt: FieldValue.serverTimestamp()
       });
-      setMsg(`✓ Account created for ${form.email.trim().toLowerCase()}`);
-      setForm({ name:'', email:'', password:'' });
+      setMsg(`✓ Account created! ID: ${therapistId}`);
+      setForm({ name:'', pin:'' });
       load();
     } catch(e) { setMsg(`Error: ${e.message}`); }
     setSaving(false);
   };
 
   const handleDelete = async (acc) => {
-    if (!window.confirm(`Delete account "${acc.name}" (${acc.email})? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete therapist "${acc.name}" (${acc.therapistId})? This cannot be undone.`)) return;
     setDeleting(acc.id);
     try {
       await db.collection('therapists').doc(acc.id).delete();
@@ -1025,12 +1017,12 @@ function TherapistAccounts() {
     setDeleting(null);
   };
 
-  const handleResetPassword = async (acc) => {
-    const newPass = prompt(`New password for "${acc.name}" (${acc.email}):`);
-    if (!newPass || newPass.length < 6) { alert('Password must be at least 6 characters.'); return; }
+  const handleResetPin = async (acc) => {
+    const newPin = prompt(`New PIN for "${acc.name}":`);
+    if (!newPin || newPin.length < 4) { alert('PIN must be at least 4 characters.'); return; }
     try {
-      await db.collection('therapists').doc(acc.id).update({ password: newPass.trim() });
-      alert('Password updated.');
+      await db.collection('therapists').doc(acc.id).update({ pin: newPin.trim() });
+      alert('PIN updated.');
     } catch(e) { alert(`Error: ${e.message}`); }
   };
 
@@ -1044,17 +1036,13 @@ function TherapistAccounts() {
           <h2 style={{fontSize:'0.95rem',fontWeight:'700',color:'var(--text)'}}>Create Therapist Account</h2>
         </div>
         <form onSubmit={handleCreate} style={{display:'flex',gap:'14px',flexWrap:'wrap',alignItems:'flex-end'}}>
-          <div style={{flex:'1 1 160px'}}>
+          <div style={{flex:'1 1 180px'}}>
             <label className="form-label">Display Name <span style={{color:'var(--danger)'}}>*</span></label>
             <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. Priya" required className="form-input"/>
           </div>
-          <div style={{flex:'1 1 200px'}}>
-            <label className="form-label">Email <span style={{color:'var(--danger)'}}>*</span></label>
-            <input type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="priya@feelfreespa.in" required className="form-input"/>
-          </div>
-          <div style={{flex:'1 1 150px'}}>
-            <label className="form-label">Password <span style={{color:'var(--muted)'}}>(min 6)</span></label>
-            <input type="text" value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))} placeholder="Set a password" required className="form-input"/>
+          <div style={{flex:'1 1 140px'}}>
+            <label className="form-label">PIN <span style={{color:'var(--muted)'}}>(min 4)</span></label>
+            <input value={form.pin} onChange={e=>setForm(f=>({...f,pin:e.target.value}))} placeholder="e.g. 1234" required className="form-input"/>
           </div>
           <button type="submit" disabled={saving} className="btn btn-gold btn-md" style={{minWidth:'148px',height:'42px'}}>
             {saving?<span className="spin">✦</span>:'+ Create Account'}
@@ -1097,13 +1085,13 @@ function TherapistAccounts() {
                 {/* Info */}
                 <div className="item-info">
                   <div className="name">{acc.name||'—'}</div>
-                  <div className="sub">{acc.email}</div>
+                  <div className="sub">{acc.therapistId}</div>
                   <div className="meta">
                     <span className={`badge ${acc.available?'badge-green':'badge-red'}`}>{acc.available?'Available':'Unavailable'}</span>
                   </div>
                   {/* Mobile actions */}
                   <div className="item-actions-mobile">
-                    <button onClick={()=>handleResetPassword(acc)} className="btn btn-ghost btn-sm">Reset Password</button>
+                    <button onClick={()=>handleResetPin(acc)} className="btn btn-ghost btn-sm">Reset PIN</button>
                     <button onClick={()=>handleDelete(acc)} disabled={deleting===acc.id} className="btn btn-danger btn-sm">
                       {deleting===acc.id?<span className="spin">✦</span>:'Delete'}
                     </button>
@@ -1111,7 +1099,7 @@ function TherapistAccounts() {
                 </div>
                 {/* Desktop actions */}
                 <div className="item-actions item-actions-desktop">
-                  <button onClick={()=>handleResetPassword(acc)} className="btn btn-ghost btn-sm">Reset Password</button>
+                  <button onClick={()=>handleResetPin(acc)} className="btn btn-ghost btn-sm">Reset PIN</button>
                   <button onClick={()=>handleDelete(acc)} disabled={deleting===acc.id} className="btn btn-danger btn-sm" style={{minWidth:'64px'}}>
                     {deleting===acc.id?<span className="spin">✦</span>:'Delete'}
                   </button>
