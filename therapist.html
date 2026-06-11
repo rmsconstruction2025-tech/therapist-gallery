@@ -53,21 +53,42 @@ if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 const FieldValue = firebase.firestore.FieldValue;
 
-// ── Sound alert ───────────────────────────────────────
+// ── Persistent Audio Context (mobile-safe) ───────────
+let _actx = null;
+function getACtx() {
+  if (!_actx) {
+    try { _actx = new (window.AudioContext||window.webkitAudioContext)(); } catch(e){ return null; }
+  }
+  if (_actx.state === 'suspended') { _actx.resume().catch(()=>{}); }
+  return _actx;
+}
+// Unlock audio on first user touch — critical for iOS/Android
+['touchstart','touchend','click','keydown'].forEach(ev=>{
+  document.addEventListener(ev, function unlock(){
+    getACtx();
+    ['touchstart','touchend','click','keydown'].forEach(e=>document.removeEventListener(e,unlock,true));
+  }, {once:true, capture:true, passive:true});
+});
+
 function playAlert(type='new') {
   try {
-    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const ctx = getACtx();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') { ctx.resume().catch(()=>{}); return; }
+    // Also vibrate on mobile (Android)
+    if (navigator.vibrate) navigator.vibrate(type==='new' ? [200,100,200,100,200] : [150,80,150]);
     const seqs = {
-      new:    [[880,0.00],[1100,0.18],[880,0.36],[1100,0.54]],
-      accept: [[660,0.00],[880,0.18],[1100,0.36]],
+      new:    [[940,0.00,0.45],[1200,0.22,0.45],[940,0.44,0.45],[1200,0.66,0.45]],
+      accept: [[660,0.00,0.35],[880,0.20,0.35],[1100,0.40,0.35]],
     };
-    (seqs[type]||seqs.new).forEach(([freq,t])=>{
+    (seqs[type]||seqs.new).forEach(([freq,t,dur])=>{
       const o=ctx.createOscillator(), g=ctx.createGain();
       o.connect(g); g.connect(ctx.destination);
-      o.frequency.value=freq; o.type='sine';
-      g.gain.setValueAtTime(0.28, ctx.currentTime+t);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+t+0.16);
-      o.start(ctx.currentTime+t); o.stop(ctx.currentTime+t+0.18);
+      o.frequency.value=freq; o.type='square'; // 'square' is louder on phone speakers
+      g.gain.setValueAtTime(0, ctx.currentTime+t);
+      g.gain.linearRampToValueAtTime(0.35, ctx.currentTime+t+0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+t+dur);
+      o.start(ctx.currentTime+t); o.stop(ctx.currentTime+t+dur+0.05);
     });
   } catch(e){}
 }
@@ -312,6 +333,7 @@ function TherapistPortal({ session, onLogout }) {
   const [scheduledBookings, setScheduledBookings] = useState([]);
   const [allBookings,       setAllBookings]       = useState([]);
   const [hasNewPending,     setHasNewPending]     = useState(false);
+  const [newScheduledCount, setNewScheduledCount] = useState(0); // unread upcoming bookings
   // Therapist GPS for distance calc
   const [myGPS, setMyGPS] = useState(null);
   const fileRef        = useRef(null);
@@ -343,10 +365,10 @@ function TherapistPortal({ session, onLogout }) {
     return ()=>{ clearInterval(alertIntervalRef.current); alertIntervalRef.current=null; };
   },[hasNewPending]);
 
-  // Stop alert when no more pending bookings
+  // Stop alert when no more pending AND no unread scheduled
   useEffect(()=>{
-    if(pendingBookings.length===0) setHasNewPending(false);
-  },[pendingBookings.length]);
+    if(pendingBookings.length===0 && newScheduledCount===0) setHasNewPending(false);
+  },[pendingBookings.length, newScheduledCount]);
 
   // Real-time booking listener — no Firestore index required, filter client-side
   useEffect(()=>{
@@ -367,8 +389,13 @@ function TherapistPortal({ session, onLogout }) {
           snap.docChanges().forEach(c=>{
             const d = c.doc.data();
             const isMyBooking = d.therapistId===session.therapistId || d.therapistDocId===session.docId;
-            if(c.type==='added' && isMyBooking && (d.status==='pending'||d.status==='scheduled')){
-              setHasNewPending(true);
+            if(c.type==='added' && isMyBooking){
+              if(d.status==='pending'){
+                setHasNewPending(true);
+              } else if(d.status==='scheduled'){
+                setHasNewPending(true);
+                setNewScheduledCount(n=>n+1);
+              }
             }
           });
         }
@@ -483,7 +510,7 @@ function TherapistPortal({ session, onLogout }) {
   const fmt = (t) => { if (!t) return ''; const [h,m]=t.split(':'); const hr=+h; return `${hr===0?12:hr>12?hr-12:hr}:${m} ${hr<12?'AM':'PM'}`; };
 
   const tabs = [
-    { id:'bookings', icon:'🗺️', label:'Bookings',  badge: pendingBookings.length },
+    { id:'bookings', icon:'🗺️', label:'Bookings',  badge: pendingBookings.length + newScheduledCount },
     { id:'profile',  icon:'👤', label:'Profile',   badge: completion<100?1:0 },
     { id:'schedule', icon:'🕐', label:'Schedule',  badge: 0 },
   ];
@@ -743,7 +770,7 @@ function TherapistPortal({ session, onLogout }) {
       {/* ── BOTTOM TAB BAR ── */}
       <nav style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:'600px',background:'var(--surface)',borderTop:'1px solid var(--border)',display:'flex',zIndex:20,paddingBottom:'env(safe-area-inset-bottom,0px)'}}>
         {tabs.map(t=>(
-          <button key={t.id} onClick={()=>setActiveTab(t.id)}
+          <button key={t.id} onClick={()=>{ setActiveTab(t.id); if(t.id==='bookings') setNewScheduledCount(0); }}
             style={{flex:1,padding:'10px 4px 8px',background:'none',border:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:'3px',position:'relative',transition:'opacity .15s',opacity:activeTab===t.id?1:0.5}}>
             {t.badge>0&&(
               <span style={{position:'absolute',top:'6px',right:'calc(50% - 18px)',background:'var(--danger)',color:'#fff',borderRadius:'8px',padding:'1px 5px',fontSize:'0.6rem',fontWeight:'700',lineHeight:'1.3',minWidth:'16px',textAlign:'center'}}>

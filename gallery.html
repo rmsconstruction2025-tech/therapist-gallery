@@ -357,7 +357,7 @@ function BookingModal({ therapist, clientName, clientPhone, onClose }) {
       unsubRef.current = db.collection('bookings').doc(ref.id).onSnapshot(snap=>{
         if(!snap.exists) return;
         const s = snap.data().status;
-        if(s==='accepted'){
+        if(s==='accepted'||s==='admin_pending'||s==='confirmed'){
           clearInterval(timerRef.current);
           if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
           playAlert('accept');
