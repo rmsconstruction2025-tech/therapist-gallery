@@ -401,7 +401,15 @@ function TherapistPortal({ session, onLogout }) {
   const seenInitRef    = useRef(false);
   const alertIntervalRef = useRef(null);
 
-  useEffect(() => { fetchProfile(); }, []);
+  useEffect(() => {
+    fetchProfile();
+    // Record last active time immediately and every 5 minutes
+    const pingActive = () => db.collection('therapists').doc(session.docId)
+      .update({ lastActiveAt: FieldValue.serverTimestamp() }).catch(()=>{});
+    pingActive();
+    const pingInterval = setInterval(pingActive, 5 * 60 * 1000);
+    return () => clearInterval(pingInterval);
+  }, []);
 
   // Get therapist GPS location for distance calculation
   useEffect(()=>{

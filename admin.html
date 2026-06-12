@@ -429,8 +429,9 @@ function DashboardTab() {
   },[]);
 
   useEffect(()=>{
-    db.collection('therapists').get()
-      .then(snap=>setTherapists(snap.docs.map(d=>({id:d.id,...d.data()}))));
+    const unsub = db.collection('therapists').onSnapshot(snap=>
+      setTherapists(snap.docs.map(d=>({id:d.id,...d.data()}))));
+    return ()=>unsub();
   },[]);
 
   const today = new Date(); today.setHours(0,0,0,0);
@@ -461,6 +462,17 @@ function DashboardTab() {
     if(s<3600) return `${Math.floor(s/60)}m ago`;
     if(s<86400) return `${Math.floor(s/3600)}h ago`;
     return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+  };
+  const lastSeen = t => {
+    if(t.sessionActive) return {text:'In Session', color:'#ffa500'};
+    if(!t.lastActiveAt) return {text:'Never opened app', color:'var(--muted)'};
+    const d = t.lastActiveAt.toDate?.(); if(!d) return {text:'—',color:'var(--muted)'};
+    const s = (Date.now()-d)/1000;
+    if(s<60)    return {text:'Last seen just now', color:'#2ecc71'};
+    if(s<300)   return {text:`Last seen ${Math.floor(s/60)}m ago`, color:'#2ecc71'};
+    if(s<3600)  return {text:`Last seen ${Math.floor(s/60)}m ago`, color:'var(--muted)'};
+    if(s<86400) return {text:`Last seen ${Math.floor(s/3600)}h ago`, color:'var(--muted)'};
+    return {text:`Last seen ${d.toLocaleDateString('en-IN',{day:'numeric',month:'short'})}`, color:'var(--muted)'};
   };
 
   const stats = [
@@ -536,7 +548,8 @@ function DashboardTab() {
                   </div>
                   <div style={{flex:1,minWidth:0}}>
                     <p style={{fontSize:'0.82rem',fontWeight:'600',color:'var(--text)',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.name||t.therapistId||'—'}</p>
-                    <p style={{fontSize:'0.68rem',color:t.available?'#2ecc71':'var(--muted)',margin:'2px 0 0',fontWeight:t.available?'600':'400'}}>{t.available?'● Online':'○ Offline'}</p>
+                    <p style={{fontSize:'0.68rem',color:t.available?'#2ecc71':'var(--muted)',margin:'1px 0 0',fontWeight:t.available?'600':'400'}}>{t.available?'● Online':'○ Offline'}</p>
+                    <p style={{fontSize:'0.64rem',color:lastSeen(t).color,margin:'1px 0 0'}}>{lastSeen(t).text}</p>
                   </div>
                 </div>
               ))
