@@ -346,6 +346,7 @@ function Dashboard({ user }) {
     { id:'links',      icon:'🔗', label:'Gallery Links' },
     { id:'accounts',   icon:'👤', label:'Accounts' },
     { id:'bookings',   icon:'📋', label:'Bookings' },
+    { id:'attendance', icon:'📅', label:'Attendance' },
   ];
   return (
     <div className="admin-layout">
@@ -405,6 +406,7 @@ function Dashboard({ user }) {
           {tab==='links'      && <LinkCreator/>}
           {tab==='accounts'   && <TherapistAccounts/>}
           {tab==='bookings'   && <BookingsPanel/>}
+          {tab==='attendance' && <AttendanceAdmin/>}
         </div>
       </div>
     </div>
@@ -1290,6 +1292,245 @@ function AdminBookingForm({ therapistList, onClose }) {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+// ── Attendance Admin ────────────────────────────────────
+function AttendanceAdmin() {
+  const [therapists,  setTherapists]  = useState([]);
+  const [records,     setRecords]     = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [selTherapist,setSelTherapist]= useState(null);
+
+  const now         = new Date();
+  const yr          = now.getFullYear();
+  const mo          = now.getMonth();
+  const daysInMonth = new Date(yr, mo+1, 0).getDate();
+  const todayStr    = now.toISOString().split('T')[0];
+  const monthStart  = `${yr}-${String(mo+1).padStart(2,'0')}-01`;
+  const monthEnd    = `${yr}-${String(mo+1).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`;
+
+  useEffect(()=>{
+    Promise.all([
+      db.collection('therapists').get(),
+      db.collection('attendance').where('date','>=',monthStart).where('date','<=',monthEnd).get()
+    ]).then(([tSnap, aSnap])=>{
+      setTherapists(tSnap.docs.map(d=>({id:d.id,...d.data()})));
+      setRecords(aSnap.docs.map(d=>({id:d.id,...d.data()})));
+      setLoading(false);
+    }).catch(()=>setLoading(false));
+  },[]);
+
+  const S_COLOR = { present:'#27ae60','half-day':'#f39c12',absent:'#e74c3c','no-data':'#222',weekend:'#1a1a1a',future:'transparent' };
+  const S_LABEL = { present:'Present','half-day':'Half','no-data':'—',absent:'Absent',weekend:'',future:'' };
+
+  const getTherapistRecords = (docId) => records.filter(r=>r.therapistDocId===docId);
+
+  const getStatus = (docId, dayNum) => {
+    const ds   = `${yr}-${String(mo+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
+    const date = new Date(yr, mo, dayNum);
+    if (ds > todayStr) return 'future';
+    if (date.getDay() === 0) return 'weekend';
+    const recs = getTherapistRecords(docId);
+    const r = recs.find(x=>x.date===ds);
+    if (r) return r.status||'present';
+    const firstDate = recs.length>0 ? recs.reduce((m,x)=>x.date<m?x.date:m, recs[0].date) : null;
+    if (firstDate && ds>=firstDate && ds<todayStr) return 'absent';
+    return 'no-data';
+  };
+
+  const summaryFor = (docId) => {
+    const recs = getTherapistRecords(docId);
+    return {
+      present:  recs.filter(r=>r.status==='present').length,
+      half:     recs.filter(r=>r.status==='half-day').length,
+      absent:   Array.from({length:daysInMonth},(_,i)=>i+1).filter(d=>getStatus(docId,d)==='absent').length,
+      hours:    recs.reduce((s,r)=>s+(r.hoursOnDuty||0),0),
+      sessions: recs.reduce((s,r)=>s+(r.sessions||0),0),
+      today:    recs.find(r=>r.date===todayStr)||null,
+    };
+  };
+
+  const fmtTime = ts=>{ if(!ts?.toDate) return '—'; return ts.toDate().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}); };
+  const fmtHrs  = h=>{ if(!h) return '—'; const hr=Math.floor(h),min=Math.round((h-hr)*60); return min>0?`${hr}h ${min}m`:`${hr}h`; };
+
+  if (loading) return <div style={{padding:'60px',textAlign:'center',color:'var(--muted)'}}>Loading…</div>;
+
+  // ── Detail view ──────────────────────────────────────
+  if (selTherapist) {
+    const t = selTherapist;
+    const recs = getTherapistRecords(t.id);
+    const byDate = {};
+    recs.forEach(r=>{ byDate[r.date]=r; });
+    const firstDow = new Date(yr,mo,1).getDay();
+
+    return (
+      <div>
+        <button onClick={()=>setSelTherapist(null)}
+          style={{marginBottom:'20px',background:'transparent',border:'1px solid var(--border)',borderRadius:'8px',padding:'7px 14px',color:'var(--muted)',cursor:'pointer',fontSize:'0.82rem',display:'flex',alignItems:'center',gap:'6px'}}>
+          ← Back
+        </button>
+        <div style={{display:'flex',alignItems:'center',gap:'14px',marginBottom:'24px'}}>
+          {t.imageUrl
+            ?<img src={t.imageUrl} style={{width:'52px',height:'52px',borderRadius:'50%',objectFit:'cover'}}/>
+            :<div style={{width:'52px',height:'52px',borderRadius:'50%',background:'rgba(212,175,55,0.1)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:'700',color:'var(--gold)',fontSize:'1.2rem'}}>{(t.name||'?')[0]}</div>
+          }
+          <div>
+            <p style={{fontWeight:'700',fontSize:'1.1rem',color:'var(--text)'}}>{t.name}</p>
+            <p style={{fontSize:'0.75rem',color:'var(--muted)'}}>{now.toLocaleDateString('en-IN',{month:'long',year:'numeric'})}</p>
+          </div>
+        </div>
+        {/* Month stats */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'10px',marginBottom:'24px'}}>
+          {[
+            [summaryFor(t.id).present + (summaryFor(t.id).half>0?` +${summaryFor(t.id).half}½`:''),'Present','#27ae60'],
+            [String(summaryFor(t.id).absent),'Absent','#e74c3c'],
+            [`${summaryFor(t.id).hours.toFixed(0)}h`,'Hours','var(--text)'],
+            [String(summaryFor(t.id).sessions),'Sessions','var(--gold)'],
+          ].map(([v,l,c])=>(
+            <div key={l} style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'12px',padding:'14px 10px',textAlign:'center'}}>
+              <p style={{fontSize:'1.3rem',fontWeight:'700',color:c,margin:0}}>{v}</p>
+              <p style={{fontSize:'0.65rem',color:'var(--muted)',marginTop:'4px',textTransform:'uppercase',letterSpacing:'0.5px'}}>{l}</p>
+            </div>
+          ))}
+        </div>
+        {/* Calendar */}
+        <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'16px',padding:'20px',marginBottom:'20px'}}>
+          <p style={{textAlign:'center',fontWeight:'700',color:'var(--gold)',marginBottom:'14px',letterSpacing:'1px'}}>
+            {now.toLocaleDateString('en-IN',{month:'long',year:'numeric'})}
+          </p>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'3px',marginBottom:'6px',textAlign:'center'}}>
+            {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d=><div key={d} style={{fontSize:'0.65rem',color:'var(--muted)',paddingBottom:'4px'}}>{d}</div>)}
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'3px'}}>
+            {Array.from({length:firstDow},(_,i)=><div key={'e'+i}/>)}
+            {Array.from({length:daysInMonth},(_,i)=>{
+              const day=i+1, s=getStatus(t.id,day), isToday=day===now.getDate();
+              return(
+                <div key={day} style={{aspectRatio:'1',borderRadius:'6px',background:S_COLOR[s],
+                  border:isToday?`2px solid var(--gold)`:'2px solid transparent',
+                  opacity:(s==='future'||s==='no-data')?0.25:1,
+                  display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <span style={{fontSize:'0.65rem',fontWeight:'700',color:s==='present'?'#9be09b':s==='half-day'?'#f5c86f':s==='absent'?'#f1a8a8':'#444'}}>{day}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{display:'flex',gap:'12px',flexWrap:'wrap',marginTop:'14px',justifyContent:'center'}}>
+            {[['#27ae60','Present'],['#f39c12','Half day'],['#e74c3c','Absent']].map(([c,l])=>(
+              <div key={l} style={{display:'flex',alignItems:'center',gap:'4px'}}>
+                <div style={{width:'10px',height:'10px',borderRadius:'3px',background:c}}/>
+                <span style={{fontSize:'0.65rem',color:'var(--muted)'}}>{l}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Log */}
+        <div style={{display:'flex',flexDirection:'column',gap:'7px'}}>
+          {recs.length===0
+            ?<div style={{textAlign:'center',padding:'32px',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'14px',color:'var(--muted)',fontSize:'0.85rem'}}>No records this month</div>
+            :recs.sort((a,b)=>b.date.localeCompare(a.date)).map(r=>{
+              const c=S_COLOR[r.status]||'#888';
+              return(
+                <div key={r.id} style={{display:'flex',alignItems:'center',gap:'12px',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'12px',padding:'12px 16px'}}>
+                  <div style={{width:'8px',height:'8px',borderRadius:'50%',background:c,flexShrink:0}}/>
+                  <div style={{flex:1}}>
+                    <p style={{fontWeight:'700',fontSize:'0.85rem',color:'var(--text)',marginBottom:'2px'}}>
+                      {new Date(r.date+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})}
+                    </p>
+                    <p style={{fontSize:'0.72rem',color:'var(--muted)'}}>
+                      {fmtTime(r.checkIn)} → {r.checkOut?fmtTime(r.checkOut):'ongoing'} · {fmtHrs(r.hoursOnDuty)} · {r.sessions||0} sessions
+                    </p>
+                  </div>
+                  <div style={{textAlign:'right',flexShrink:0}}>
+                    <span style={{fontSize:'0.65rem',fontWeight:'700',padding:'3px 10px',borderRadius:'20px',background:c+'22',color:c,border:`1px solid ${c}44`}}>
+                      {S_LABEL[r.status]||r.status}
+                    </span>
+                    {r.earnings>0&&<p style={{fontSize:'0.75rem',color:'var(--gold)',fontWeight:'700',marginTop:'3px'}}>₹{(r.earnings||0).toLocaleString('en-IN')}</p>}
+                  </div>
+                </div>
+              );
+            })
+          }
+        </div>
+      </div>
+    );
+  }
+
+  // ── Summary list ──────────────────────────────────────
+  return (
+    <div>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'20px'}}>
+        <div>
+          <h2 style={{fontWeight:'700',fontSize:'1rem',color:'var(--text)',margin:0}}>Attendance</h2>
+          <p style={{fontSize:'0.75rem',color:'var(--muted)',marginTop:'2px'}}>{now.toLocaleDateString('en-IN',{month:'long',year:'numeric'})}</p>
+        </div>
+      </div>
+      {therapists.length===0
+        ?<div style={{textAlign:'center',padding:'48px',color:'var(--muted)',fontSize:'0.9rem'}}>No therapists found</div>
+        :<div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
+          {therapists.map(t=>{
+            const s = summaryFor(t.id);
+            const todayRec = s.today;
+            const isOnline = t.available;
+            return (
+              <div key={t.id} onClick={()=>setSelTherapist(t)}
+                style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'14px',padding:'16px 18px',cursor:'pointer',transition:'border-color .15s'}}
+                onMouseEnter={el=>el.currentTarget.style.borderColor='rgba(212,175,55,0.4)'}
+                onMouseLeave={el=>el.currentTarget.style.borderColor='var(--border)'}>
+                <div style={{display:'flex',alignItems:'center',gap:'14px',marginBottom:'12px'}}>
+                  <div style={{position:'relative',flexShrink:0}}>
+                    {t.imageUrl
+                      ?<img src={t.imageUrl} style={{width:'44px',height:'44px',borderRadius:'50%',objectFit:'cover'}}/>
+                      :<div style={{width:'44px',height:'44px',borderRadius:'50%',background:'rgba(212,175,55,0.1)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:'700',color:'var(--gold)'}}>{(t.name||'?')[0]}</div>
+                    }
+                    <div style={{position:'absolute',bottom:0,right:0,width:'12px',height:'12px',borderRadius:'50%',background:isOnline?'#27ae60':'#666',border:'2px solid var(--surface)'}}/>
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <p style={{fontWeight:'700',fontSize:'0.95rem',color:'var(--text)',marginBottom:'2px'}}>{t.name}</p>
+                    <p style={{fontSize:'0.72rem',color:'var(--muted)'}}>
+                      {todayRec
+                        ?<span style={{color:todayRec.status==='present'?'#27ae60':todayRec.status==='half-day'?'#f39c12':'#e74c3c',fontWeight:'600'}}>Today: {S_LABEL[todayRec.status]||todayRec.status} · {fmtTime(todayRec.checkIn)} → {todayRec.checkOut?fmtTime(todayRec.checkOut):'ongoing'}</span>
+                        :<span>Not checked in today</span>
+                      }
+                    </p>
+                  </div>
+                  <span style={{fontSize:'0.7rem',color:'var(--muted)',flexShrink:0}}>Details →</span>
+                </div>
+                {/* Mini month strip */}
+                <div style={{display:'flex',gap:'3px',flexWrap:'nowrap',overflowX:'auto'}}>
+                  {Array.from({length:daysInMonth},(_,i)=>{
+                    const day=i+1, st=getStatus(t.id,day);
+                    return(
+                      <div key={day} title={`${day}: ${S_LABEL[st]||st}`} style={{flexShrink:0,width:'20px',height:'20px',borderRadius:'4px',
+                        background:S_COLOR[st],opacity:(st==='future'||st==='no-data')?0.2:1,
+                        border:day===now.getDate()?'1.5px solid var(--gold)':'1.5px solid transparent',
+                        display:'flex',alignItems:'center',justifyContent:'center'}}>
+                        <span style={{fontSize:'0.5rem',color:st==='present'?'#9be09b':st==='half-day'?'#f5c86f':st==='absent'?'#f1a8a8':'#333'}}>{day}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Summary row */}
+                <div style={{display:'flex',gap:'16px',marginTop:'10px',paddingTop:'10px',borderTop:'1px solid var(--border)'}}>
+                  {[
+                    [s.present+(s.half>0?`+${s.half}½`:''),'Present','#27ae60'],
+                    [String(s.absent),'Absent','#e74c3c'],
+                    [`${s.hours.toFixed(0)}h`,'Hours','var(--text)'],
+                    [String(s.sessions),'Sessions','var(--gold)'],
+                  ].map(([v,l,c])=>(
+                    <div key={l} style={{textAlign:'center'}}>
+                      <p style={{fontSize:'0.9rem',fontWeight:'700',color:c,margin:0}}>{v}</p>
+                      <p style={{fontSize:'0.6rem',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'0.5px',margin:'2px 0 0'}}>{l}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      }
     </div>
   );
 }
