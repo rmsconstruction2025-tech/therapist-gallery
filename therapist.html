@@ -246,21 +246,21 @@ function App() {
   const [loading,  setLoading]  = useState(true);
 
   useEffect(() => {
-    const saved = sessionStorage.getItem('therapist_session');
+    const saved = localStorage.getItem('therapist_session');
     if (saved) {
       try { setSession(JSON.parse(saved)); }
-      catch { sessionStorage.removeItem('therapist_session'); }
+      catch { localStorage.removeItem('therapist_session'); }
     }
     setLoading(false);
   }, []);
 
   const handleLogin = (s) => {
-    sessionStorage.setItem('therapist_session', JSON.stringify(s));
+    localStorage.setItem('therapist_session', JSON.stringify(s));
     setSession(s);
   };
 
   const handleLogout = () => {
-    sessionStorage.removeItem('therapist_session');
+    localStorage.removeItem('therapist_session');
     setSession(null);
   };
 
