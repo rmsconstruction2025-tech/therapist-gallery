@@ -16,11 +16,7 @@
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
 
-  <!-- Leaflet (free map, no API key) -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css"/>
-  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
-
-  <style>
+<style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
       --bg: #080808; --surface: #111111; --elevated: #1a1a1a; --card: #161616;
@@ -352,9 +348,6 @@ function LiveTracker() {
   const [selected,   setSelected]   = useState(null);
   const [view,       setView]       = useState('single');
   const [now,        setNow]        = useState(Date.now());
-  const mapContainerRef = useRef(null);
-  const mapRef          = useRef(null);
-  const markersRef      = useRef({});
 
   useEffect(()=>{
     const unsub = db.collection('therapists').onSnapshot(snap=>{
@@ -377,54 +370,22 @@ function LiveTracker() {
     .map(t => ({...t, _ago: timeAgo(t.locationUpdatedAt)}));
 
   const selId = selected && onDutyList.find(t=>t.id===selected) ? selected : (onDutyList[0]?.id || null);
+  const selT  = onDutyList.find(t=>t.id===selId) || null;
 
-  // ── Init Leaflet map once ──────────────────────────
-  useEffect(()=>{
-    if(!mapContainerRef.current || mapRef.current) return;
-    const m = L.map(mapContainerRef.current, {zoomControl:true,attributionControl:true});
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-      attribution:'© <a href="https://openstreetmap.org">OpenStreetMap</a>',maxZoom:19,
-    }).addTo(m);
-    mapRef.current = m;
-    // Let React finish layout then recalculate map size
-    setTimeout(()=>m.invalidateSize(), 100);
-    return ()=>{ m.remove(); mapRef.current=null; };
-  },[]);
-
-  // ── Update markers on data / view / selection change ──
-  useEffect(()=>{
-    const map = mapRef.current;
-    if(!map) return;
-    map.invalidateSize();
-    Object.values(markersRef.current).forEach(m=>map.removeLayer(m));
-    markersRef.current = {};
-    if(onDutyList.length===0) return;
-
-    const makeIcon = (t, size) => L.divIcon({
-      className:'',
-      html:`<div style="background:${tAvatarColor(t.name||t.therapistId||'')};width:${size}px;height:${size}px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:${size===36?12:11}px;font-weight:700;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.45)">${tInitials(t.name||t.therapistId||'?')}</div>`,
-      iconSize:[size,size],iconAnchor:[size/2,size/2],
-    });
-
-    if(view==='single'){
-      const t = onDutyList.find(x=>x.id===selId)||onDutyList[0];
-      if(!t) return;
-      const mk = L.marker([t.location.lat,t.location.lng],{icon:makeIcon(t,36)}).addTo(map);
-      mk.bindPopup(`<b>${t.name||t.therapistId||'Therapist'}</b><br/><small>${t._ago}</small>`);
-      markersRef.current[t.id]=mk;
-      map.setView([t.location.lat,t.location.lng],15);
-    } else {
-      const bounds=[];
-      onDutyList.forEach(t=>{
-        const mk=L.marker([t.location.lat,t.location.lng],{icon:makeIcon(t,30)}).addTo(map);
-        mk.bindPopup(`<b>${t.name||t.therapistId||'Therapist'}</b><br/><small>${t._ago}</small>`);
-        markersRef.current[t.id]=mk;
-        bounds.push([t.location.lat,t.location.lng]);
-      });
-      if(bounds.length===1) map.setView(bounds[0],15);
-      else if(bounds.length>1) map.fitBounds(bounds,{padding:[50,50]});
-    }
-  },[onDutyList.length, view, selId, now]);
+  // ── Google Maps URL builders ───────────────────────
+  const singleMapSrc = t => {
+    const ts = Math.floor((t.locationUpdatedAt?.toMillis?.()??0)/30000);
+    return `https://maps.google.com/maps?q=${t.location.lat},${t.location.lng}&z=16&output=embed&key=${ts}`;
+  };
+  const allMapSrc = () => {
+    if(onDutyList.length===0) return '';
+    if(onDutyList.length===1) return singleMapSrc(onDutyList[0]);
+    // Center between all locations
+    const avgLat = onDutyList.reduce((s,t)=>s+t.location.lat,0)/onDutyList.length;
+    const avgLng = onDutyList.reduce((s,t)=>s+t.location.lng,0)/onDutyList.length;
+    const ts = Math.floor(now/30000);
+    return `https://maps.google.com/maps?q=${avgLat.toFixed(4)},${avgLng.toFixed(4)}&z=14&output=embed&key=${ts}`;
+  };
 
   const btnSty = active => ({
     padding:'5px 14px',borderRadius:'20px',fontSize:'0.74rem',fontWeight:'700',
@@ -507,25 +468,41 @@ function LiveTracker() {
 
           {/* Map */}
           <div style={{position:'relative',height:'calc(100vh - 120px)',minHeight:'480px'}}>
-            <div ref={mapContainerRef} style={{width:'100%',height:'100%'}}/>
+            {view==='single' && selT ? (
+              <iframe
+                key={`s-${selT.id}-${Math.floor((selT.locationUpdatedAt?.toMillis?.()??0)/30000)}`}
+                src={singleMapSrc(selT)}
+                style={{width:'100%',height:'100%',border:'none',display:'block'}}
+                allowFullScreen loading="lazy" title="Live Location"
+              />
+            ) : view==='all' && onDutyList.length>0 ? (
+              <iframe
+                key={`a-${onDutyList.map(t=>t.id).join('-')}-${Math.floor(now/30000)}`}
+                src={allMapSrc()}
+                style={{width:'100%',height:'100%',border:'none',display:'block'}}
+                allowFullScreen loading="lazy" title="All Locations"
+              />
+            ) : (
+              <div style={{height:'100%',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--muted)',flexDirection:'column',gap:'10px'}}>
+                <span style={{fontSize:'2rem'}}>🗺️</span>
+                <span style={{fontSize:'0.85rem'}}>Select a therapist</span>
+              </div>
+            )}
 
-            {/* Single view overlay */}
-            {view==='single' && selId && (()=>{
-              const t=onDutyList.find(x=>x.id===selId); if(!t) return null;
-              return (
-                <div style={{position:'absolute',top:'12px',left:'12px',zIndex:1000,background:'rgba(12,12,12,0.86)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'11px',padding:'8px 13px',display:'flex',alignItems:'center',gap:'9px',pointerEvents:'none'}}>
-                  <div style={{width:'7px',height:'7px',borderRadius:'50%',background:'#27ae60',animation:'pulse 2s infinite'}}/>
-                  <div>
-                    <p style={{margin:0,fontWeight:'700',fontSize:'0.8rem',color:'#fff'}}>{t.name||t.therapistId||'Therapist'}</p>
-                    <p style={{margin:0,fontSize:'0.63rem',color:'rgba(255,255,255,0.5)'}}>Updated {t._ago}</p>
-                  </div>
+            {/* Single overlay */}
+            {view==='single' && selT && (
+              <div style={{position:'absolute',top:'12px',left:'12px',zIndex:10,background:'rgba(12,12,12,0.86)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'11px',padding:'8px 13px',display:'flex',alignItems:'center',gap:'9px',pointerEvents:'none'}}>
+                <div style={{width:'7px',height:'7px',borderRadius:'50%',background:'#27ae60',animation:'pulse 2s infinite'}}/>
+                <div>
+                  <p style={{margin:0,fontWeight:'700',fontSize:'0.8rem',color:'#fff'}}>{selT.name||selT.therapistId||'Therapist'}</p>
+                  <p style={{margin:0,fontSize:'0.63rem',color:'rgba(255,255,255,0.5)'}}>Updated {selT._ago}</p>
                 </div>
-              );
-            })()}
+              </div>
+            )}
 
-            {/* All view legend */}
+            {/* All legend */}
             {view==='all' && (
-              <div style={{position:'absolute',top:'12px',left:'12px',zIndex:1000,background:'rgba(12,12,12,0.86)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'11px',padding:'9px 13px',pointerEvents:'none'}}>
+              <div style={{position:'absolute',top:'12px',left:'12px',zIndex:10,background:'rgba(12,12,12,0.86)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'11px',padding:'9px 13px',pointerEvents:'none'}}>
                 <p style={{margin:'0 0 7px',fontSize:'0.62rem',color:'rgba(255,255,255,0.45)',letterSpacing:'1px',textTransform:'uppercase'}}>On duty</p>
                 <div style={{display:'flex',flexDirection:'column',gap:'5px'}}>
                   {onDutyList.map(t=>(
