@@ -527,10 +527,27 @@ function DashboardTab() {
   },[]);
 
   useEffect(()=>{
-    const unsub = db.collection('therapists').onSnapshot(snap=>
-      setTherapists(snap.docs.map(d=>({id:d.id,...d.data()}))));
+    const unsub = db.collection('therapists').onSnapshot(snap=>{
+      const list = snap.docs.map(d=>({id:d.id,...d.data()}));
+      setTherapists(list);
+    });
     return ()=>unsub();
   },[]);
+
+  // One-time cleanup: clear sessionActive for therapists with no active booking
+  useEffect(()=>{
+    if(bookings.length===0||therapists.length===0) return;
+    therapists.forEach(t=>{
+      if(!t.sessionActive) return;
+      const hasLive = bookings.some(b=>
+        (b.therapistDocId===t.id||b.therapistId===t.therapistId) &&
+        ['in_session','on_way','confirmed'].includes(b.status)
+      );
+      if(!hasLive){
+        db.collection('therapists').doc(t.id).update({sessionActive:false}).catch(()=>{});
+      }
+    });
+  },[bookings.length, therapists.length]);
 
   const today = new Date(); today.setHours(0,0,0,0);
   const todayCount             = bookings.filter(b=>{ const d=b.createdAt?.toDate?.(); return d&&d>=today; }).length;
@@ -562,7 +579,14 @@ function DashboardTab() {
     return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'});
   };
   const lastSeen = t => {
-    if(t.sessionActive) return {text:'In Session', color:'#ffa500'};
+    // Cross-check actual bookings — never rely on stale sessionActive flag
+    const live = bookings.find(b=>
+      (b.therapistDocId===t.id||b.therapistId===t.therapistId) &&
+      ['in_session','on_way'].includes(b.status)
+    );
+    if(live) return live.status==='in_session'
+      ? {text:'In Session', color:'#ffa500'}
+      : {text:'On the Way', color:'#4a9eff'};
     if(!t.lastActiveAt) return t.available
       ? {text:'Currently online', color:'#2ecc71'}
       : {text:'', color:'var(--muted)'};
@@ -1846,6 +1870,10 @@ function BookingsPanel() {
         status: newStatus,
         [`${newStatus}At`]: FieldValue.serverTimestamp(),
       });
+      // Clear stale sessionActive flag on therapist when session ends
+      if(newStatus==='completed' && b.therapistDocId) {
+        await db.collection('therapists').doc(b.therapistDocId).update({ sessionActive: false }).catch(()=>{});
+      }
     } catch(err){ alert(`Error: ${err.message}`); }
     setConfirming(null);
   };
