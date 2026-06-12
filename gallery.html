@@ -682,6 +682,16 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
   const fmtTime = s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
   const urgent = timeLeft < 60;
 
+  // ── WhatsApp message helpers ──
+  const tName        = therapist.name||therapist.therapistId;
+  const lmk          = form.landmark?.trim()||'Not provided';
+  const mLoc         = clientMapsLink||'Not provided';
+  const therapistWa  = therapist.phone ? '91'+therapist.phone.replace(/\D/g,'').replace(/^91/,'') : null;
+  const adminMsgNow       = encodeURIComponent(`Hi, booking with ${tName} accepted!\nClient: ${clientName}\nAppointment: Immediate (Now)\nLandmark: ${lmk}\nLocation: ${mLoc}\nKindly confirm. — ${clientName}`);
+  const therapistMsgNow   = encodeURIComponent(`Hi ${tName}, new confirmed booking!\nClient: ${clientName}\nAppointment: Immediate (Now)\nLandmark: ${lmk}\nLocation: ${mLoc}\nPlease proceed. — Feel Free Spa`);
+  const adminMsgLater     = encodeURIComponent(`Hi, appointment scheduled with ${tName}!\nClient: ${clientName}\nDate: ${form.date}\nTime: ${form.time}\nLandmark: ${lmk}\nLocation: ${mLoc}\nPlease confirm. — ${clientName}`);
+  const therapistMsgLater = encodeURIComponent(`Hi ${tName}, upcoming booking confirmed!\nClient: ${clientName}\nDate: ${form.date}\nTime: ${form.time}\nLandmark: ${lmk}\nLocation: ${mLoc}\nPlease note. — Feel Free Spa`);
+
   const overlay  = {position:'fixed',inset:0,background:'rgba(0,0,0,0.93)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'};
   const card     = {background:'var(--surface)',border:'1px solid rgba(212,175,55,0.4)',borderRadius:'20px',padding:'28px 24px',width:'100%',maxWidth:'380px',position:'relative'};
   const btnClose = {position:'absolute',top:'14px',right:'16px',background:'none',border:'none',color:'var(--muted)',fontSize:'1.3rem',cursor:'pointer',lineHeight:'1'};
@@ -799,14 +809,7 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
         )}
 
         {/* ── Accepted ── */}
-        {step==='accepted'&&(()=>{
-          const tName       = therapist.name||therapist.therapistId;
-          const lmk         = form.landmark.trim()||'Not provided';
-          const loc         = clientMapsLink||'Not provided';
-          const therapistWa = therapist.phone ? '91'+therapist.phone.replace(/\D/g,'').replace(/^91/,'') : null;
-          const adminMsg    = encodeURIComponent(`Hi, my booking with ${tName} has been accepted!\nClient: ${clientName}\nAppointment: Immediate (Now)\nLandmark: ${lmk}\nLocation: ${loc}\nKindly confirm. — ${clientName}`);
-          const therapistMsg= encodeURIComponent(`Hi ${tName}, you have a new confirmed booking!\nClient: ${clientName}\nAppointment: Immediate (Now)\nLandmark: ${lmk}\nLocation: ${loc}\nPlease proceed. — Feel Free Spa`);
-          return (
+        {step==='accepted'&&(
           <div style={{textAlign:'center'}}>
             <div style={{fontSize:'3rem',marginBottom:'10px'}}>✅</div>
             <h2 style={{color:'#27ae60',fontSize:'1.15rem',fontWeight:'700',marginBottom:'8px'}}>Therapist Accepted!</h2>
@@ -815,17 +818,17 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
             </p>
             <div style={{background:'rgba(212,175,55,0.08)',border:'1px solid var(--border-gold)',borderRadius:'12px',padding:'14px',marginBottom:'16px',textAlign:'left'}}>
               <p style={{color:'var(--gold)',fontSize:'0.85rem',fontWeight:'700',marginBottom:'5px'}}>⏳ Next: Admin Confirmation</p>
-              <p style={{color:'var(--muted)',fontSize:'0.8rem',lineHeight:'1.6'}}>Admin will verify and confirm your appointment. Confirmation will be sent to your WhatsApp.</p>
-              {form.landmark&&<p style={{color:'var(--muted)',fontSize:'0.78rem',marginTop:'6px'}}>📍 Landmark: <strong style={{color:'var(--text)'}}>{form.landmark}</strong></p>}
+              <p style={{color:'var(--muted)',fontSize:'0.8rem',lineHeight:'1.6'}}>Admin will verify and confirm your appointment.</p>
+              {form.landmark&&<p style={{color:'var(--muted)',fontSize:'0.78rem',marginTop:'6px'}}>📍 <strong style={{color:'var(--text)'}}>{form.landmark}</strong></p>}
               {clientMapsLink&&<p style={{color:'var(--muted)',fontSize:'0.78rem',marginTop:'4px'}}>🗺️ <a href={clientMapsLink} target="_blank" rel="noopener noreferrer" style={{color:'var(--gold)',textDecoration:'none'}}>View on Google Maps</a></p>}
             </div>
-            <a href={`https://wa.me/${ADMIN_WHATSAPP}?text=${adminMsg}`}
+            <a href={`https://wa.me/${ADMIN_WHATSAPP}?text=${adminMsgNow}`}
               target="_blank" rel="noopener noreferrer"
               style={{display:'block',background:'#25D366',color:'#fff',borderRadius:'10px',padding:'13px',fontWeight:'700',textDecoration:'none',marginBottom:'10px',fontSize:'0.9rem',textAlign:'center'}}>
               💬 Send Details to Admin
             </a>
             {therapistWa&&(
-              <a href={`https://wa.me/${therapistWa}?text=${therapistMsg}`}
+              <a href={`https://wa.me/${therapistWa}?text=${therapistMsgNow}`}
                 target="_blank" rel="noopener noreferrer"
                 style={{display:'block',background:'#128C7E',color:'#fff',borderRadius:'10px',padding:'13px',fontWeight:'700',textDecoration:'none',marginBottom:'10px',fontSize:'0.9rem',textAlign:'center'}}>
                 💬 Send Location to Therapist
@@ -833,8 +836,7 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
             )}
             <button onClick={onClose} style={{...goldBtn,background:'transparent',border:'1px solid var(--border)',color:'var(--muted)'}}>Close</button>
           </div>
-          );
-        })()}
+        )}
         )}
 
         {/* ── Declined ── */}
@@ -939,14 +941,7 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
         </>)}
 
         {/* ── Later Done ── */}
-        {step==='later-done'&&(()=>{
-          const tName        = therapist.name||therapist.therapistId;
-          const lmk          = form.landmark.trim()||'Not provided';
-          const loc          = clientMapsLink||'Not provided';
-          const therapistWa  = therapist.phone ? '91'+therapist.phone.replace(/\D/g,'').replace(/^91/,'') : null;
-          const adminMsg     = encodeURIComponent(`Hi, I scheduled an appointment with ${tName}!\nClient: ${clientName}\nDate: ${form.date}\nTime: ${form.time}\nLandmark: ${lmk}\nLocation: ${loc}\nPlease confirm. — ${clientName}`);
-          const therapistMsg = encodeURIComponent(`Hi ${tName}, upcoming booking confirmed!\nClient: ${clientName}\nDate: ${form.date}\nTime: ${form.time}\nLandmark: ${lmk}\nLocation: ${loc}\nPlease note and prepare. — Feel Free Spa`);
-          return (
+        {step==='later-done'&&(
           <div style={{textAlign:'center'}}>
             <div style={{fontSize:'3rem',marginBottom:'10px'}}>🎉</div>
             <h2 style={{color:'var(--gold)',fontSize:'1.15rem',fontWeight:'700',marginBottom:'8px'}}>Appointment Scheduled!</h2>
@@ -958,13 +953,13 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
               {clientMapsLink&&<p style={{color:'var(--muted)',fontSize:'0.8rem',marginTop:'4px'}}>🗺️ <a href={clientMapsLink} target="_blank" rel="noopener noreferrer" style={{color:'var(--gold)',textDecoration:'none'}}>View on Google Maps</a></p>}
             </div>
             <p style={{color:'var(--muted)',fontSize:'0.76rem',marginBottom:'14px'}}>Share these details with admin and therapist on WhatsApp.</p>
-            <a href={`https://wa.me/${ADMIN_WHATSAPP}?text=${adminMsg}`}
+            <a href={`https://wa.me/${ADMIN_WHATSAPP}?text=${adminMsgLater}`}
               target="_blank" rel="noopener noreferrer"
               style={{display:'block',background:'#25D366',color:'#fff',borderRadius:'10px',padding:'12px',fontWeight:'700',textDecoration:'none',marginBottom:'10px',fontSize:'0.88rem',textAlign:'center'}}>
               💬 Send Details to Admin
             </a>
             {therapistWa&&(
-              <a href={`https://wa.me/${therapistWa}?text=${therapistMsg}`}
+              <a href={`https://wa.me/${therapistWa}?text=${therapistMsgLater}`}
                 target="_blank" rel="noopener noreferrer"
                 style={{display:'block',background:'#128C7E',color:'#fff',borderRadius:'10px',padding:'12px',fontWeight:'700',textDecoration:'none',marginBottom:'10px',fontSize:'0.88rem',textAlign:'center'}}>
                 💬 Send Details to Therapist
@@ -972,8 +967,7 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
             )}
             <button onClick={onClose} style={goldBtn}>Done ✓</button>
           </div>
-          );
-        })()}
+        )}
 
       </div>
     </div>
