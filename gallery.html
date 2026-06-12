@@ -35,6 +35,7 @@
     button { cursor: pointer; font-family: inherit; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .spin { display: inline-block; animation: spin 0.8s linear infinite; }
+    @keyframes pulseRing { 0%{transform:scale(1);opacity:0.35} 70%{transform:scale(2.2);opacity:0} 100%{transform:scale(2.2);opacity:0} }
     @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
     .fade-in { animation: fadeIn 0.3s ease forwards; }
     @media print { body { display:none !important; } }
@@ -333,6 +334,21 @@ function TherapistGallery({ tokenData, clientName, clientPhone, isBlurred }) {
           if (!wh) return true; // no hours configured → always show
           return wh[filterInfo.dayKey]?.on === true;
         });
+
+        // Sort: Online first → recently seen → older (priority + lastActiveAt desc)
+        const statusPriority = t => {
+          if (t.available) return 0;
+          const ts = t.lastActiveAt?.toMillis?.() ?? 0;
+          if (ts && (Date.now() - ts) < 30 * 60 * 1000) return 1; // seen < 30 min
+          return 2;
+        };
+        filtered.sort((a, b) => {
+          const pa = statusPriority(a), pb = statusPriority(b);
+          if (pa !== pb) return pa - pb;
+          // Same priority → most recently active first
+          return (b.lastActiveAt?.toMillis?.() ?? 0) - (a.lastActiveAt?.toMillis?.() ?? 0);
+        });
+
         setTherapists(filtered);
       } finally { setLoading(false); }
     })();
@@ -1031,21 +1047,42 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
 
   const watermarkText=`${clientName} | +91${clientPhone}`;
 
+  // ── Availability status ──────────────────────────────
+  const getOnlineStatus = () => {
+    if (therapist.available) return { dot:'#27ae60', label:'Online', pulse:true };
+    const ts = therapist.lastActiveAt?.toMillis?.() ?? 0;
+    if (!ts) return { dot:'#555', label:'Offline', pulse:false };
+    const ago = (Date.now() - ts) / 60000; // minutes
+    if (ago < 5)   return { dot:'#f39c12', label:'Just now',            pulse:false };
+    if (ago < 30)  return { dot:'#f39c12', label:`${Math.floor(ago)}m ago`, pulse:false };
+    if (ago < 120) return { dot:'#888',    label:`${Math.floor(ago)}m ago`, pulse:false };
+    if (ago < 1440)return { dot:'#555',    label:`${Math.floor(ago/60)}h ago`,   pulse:false };
+    return            { dot:'#555',        label:'Offline',             pulse:false };
+  };
+  const status = getOnlineStatus();
+
   return (
-    <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'16px',overflow:'hidden',boxShadow:'0 4px 24px rgba(0,0,0,.4)'}}>
+    <div style={{background:'var(--surface)',border:`1px solid ${therapist.available?'rgba(39,174,96,0.25)':'var(--border)'}`,borderRadius:'16px',overflow:'hidden',boxShadow:'0 4px 24px rgba(0,0,0,.4)'}}>
       <canvas ref={canvasRef} style={{display:'none'}}/>
       <div style={{position:'relative',aspectRatio:'3/4',background:'#0d0d0d',overflow:'hidden'}}>
 
         {/* Solid black background — no blurred preview to screenshot */}
         <div style={{position:'absolute',inset:0,background:'#0a0a0a'}}/>
 
+        {/* Status pill — top left of photo */}
+        <div style={{position:'absolute',top:'10px',left:'10px',zIndex:10,display:'flex',alignItems:'center',gap:'5px',background:'rgba(0,0,0,0.65)',backdropFilter:'blur(6px)',borderRadius:'20px',padding:'4px 10px',border:`1px solid ${status.dot}33`}}>
+          <div style={{position:'relative',width:'8px',height:'8px',flexShrink:0}}>
+            <div style={{position:'absolute',inset:0,borderRadius:'50%',background:status.dot}}/>
+            {status.pulse&&<div style={{position:'absolute',inset:'-3px',borderRadius:'50%',background:status.dot,opacity:0.35,animation:'pulseRing 1.5s ease-out infinite'}}/>}
+          </div>
+          <span style={{fontSize:'0.65rem',fontWeight:'700',color:'#fff',letterSpacing:'0.3px'}}>{status.label}</span>
+        </div>
+
         {/* Watermarked photo */}
         {isVisible&&canvasUrl&&(
           <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
             {isIOS
-              /* iOS: show watermarked <img> directly — captureStream not supported */
               ? <img src={canvasUrl} onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover',display:'block',WebkitUserSelect:'none',userSelect:'none'}}/>
-              /* Android/Desktop: live canvas stream into <video> so screenshots show black */
               : <video ref={videoRef} poster={canvasUrl} muted playsInline autoPlay onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
             }
             {/* Countdown */}
@@ -1073,7 +1110,13 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
       {/* Footer */}
       <div style={{padding:'14px 18px',display:'flex',flexDirection:'column',gap:'10px'}}>
         <div>
-          <p style={{color:'var(--gold)',fontSize:'1rem',fontWeight:'700',letterSpacing:'1px'}}>{therapist.name || therapist.therapistId}</p>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'8px',marginBottom:'2px'}}>
+            <p style={{color:'var(--gold)',fontSize:'1rem',fontWeight:'700',letterSpacing:'1px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{therapist.name || therapist.therapistId}</p>
+            <span style={{display:'flex',alignItems:'center',gap:'4px',flexShrink:0,background:therapist.available?'rgba(39,174,96,0.1)':'rgba(80,80,80,0.15)',borderRadius:'10px',padding:'2px 8px',border:`1px solid ${therapist.available?'rgba(39,174,96,0.25)':'rgba(80,80,80,0.2)'}`}}>
+              <div style={{width:'6px',height:'6px',borderRadius:'50%',background:status.dot,flexShrink:0}}/>
+              <span style={{fontSize:'0.62rem',fontWeight:'700',color:status.dot,whiteSpace:'nowrap'}}>{status.label}</span>
+            </span>
+          </div>
           {therapist.speciality && (
             <p style={{color:'var(--muted)',fontSize:'0.78rem',marginTop:'3px'}}>💆 {therapist.speciality}</p>
           )}
