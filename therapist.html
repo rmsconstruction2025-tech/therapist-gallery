@@ -1096,9 +1096,10 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
               const apptMs     = b.scheduledTime ? new Date(b.scheduledTime.replace(' ','T')) - new Date() : null;
               const canGoOnWay = b.scheduledTime ? apptMs <= 2*60*60*1000 : true;
               const minsLeft   = apptMs !== null ? Math.round(apptMs / 60000) : null;
+              const isTodayExpanded = expandedId===b.id;
               return(
                 <div key={b.id} style={{background:'var(--surface)',border:`1px solid ${isInSession?'rgba(255,165,0,0.3)':isOnWay?'rgba(74,158,255,0.3)':'var(--border)'}`,borderRadius:'14px',padding:'13px 16px',marginBottom:'8px'}}>
-                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px'}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px',cursor:'pointer'}} onClick={()=>setExpandedId(isTodayExpanded?null:b.id)}>
                     <div style={{borderLeft:`3px solid ${accentColor}`,paddingLeft:'12px',flex:1,minWidth:0}}>
                       <p style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--text)',marginBottom:'3px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{b.clientName||'—'}</p>
                       <p style={{fontSize:'0.73rem',color:'var(--muted)',display:'flex',alignItems:'center',gap:'5px',flexWrap:'wrap'}}>
@@ -1108,15 +1109,26 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
                     </div>
                     {isCompleted&&<span style={{color:'#27ae60',fontSize:'1.1rem',flexShrink:0}}>✓</span>}
                     {isConfirmed&&markingId!==b.id&&canGoOnWay&&!b.scheduledTime&&(
-                      <button onClick={()=>onUpdateStatus(b,'on_way')} style={{background:'rgba(74,158,255,0.15)',color:'#4a9eff',border:'1px solid rgba(74,158,255,0.35)',borderRadius:'8px',padding:'7px 12px',fontSize:'0.72rem',fontWeight:'700',cursor:'pointer',flexShrink:0,fontFamily:'inherit'}}>🚗 On My Way</button>
+                      <button onClick={e=>{e.stopPropagation();onUpdateStatus(b,'on_way');}} style={{background:'rgba(74,158,255,0.15)',color:'#4a9eff',border:'1px solid rgba(74,158,255,0.35)',borderRadius:'8px',padding:'7px 12px',fontSize:'0.72rem',fontWeight:'700',cursor:'pointer',flexShrink:0,fontFamily:'inherit'}}>🚗 On My Way</button>
                     )}
                     {isOnWay&&markingId!==b.id&&(
-                      <button onClick={()=>onUpdateStatus(b,'in_session')} style={{background:'rgba(255,165,0,0.15)',color:'#ffa500',border:'1px solid rgba(255,165,0,0.35)',borderRadius:'8px',padding:'7px 12px',fontSize:'0.72rem',fontWeight:'700',cursor:'pointer',flexShrink:0,fontFamily:'inherit'}}>✦ Start Session</button>
+                      <button onClick={e=>{e.stopPropagation();onUpdateStatus(b,'in_session');}} style={{background:'rgba(255,165,0,0.15)',color:'#ffa500',border:'1px solid rgba(255,165,0,0.35)',borderRadius:'8px',padding:'7px 12px',fontSize:'0.72rem',fontWeight:'700',cursor:'pointer',flexShrink:0,fontFamily:'inherit'}}>✦ Start Session</button>
                     )}
                     {isInSession&&markingId!==b.id&&(
-                      <button onClick={()=>{setMarkingId(b.id);setMarkAmount('');}} style={{background:'rgba(180,100,255,0.15)',color:'#b464ff',border:'1px solid rgba(180,100,255,0.35)',borderRadius:'8px',padding:'7px 12px',fontSize:'0.72rem',fontWeight:'700',cursor:'pointer',flexShrink:0,fontFamily:'inherit'}}>🏁 End Session</button>
+                      <button onClick={e=>{e.stopPropagation();setMarkingId(b.id);setMarkAmount('');}} style={{background:'rgba(180,100,255,0.15)',color:'#b464ff',border:'1px solid rgba(180,100,255,0.35)',borderRadius:'8px',padding:'7px 12px',fontSize:'0.72rem',fontWeight:'700',cursor:'pointer',flexShrink:0,fontFamily:'inherit'}}>🏁 End Session</button>
                     )}
+                    <span style={{color:'var(--muted)',fontSize:'0.7rem',flexShrink:0,marginLeft:'2px'}}>{isTodayExpanded?'▾':'▸'}</span>
                   </div>
+                  {isTodayExpanded&&(
+                    <div style={{marginTop:'10px',paddingTop:'10px',borderTop:'1px solid var(--border)',display:'grid',gridTemplateColumns:'1fr 1fr',gap:'6px 12px'}}>
+                      {[['Service',b.serviceType||'—'],['Duration',b.duration||'—'],['Time',b.scheduledTime||'Immediate'],['Location',b.location||'—'],['Notes',b.notes||'None']].map(([k,v])=>(
+                        <div key={k} style={{gridColumn:k==='Notes'?'1 / -1':'auto'}}>
+                          <p style={{fontSize:'0.68rem',color:'var(--muted)',margin:'0 0 2px',textTransform:'uppercase',letterSpacing:'0.04em'}}>{k}</p>
+                          <p style={{fontSize:'0.8rem',color:'var(--text)',margin:0,fontWeight:'500',wordBreak:'break-word'}}>{v}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {isConfirmed&&markingId!==b.id&&canGoOnWay&&b.scheduledTime&&(
                     <div style={{marginTop:'10px',background:'rgba(234,163,0,0.08)',border:'1px solid rgba(234,163,0,0.28)',borderRadius:'10px',padding:'10px 14px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px'}}>
                       <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
