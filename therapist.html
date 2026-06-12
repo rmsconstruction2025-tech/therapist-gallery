@@ -566,6 +566,23 @@ function TherapistPortal({ session, onLogout }) {
         setSpeciality(d.speciality || '');
         setBio(d.bio || '');
         setPhone(d.phone || '');
+        // If already on duty on page load, ensure today's attendance record exists
+        if (d.available) {
+          const today   = new Date().toISOString().split('T')[0];
+          const attRef  = db.collection('attendance').doc(`${session.docId}_${today}`);
+          const attSnap = await attRef.get();
+          if (!attSnap.exists || !attSnap.data()?.checkIn) {
+            attRef.set({
+              therapistDocId: session.docId,
+              therapistId:    session.therapistId,
+              date:           today,
+              checkIn:        FieldValue.serverTimestamp(),
+              sessions:       attSnap.exists ? (attSnap.data().sessions || 0) : 0,
+              earnings:       attSnap.exists ? (attSnap.data().earnings || 0) : 0,
+              status:         'present',
+            }, { merge: true });
+          }
+        }
       }
     } finally { setLoading(false); }
   };
