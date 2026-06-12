@@ -1507,20 +1507,16 @@ function DutyCard({ onDuty, dutySeconds, dutyLoading, onStartDuty, onEndDuty, on
   return (
     <div style={{margin:'14px 16px 0',borderRadius:'16px',overflow:'hidden',border:`1px solid ${onDuty?'rgba(74,158,255,0.4)':'var(--border)'}`,background:onDuty?'rgba(74,158,255,0.05)':'var(--surface)'}}>
       <div style={{padding:'13px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px'}}>
-        <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-          <div style={{width:'8px',height:'8px',borderRadius:'50%',flexShrink:0,
-            background:onDuty?'#4a9eff':'var(--muted)',
-            boxShadow:onDuty?'0 0 8px #4a9eff':'none'}}/>
-          <div>
-            <p style={{fontWeight:'700',fontSize:'0.85rem',color:onDuty?'#4a9eff':'var(--muted)',margin:0}}>
-              {onDuty ? 'Live Tracking ON' : 'Live Tracking OFF'}
-            </p>
-            {onDuty
-              ? <p style={{fontSize:'0.72rem',color:'var(--muted)',margin:'2px 0 0',fontFamily:'monospace'}}>{fmtTime(dutySeconds)}</p>
-              : <p style={{fontSize:'0.7rem',color:'var(--muted)',margin:'2px 0 0'}}>Admin cannot see your location</p>
-            }
+        {onDuty&&(
+          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+            <div style={{width:'8px',height:'8px',borderRadius:'50%',flexShrink:0,background:'#4a9eff',boxShadow:'0 0 8px #4a9eff'}}/>
+            <div>
+              <p style={{fontWeight:'700',fontSize:'0.85rem',color:'#4a9eff',margin:0}}>Live Tracking ON</p>
+              <p style={{fontSize:'0.72rem',color:'var(--muted)',margin:'2px 0 0',fontFamily:'monospace'}}>{fmtTime(dutySeconds)}</p>
+            </div>
           </div>
-        </div>
+        )}
+        {!onDuty&&<div/>}
         <button
           onClick={onDuty ? onEndDuty : onStartDuty}
           disabled={dutyLoading}
