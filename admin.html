@@ -16,6 +16,10 @@
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
 
+  <!-- Leaflet (free map, no API key) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
+
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -339,89 +343,199 @@ function AdminLogin() {
 // ══════════════════════════════════════════════════════
 //  LIVE TRACKER
 // ══════════════════════════════════════════════════════
+const AVATAR_COLORS_T = ['#4a9eff','#9b59b6','#e67e22','#27ae60','#e74c3c','#1abc9c','#c9963a'];
+function tAvatarColor(name){ let h=0; for(let i=0;i<(name||'').length;i++) h=(name.charCodeAt(i)+h*31)%AVATAR_COLORS_T.length; return AVATAR_COLORS_T[h]; }
+function tInitials(name){ return (name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
+
 function LiveTracker() {
   const [therapists, setTherapists] = useState([]);
   const [selected,   setSelected]   = useState(null);
+  const [view,       setView]       = useState('single');
+  const [now,        setNow]        = useState(Date.now());
+  const mapContainerRef = useRef(null);
+  const mapRef          = useRef(null);
+  const markersRef      = useRef({});
 
   useEffect(()=>{
     const unsub = db.collection('therapists').onSnapshot(snap=>{
       setTherapists(snap.docs.map(d=>({id:d.id,...d.data()})));
     });
-    return ()=>unsub();
+    const tick = setInterval(()=>setNow(Date.now()), 15000);
+    return ()=>{ unsub(); clearInterval(tick); };
   },[]);
 
-  const onDutyList = therapists.filter(t => t.onDuty && t.location?.lat != null);
-
   const timeAgo = ts => {
-    if(!ts?.toDate) return '?';
-    const s = (Date.now() - ts.toDate().getTime()) / 1000;
+    if(!ts?.toDate) return '—';
+    const s = (now - ts.toDate().getTime()) / 1000;
     if(s < 60)   return `${Math.floor(s)}s ago`;
     if(s < 3600) return `${Math.floor(s/60)} min ago`;
     return `${Math.floor(s/3600)}h ago`;
   };
 
-  // Auto-select first on-duty therapist
+  const onDutyList = therapists
+    .filter(t => t.onDuty && t.location?.lat != null)
+    .map(t => ({...t, _ago: timeAgo(t.locationUpdatedAt)}));
+
   const selId = selected && onDutyList.find(t=>t.id===selected) ? selected : (onDutyList[0]?.id || null);
-  const selT  = onDutyList.find(t=>t.id===selId) || null;
+
+  // ── Init Leaflet map once ──────────────────────────
+  useEffect(()=>{
+    if(!mapContainerRef.current || mapRef.current) return;
+    const m = L.map(mapContainerRef.current, {zoomControl:true,attributionControl:true});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      attribution:'© <a href="https://openstreetmap.org">OpenStreetMap</a>',maxZoom:19,
+    }).addTo(m);
+    mapRef.current = m;
+  },[]);
+
+  // ── Update markers on data / view / selection change ──
+  useEffect(()=>{
+    const map = mapRef.current;
+    if(!map) return;
+    Object.values(markersRef.current).forEach(m=>map.removeLayer(m));
+    markersRef.current = {};
+    if(onDutyList.length===0) return;
+
+    const makeIcon = (t, size) => L.divIcon({
+      className:'',
+      html:`<div style="background:${tAvatarColor(t.name||t.therapistId||'')};width:${size}px;height:${size}px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:${size===36?12:11}px;font-weight:700;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.45)">${tInitials(t.name||t.therapistId||'?')}</div>`,
+      iconSize:[size,size],iconAnchor:[size/2,size/2],
+    });
+
+    if(view==='single'){
+      const t = onDutyList.find(x=>x.id===selId)||onDutyList[0];
+      if(!t) return;
+      const mk = L.marker([t.location.lat,t.location.lng],{icon:makeIcon(t,36)}).addTo(map);
+      mk.bindPopup(`<b>${t.name||t.therapistId||'Therapist'}</b><br/><small>${t._ago}</small>`);
+      markersRef.current[t.id]=mk;
+      map.setView([t.location.lat,t.location.lng],15);
+    } else {
+      const bounds=[];
+      onDutyList.forEach(t=>{
+        const mk=L.marker([t.location.lat,t.location.lng],{icon:makeIcon(t,30)}).addTo(map);
+        mk.bindPopup(`<b>${t.name||t.therapistId||'Therapist'}</b><br/><small>${t._ago}</small>`);
+        markersRef.current[t.id]=mk;
+        bounds.push([t.location.lat,t.location.lng]);
+      });
+      if(bounds.length===1) map.setView(bounds[0],15);
+      else if(bounds.length>1) map.fitBounds(bounds,{padding:[50,50]});
+    }
+  },[onDutyList.length, view, selId, now]);
+
+  const btnSty = active => ({
+    padding:'5px 14px',borderRadius:'20px',fontSize:'0.74rem',fontWeight:'700',
+    cursor:'pointer',fontFamily:'inherit',transition:'all .15s',
+    background:active?'var(--elevated)':'transparent',
+    color:active?'var(--text)':'var(--muted)',
+    border:`1px solid ${active?'rgba(212,175,55,0.35)':'transparent'}`,
+  });
 
   return (
-    <div className="tab-content">
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'18px',flexWrap:'wrap',gap:'10px'}}>
-        <h2 style={{margin:0}}>Live Tracker</h2>
-        <span style={{fontSize:'0.75rem',color:'var(--muted)',background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'20px',padding:'4px 12px'}}>
-          {onDutyList.length} therapist{onDutyList.length!==1?'s':''} on duty
-        </span>
+    <div className="tab-content" style={{padding:'0',display:'flex',flexDirection:'column',height:'calc(100vh - 60px)'}}>
+
+      {/* Header */}
+      <div style={{padding:'13px 18px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:'10px',flexShrink:0}}>
+        <div style={{display:'flex',alignItems:'center',gap:'9px'}}>
+          <div style={{width:'8px',height:'8px',borderRadius:'50%',background:onDutyList.length>0?'#27ae60':'var(--muted)',animation:onDutyList.length>0?'pulse 2s infinite':'none'}}/>
+          <h2 style={{margin:0,fontSize:'1.05rem',fontWeight:'700'}}>Live Tracker</h2>
+        </div>
+
+        {/* Toggle */}
+        <div style={{display:'flex',gap:'3px',background:'var(--surface)',borderRadius:'22px',padding:'3px',border:'1px solid var(--border)'}}>
+          <button style={btnSty(view==='single')} onClick={()=>setView('single')}>👤 Single</button>
+          <button style={btnSty(view==='all')}    onClick={()=>setView('all')}>🗺 All therapists</button>
+        </div>
+
+        <div style={{display:'flex',gap:'8px'}}>
+          <span style={{fontSize:'0.72rem',fontWeight:'700',color:'#27ae60',background:'rgba(39,174,96,0.1)',border:'1px solid rgba(39,174,96,0.25)',borderRadius:'20px',padding:'4px 11px',display:'flex',alignItems:'center',gap:'5px'}}>
+            <span style={{width:'5px',height:'5px',borderRadius:'50%',background:'#27ae60',display:'inline-block',animation:'pulse 2s infinite'}}/>
+            {onDutyList.length} on duty
+          </span>
+          <span style={{fontSize:'0.72rem',color:'var(--muted)',background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'20px',padding:'4px 11px'}}>{therapists.length} total</span>
+        </div>
       </div>
 
       {onDutyList.length===0 ? (
-        <div className="card" style={{textAlign:'center',padding:'48px 24px'}}>
-          <div style={{fontSize:'3rem',marginBottom:'14px'}}>📍</div>
-          <p style={{fontWeight:'700',fontSize:'1rem',color:'var(--text)',marginBottom:'6px'}}>No therapists on duty</p>
-          <p style={{fontSize:'0.83rem',color:'var(--muted)',lineHeight:'1.5'}}>Therapists appear here when they tap "Start Duty" in their portal</p>
+        <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'14px'}}>
+          <div style={{width:'64px',height:'64px',borderRadius:'50%',background:'var(--elevated)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.6rem'}}>📍</div>
+          <p style={{fontWeight:'700',color:'var(--text)',margin:'0 0 4px'}}>No therapists on duty</p>
+          <p style={{fontSize:'0.82rem',color:'var(--muted)',margin:0}}>Therapists appear here when they go Online</p>
         </div>
       ) : (
-        <div style={{display:'grid',gridTemplateColumns:'minmax(220px,280px) 1fr',gap:'16px',alignItems:'start'}}>
-          {/* Therapist list */}
-          <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
-            {onDutyList.map(t=>(
-              <div key={t.id} onClick={()=>setSelected(t.id)} style={{
-                background:'var(--surface)',
-                border:`2px solid ${selId===t.id?'var(--gold)':'var(--border)'}`,
-                borderRadius:'14px',padding:'13px 15px',cursor:'pointer',
-                transition:'border-color .15s',
-              }}>
-                <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'5px'}}>
-                  <div style={{width:'8px',height:'8px',borderRadius:'50%',background:'#27ae60',boxShadow:'0 0 6px #27ae60',flexShrink:0,animation:'pulse 2s infinite'}}/>
-                  <span style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.name||t.therapistId||'Therapist'}</span>
-                </div>
-                <p style={{fontSize:'0.7rem',color:'var(--muted)',margin:0}}>🕒 Updated: {timeAgo(t.locationUpdatedAt)}</p>
-                {t.location?.lat!=null&&(
-                  <p style={{fontSize:'0.67rem',color:'var(--muted)',margin:'3px 0 0',fontFamily:'monospace',opacity:0.7}}>
-                    {t.location.lat.toFixed(4)}, {t.location.lng.toFixed(4)}
-                  </p>
-                )}
-              </div>
-            ))}
+        <div style={{flex:1,display:'grid',gridTemplateColumns:'260px 1fr',minHeight:0}}>
+
+          {/* Left list */}
+          <div style={{borderRight:'1px solid var(--border)',overflowY:'auto',padding:'10px',background:'var(--surface)'}}>
+            <p style={{fontSize:'0.62rem',color:'var(--muted)',letterSpacing:'1.5px',textTransform:'uppercase',padding:'4px 6px 10px',margin:0}}>Active Therapists</p>
+            <div style={{display:'flex',flexDirection:'column',gap:'4px'}}>
+              {onDutyList.map(t=>{
+                const isSel = selId===t.id && view==='single';
+                const ac = tAvatarColor(t.name||t.therapistId||'');
+                return (
+                  <div key={t.id} onClick={()=>{ setSelected(t.id); setView('single'); }} style={{
+                    background:isSel?'rgba(201,150,58,0.08)':'transparent',
+                    border:`1px solid ${isSel?'rgba(201,150,58,0.4)':'transparent'}`,
+                    borderRadius:'11px',padding:'10px 11px',cursor:'pointer',transition:'all .15s',
+                  }}>
+                    <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+                      <div style={{position:'relative',flexShrink:0}}>
+                        <div style={{width:'34px',height:'34px',borderRadius:'50%',background:ac,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.72rem',fontWeight:'800',color:'#fff'}}>
+                          {tInitials(t.name||t.therapistId||'?')}
+                        </div>
+                        <div style={{position:'absolute',bottom:0,right:0,width:'9px',height:'9px',borderRadius:'50%',background:'#27ae60',border:'2px solid var(--surface)'}}/>
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <p style={{fontWeight:'700',fontSize:'0.85rem',color:isSel?'var(--gold)':'var(--text)',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                          {t.name||t.therapistId||'Therapist'}
+                        </p>
+                        <p style={{fontSize:'0.67rem',color:'var(--muted)',margin:'2px 0 0'}}>{t._ago}</p>
+                      </div>
+                      <div style={{width:'9px',height:'9px',borderRadius:'50%',background:ac,flexShrink:0,opacity:0.85}}/>
+                    </div>
+                    <p style={{fontSize:'0.62rem',color:'var(--muted)',margin:'6px 0 0 44px',fontFamily:'monospace',opacity:0.55}}>
+                      {t.location.lat.toFixed(4)}, {t.location.lng.toFixed(4)}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           {/* Map */}
-          {selT?.location?.lat!=null ? (
-            <div style={{borderRadius:'16px',overflow:'hidden',border:'1px solid var(--border)',height:'430px',background:'var(--elevated)'}}>
-              <iframe
-                key={`${selT.id}-${Math.floor((selT.locationUpdatedAt?.toMillis?.()??0)/30000)}`}
-                src={`https://maps.google.com/maps?q=${selT.location.lat},${selT.location.lng}&z=16&output=embed`}
-                style={{width:'100%',height:'100%',border:'none',display:'block'}}
-                allowFullScreen
-                loading="lazy"
-                title="Live Location"
-              />
-            </div>
-          ) : (
-            <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'16px',height:'430px',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--muted)',flexDirection:'column',gap:'10px'}}>
-              <span style={{fontSize:'2.5rem'}}>🗺️</span>
-              <span style={{fontSize:'0.85rem'}}>Select a therapist to view map</span>
-            </div>
-          )}
+          <div style={{position:'relative'}}>
+            <div ref={mapContainerRef} style={{width:'100%',height:'100%',minHeight:'420px'}}/>
+
+            {/* Single view overlay */}
+            {view==='single' && selId && (()=>{
+              const t=onDutyList.find(x=>x.id===selId); if(!t) return null;
+              return (
+                <div style={{position:'absolute',top:'12px',left:'12px',zIndex:1000,background:'rgba(12,12,12,0.86)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'11px',padding:'8px 13px',display:'flex',alignItems:'center',gap:'9px',pointerEvents:'none'}}>
+                  <div style={{width:'7px',height:'7px',borderRadius:'50%',background:'#27ae60',animation:'pulse 2s infinite'}}/>
+                  <div>
+                    <p style={{margin:0,fontWeight:'700',fontSize:'0.8rem',color:'#fff'}}>{t.name||t.therapistId||'Therapist'}</p>
+                    <p style={{margin:0,fontSize:'0.63rem',color:'rgba(255,255,255,0.5)'}}>Updated {t._ago}</p>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* All view legend */}
+            {view==='all' && (
+              <div style={{position:'absolute',top:'12px',left:'12px',zIndex:1000,background:'rgba(12,12,12,0.86)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'11px',padding:'9px 13px',pointerEvents:'none'}}>
+                <p style={{margin:'0 0 7px',fontSize:'0.62rem',color:'rgba(255,255,255,0.45)',letterSpacing:'1px',textTransform:'uppercase'}}>On duty</p>
+                <div style={{display:'flex',flexDirection:'column',gap:'5px'}}>
+                  {onDutyList.map(t=>(
+                    <div key={t.id} style={{display:'flex',alignItems:'center',gap:'7px'}}>
+                      <div style={{width:'8px',height:'8px',borderRadius:'50%',background:tAvatarColor(t.name||t.therapistId||''),flexShrink:0}}/>
+                      <span style={{fontSize:'0.75rem',color:'rgba(255,255,255,0.88)',fontWeight:'700'}}>{t.name||t.therapistId||'Therapist'}</span>
+                      <span style={{fontSize:'0.63rem',color:'rgba(255,255,255,0.4)'}}>{t._ago}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
         </div>
       )}
     </div>

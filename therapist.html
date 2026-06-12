@@ -716,12 +716,60 @@ function TherapistPortal({ session, onLogout }) {
 
   const handleToggleDuty = async () => {
     const next = !available;
+    if(dutyLoading) return;
+    setDutyLoading(true);
     setAvailable(next);
-    try {
-      await db.collection('therapists').doc(session.docId).update({ available: next });
-      showMsg(next ? 'Duty ON — you are now visible to clients' : 'Duty OFF — profile hidden from clients');
-    } catch(err) { setAvailable(!next); showMsg(`Error: ${err.message}`, 'error'); return; }
-    // ── Attendance tracking (silent — don't block or error on rules issues) ──
+
+    if (next) {
+      // ── GO ONLINE = START DUTY ──────────────────────────────
+      let initialLoc = null;
+      try {
+        const pos = await new Promise((res, rej) =>
+          navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:false, timeout:6000, maximumAge:60000})
+        );
+        initialLoc = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+      } catch(_) {
+        try {
+          const pos = await new Promise((res, rej) =>
+            navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:true, timeout:8000})
+          );
+          initialLoc = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+        } catch(_) {}
+      }
+      try {
+        const updates = { available:true, onDuty:true, dutyStartedAt:FieldValue.serverTimestamp(), locationUpdatedAt:FieldValue.serverTimestamp() };
+        if(initialLoc) updates.location = initialLoc;
+        await db.collection('therapists').doc(session.docId).update(updates);
+        setOnDuty(true);
+        setDutySeconds(0);
+        dutyTimerRef.current = setInterval(() => setDutySeconds(s => s + 1), 1000);
+        lastLocUpdateRef.current = Date.now();
+        watchRef.current = navigator.geolocation.watchPosition(
+          p => {
+            const now = Date.now();
+            if(now - lastLocUpdateRef.current < 30000) return;
+            lastLocUpdateRef.current = now;
+            db.collection('therapists').doc(session.docId).update({
+              location: {lat: p.coords.latitude, lng: p.coords.longitude},
+              locationUpdatedAt: FieldValue.serverTimestamp(),
+            }).catch(()=>{});
+          },
+          ()=>{},
+          {enableHighAccuracy:true, maximumAge:10000}
+        );
+      } catch(err) { setAvailable(false); setOnDuty(false); showMsg(`Error: ${err.message}`, 'error'); setDutyLoading(false); return; }
+    } else {
+      // ── GO OFFLINE = END DUTY ───────────────────────────────
+      if(watchRef.current !== null){ navigator.geolocation.clearWatch(watchRef.current); watchRef.current = null; }
+      if(dutyTimerRef.current){ clearInterval(dutyTimerRef.current); dutyTimerRef.current = null; }
+      try {
+        await db.collection('therapists').doc(session.docId).update({ available:false, onDuty:false, locationUpdatedAt:FieldValue.serverTimestamp() });
+        setOnDuty(false);
+        setDutySeconds(0);
+      } catch(err) { setAvailable(true); showMsg(`Error: ${err.message}`, 'error'); setDutyLoading(false); return; }
+    }
+
+    // ── Attendance tracking (silent) ────────────────────────
     try {
       const today  = new Date().toISOString().split('T')[0];
       const attRef = db.collection('attendance').doc(`${session.docId}_${today}`);
@@ -750,7 +798,8 @@ function TherapistPortal({ session, onLogout }) {
           });
         }
       }
-    } catch(_) {} // attendance write failure is non-fatal
+    } catch(_) {}
+    setDutyLoading(false);
   };
 
   const pickFile = (f) => {
@@ -1585,7 +1634,7 @@ function BookingRequestCard({ booking: b, myGPS, onAccept, onDecline }) {
 // ══════════════════════════════════════════════════════
 //  DUTY CARD (Home tab — live tracking + SOS)
 // ══════════════════════════════════════════════════════
-function DutyCard({ onDuty, dutySeconds, dutyLoading, onStartDuty, onEndDuty, onSOS }) {
+function DutyCard({ onDuty, dutySeconds, onSOS }) {
   const fmtTime = s => {
     const h = Math.floor(s / 3600);
     const m = Math.floor((s % 3600) / 60);
@@ -1596,38 +1645,16 @@ function DutyCard({ onDuty, dutySeconds, dutyLoading, onStartDuty, onEndDuty, on
   };
   return (
     <div style={{margin:'14px 16px 0',borderRadius:'16px',overflow:'hidden',border:`1px solid ${onDuty?'rgba(74,158,255,0.4)':'var(--border)'}`,background:onDuty?'rgba(74,158,255,0.05)':'var(--surface)'}}>
-      <div style={{padding:'13px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px'}}>
-        {onDuty&&(
-          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-            <div style={{width:'8px',height:'8px',borderRadius:'50%',flexShrink:0,background:'#4a9eff',boxShadow:'0 0 8px #4a9eff'}}/>
-            <div>
-              <p style={{fontWeight:'700',fontSize:'0.85rem',color:'#4a9eff',margin:0}}>✦ On Duty</p>
-              <p style={{fontSize:'0.72rem',color:'var(--muted)',margin:'2px 0 0',fontFamily:'monospace'}}>{fmtTime(dutySeconds)}</p>
-            </div>
-          </div>
-        )}
-        {!onDuty&&(
+      {onDuty && (
+        <div style={{padding:'13px 16px',display:'flex',alignItems:'center',gap:'10px'}}>
+          <div style={{width:'8px',height:'8px',borderRadius:'50%',flexShrink:0,background:'#4a9eff',boxShadow:'0 0 8px #4a9eff',animation:'pulse 1.5s ease-in-out infinite'}}/>
           <div>
-            <p style={{fontWeight:'700',fontSize:'0.85rem',color:'var(--text)',margin:0}}>Ready to make a difference? ✦</p>
-            <p style={{fontSize:'0.7rem',color:'var(--muted)',margin:'2px 0 0'}}>Start Duty to begin your shift</p>
+            <p style={{fontWeight:'700',fontSize:'0.85rem',color:'#4a9eff',margin:0}}>✦ On Duty</p>
+            <p style={{fontSize:'0.72rem',color:'var(--muted)',margin:'2px 0 0',fontFamily:'monospace'}}>{fmtTime(dutySeconds)}</p>
           </div>
-        )}
-        <button
-          onClick={onDuty ? onEndDuty : onStartDuty}
-          disabled={dutyLoading}
-          style={{
-            background: onDuty ? 'rgba(231,76,60,0.12)' : 'rgba(74,158,255,0.15)',
-            color: onDuty ? '#e74c3c' : '#4a9eff',
-            border: `1px solid ${onDuty ? 'rgba(231,76,60,0.35)' : 'rgba(74,158,255,0.35)'}`,
-            borderRadius:'10px', padding:'8px 14px', fontSize:'0.78rem', fontWeight:'700',
-            cursor: dutyLoading ? 'default' : 'pointer', flexShrink:0, fontFamily:'inherit',
-            minHeight:'36px', minWidth:'90px', display:'flex', alignItems:'center', justifyContent:'center',
-          }}
-        >
-          {dutyLoading ? <span className="spin">✦</span> : (onDuty ? 'End Duty' : 'Start Duty')}
-        </button>
-      </div>
-      <div style={{borderTop:`1px solid ${onDuty?'rgba(74,158,255,0.2)':'var(--border)'}`,padding:'11px 16px',background:'rgba(231,76,60,0.04)'}}>
+        </div>
+      )}
+      <div style={{padding:'11px 16px',borderTop: onDuty ? '1px solid rgba(74,158,255,0.2)' : 'none',background:'rgba(231,76,60,0.04)'}}>
         <button
           onClick={onSOS}
           style={{width:'100%',padding:'11px',background:'rgba(231,76,60,0.13)',color:'#e74c3c',border:'2px solid rgba(231,76,60,0.45)',borderRadius:'12px',fontSize:'0.92rem',fontWeight:'800',cursor:'pointer',letterSpacing:'0.8px',fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}>
