@@ -434,10 +434,11 @@ function DashboardTab() {
   },[]);
 
   const today = new Date(); today.setHours(0,0,0,0);
-  const todayCount    = bookings.filter(b=>{ const d=b.createdAt?.toDate?.(); return d&&d>=today; }).length;
-  const pendingCount  = bookings.filter(b=>b.status==='pending'||b.status==='admin_pending').length;
-  const confirmedCount= bookings.filter(b=>b.status==='confirmed').length;
-  const onlineCount   = therapists.filter(t=>t.available).length;
+  const todayCount             = bookings.filter(b=>{ const d=b.createdAt?.toDate?.(); return d&&d>=today; }).length;
+  const pendingCount           = bookings.filter(b=>b.status==='pending'||b.status==='admin_pending').length;
+  const confirmedCount         = bookings.filter(b=>b.status==='confirmed').length;
+  const therapistAcceptedCount = bookings.filter(b=>b.status==='confirmed'&&b.therapistAccepted===true).length;
+  const onlineCount            = therapists.filter(t=>t.available).length;
 
   const STATUS_CFG = {
     pending:       {color:'var(--gold)',  bg:'rgba(212,175,55,0.12)',  label:'Pending'},
@@ -1355,6 +1356,11 @@ function BookingsPanel() {
               ⚡ {counts.admin_pending} need your confirmation
             </span>
           )}
+          {therapistAcceptedCount>0&&(
+            <span style={{display:'inline-flex',alignItems:'center',padding:'2px 10px',borderRadius:'20px',fontSize:'0.7rem',fontWeight:'700',background:'rgba(37,211,102,0.12)',color:'#25D366',border:'1px solid rgba(37,211,102,0.35)'}}>
+              ✅ {therapistAcceptedCount} accepted — send WhatsApp to client
+            </span>
+          )}
         </div>
 
         {/* Search bar */}
@@ -1492,11 +1498,14 @@ function BookingsPanel() {
 
                         {b.status==='confirmed'&&(
                           <div style={{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center'}}>
+                            {b.therapistAccepted&&(
+                              <span style={{fontSize:'0.7rem',color:'#25D366',fontWeight:'600'}}>✅ Therapist accepted — notify client:</span>
+                            )}
                             {clientWaPhone&&(
-                              <a href={`https://wa.me/${clientWaPhone}?text=${encodeURIComponent('Hello '+b.clientName+', your appointment with '+therapistName+' has been confirmed by Feel Free Spa!')}`}
+                              <a href={`https://wa.me/${clientWaPhone}?text=${encodeURIComponent('Hello '+b.clientName+', your appointment with '+therapistName+' at Feel Free Spa is confirmed! They are on the way. 🚗')}`}
                                 target="_blank" rel="noopener noreferrer"
                                 style={{display:'inline-flex',alignItems:'center',gap:'5px',background:'#25D366',color:'#fff',borderRadius:'7px',padding:'6px 12px',fontSize:'0.75rem',fontWeight:'700',textDecoration:'none'}}>
-                                💬 Resend to Client
+                                💬 {b.therapistAccepted?'Send WhatsApp to Client':'Resend to Client'}
                               </a>
                             )}
                             {therapistWaPhone&&(

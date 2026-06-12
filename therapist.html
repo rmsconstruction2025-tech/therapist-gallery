@@ -472,9 +472,12 @@ function TherapistPortal({ session, onLogout }) {
   const acceptBooking = async (b)=>{
     try {
       await db.collection('bookings').doc(b.id).update({
-        status:'admin_pending',
+        status:'confirmed',
         acceptedAt:FieldValue.serverTimestamp(),
-        therapistPhone: data?.phone||'',
+        therapistPhone:    data?.phone||'',
+        therapistName:     data?.name||session.name||'',
+        therapistDocId:    session.docId,
+        therapistAccepted: true,
       });
       playAlert('accept');
     } catch(err){ alert(`Error: ${err.message}`); }
@@ -483,6 +486,28 @@ function TherapistPortal({ session, onLogout }) {
   const declineBooking = async (b)=>{
     try { await db.collection('bookings').doc(b.id).update({status:'declined'}); }
     catch(err){ alert(`Error: ${err.message}`); }
+  };
+
+  const markComplete = async (booking, amount) => {
+    try {
+      await db.collection('bookings').doc(booking.id).update({
+        status: 'completed',
+        completedAt: FieldValue.serverTimestamp(),
+      });
+      await db.collection('earnings').add({
+        therapistDocId: session.docId,
+        therapistId:    session.therapistId,
+        date:           new Date().toISOString().split('T')[0],
+        serviceType:    booking.serviceType || 'Massage',
+        amount,
+        clientName:     booking.clientName || '',
+        duration:       booking.duration   || '60 min',
+        notes:          booking.notes      || '',
+        bookingId:      booking.id,
+        createdAt:      FieldValue.serverTimestamp(),
+      });
+      showMsg(`Session complete! ₹${amount.toLocaleString('en-IN')} added to earnings.`);
+    } catch(err) { showMsg(`Error: ${err.message}`, 'error'); }
   };
 
   // Enable push notifications once on first load
@@ -630,6 +655,7 @@ function TherapistPortal({ session, onLogout }) {
           myGPS={myGPS}
           onAccept={acceptBooking}
           onDecline={declineBooking}
+          onMarkComplete={markComplete}
           onViewEarnings={()=>setActiveTab('earnings')}
           onLogout={onLogout}
         />}
@@ -822,9 +848,22 @@ function TherapistPortal({ session, onLogout }) {
 // ══════════════════════════════════════════════════════
 //  HOME TAB
 // ══════════════════════════════════════════════════════
-function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allBookings, myGPS, onAccept, onDecline, onViewEarnings, onLogout }) {
+function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allBookings, myGPS, onAccept, onDecline, onMarkComplete, onViewEarnings, onLogout }) {
   const [earnings, setEarnings] = useState([]);
   const [earningsLoaded, setEarningsLoaded] = useState(false);
+  const [markingId,  setMarkingId]  = useState(null);
+  const [markAmount, setMarkAmount] = useState('');
+  const [markSaving, setMarkSaving] = useState(false);
+
+  const handleMarkComplete = async (b) => {
+    if (!markAmount || isNaN(Number(markAmount)) || Number(markAmount) <= 0) return;
+    setMarkSaving(true);
+    try {
+      await onMarkComplete(b, Number(markAmount));
+      setMarkingId(null);
+      setMarkAmount('');
+    } finally { setMarkSaving(false); }
+  };
 
   useEffect(()=>{
     db.collection('earnings')
@@ -850,7 +889,7 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
   const todayStr = now.toLocaleDateString('en-CA');
   const todayStart = new Date(now); todayStart.setHours(0,0,0,0);
   const todayBookings = allBookings.filter(b=>{
-    if(['confirmed','accepted','admin_pending'].includes(b.status)){
+    if(['confirmed','accepted','admin_pending','completed'].includes(b.status)){
       const d=b.createdAt?.toDate?.(); return d&&d>=todayStart;
     }
     if(b.status==='scheduled'&&b.scheduledDate===todayStr) return true;
@@ -892,26 +931,59 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
               No bookings for today
             </div>
           : todayBookings.map(b=>{
-              const isDone=['confirmed','accepted'].includes(b.status);
-              const isUpcoming=b.status==='scheduled';
-              const accentColor=isDone?'#27ae60':isUpcoming?'#4a9eff':'var(--gold)';
+              const isCompleted = b.status==='completed';
+              const isActive    = ['confirmed','accepted','admin_pending'].includes(b.status);
+              const isUpcoming  = b.status==='scheduled';
+              const accentColor = isCompleted?'#27ae60':isActive?'var(--gold)':isUpcoming?'#4a9eff':'var(--muted)';
               return(
-                <div key={b.id} style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'14px',padding:'13px 16px',marginBottom:'8px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px'}}>
-                  <div style={{borderLeft:`3px solid ${accentColor}`,paddingLeft:'12px',flex:1,minWidth:0}}>
-                    <p style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--text)',marginBottom:'3px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                      {b.clientName||'—'}
-                    </p>
-                    <p style={{fontSize:'0.73rem',color:'var(--muted)',display:'flex',alignItems:'center',gap:'5px',flexWrap:'wrap'}}>
-                      {isUpcoming
-                        ? <><span style={{color:'#4a9eff'}}>📅</span><span>{b.scheduledTime||'Scheduled'}</span></>
-                        : <><span style={{color:'var(--gold)'}}>⚡</span><span>Immediate</span></>
-                      }
-                      <span>·</span>
-                      <span style={{color:accentColor,fontWeight:'600'}}>{isDone?'Done':isUpcoming?'Upcoming':'Awaiting'}</span>
-                    </p>
+                <div key={b.id} style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'14px',padding:'13px 16px',marginBottom:'8px'}}>
+                  <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px'}}>
+                    <div style={{borderLeft:`3px solid ${accentColor}`,paddingLeft:'12px',flex:1,minWidth:0}}>
+                      <p style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--text)',marginBottom:'3px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                        {b.clientName||'—'}
+                      </p>
+                      <p style={{fontSize:'0.73rem',color:'var(--muted)',display:'flex',alignItems:'center',gap:'5px',flexWrap:'wrap'}}>
+                        {isUpcoming
+                          ? <><span style={{color:'#4a9eff'}}>📅</span><span>{b.scheduledTime||'Scheduled'}</span></>
+                          : <><span style={{color:'var(--gold)'}}>⚡</span><span>Immediate</span></>
+                        }
+                        <span>·</span>
+                        <span style={{color:accentColor,fontWeight:'600'}}>
+                          {isCompleted?'Done':isActive?'Active':isUpcoming?'Upcoming':'Awaiting'}
+                        </span>
+                      </p>
+                    </div>
+                    {isCompleted&&<span style={{color:'#27ae60',fontSize:'1.1rem',flexShrink:0}}>✓</span>}
+                    {isUpcoming&&<span style={{color:'var(--muted)',fontSize:'1.2rem',flexShrink:0}}>›</span>}
+                    {isActive&&markingId!==b.id&&(
+                      <button onClick={()=>{setMarkingId(b.id);setMarkAmount('');}}
+                        style={{background:'linear-gradient(135deg,var(--gold-dark),var(--gold))',color:'#0a0a0a',border:'none',borderRadius:'8px',padding:'7px 12px',fontSize:'0.72rem',fontWeight:'700',cursor:'pointer',flexShrink:0,fontFamily:'inherit'}}>
+                        ✓ Done
+                      </button>
+                    )}
                   </div>
-                  {isDone&&<span style={{color:'#27ae60',fontSize:'1.1rem',flexShrink:0}}>✓</span>}
-                  {isUpcoming&&<span style={{color:'var(--muted)',fontSize:'1.2rem',flexShrink:0}}>›</span>}
+                  {/* Mark Complete inline form */}
+                  {isActive&&markingId===b.id&&(
+                    <div style={{marginTop:'10px',paddingTop:'10px',borderTop:'1px solid var(--border)',display:'flex',gap:'8px',alignItems:'center'}}>
+                      <span style={{fontSize:'0.82rem',color:'var(--muted)',flexShrink:0}}>₹</span>
+                      <input
+                        type="number" min="1"
+                        value={markAmount}
+                        onChange={e=>setMarkAmount(e.target.value)}
+                        placeholder="Session amount"
+                        autoFocus
+                        style={{flex:1,background:'var(--bg)',border:'1px solid var(--border)',borderRadius:'8px',padding:'7px 10px',color:'var(--text)',fontSize:'0.85rem',fontFamily:'inherit',outline:'none',minWidth:0}}
+                      />
+                      <button onClick={()=>handleMarkComplete(b)} disabled={markSaving||!markAmount}
+                        style={{background:'#27ae60',color:'#fff',border:'none',borderRadius:'8px',padding:'7px 14px',fontSize:'0.78rem',fontWeight:'700',cursor:'pointer',flexShrink:0,fontFamily:'inherit',opacity:(!markAmount||markSaving)?0.5:1}}>
+                        {markSaving?'…':'Save'}
+                      </button>
+                      <button onClick={()=>setMarkingId(null)}
+                        style={{background:'transparent',border:'1px solid var(--border)',color:'var(--muted)',borderRadius:'8px',padding:'7px 10px',fontSize:'0.75rem',cursor:'pointer',flexShrink:0,fontFamily:'inherit'}}>
+                        ✕
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })
