@@ -488,12 +488,28 @@ function TherapistPortal({ session, onLogout }) {
     catch(err){ alert(`Error: ${err.message}`); }
   };
 
+  const updateSessionStatus = async (booking, newStatus) => {
+    try {
+      const updates = { status: newStatus };
+      if (newStatus === 'on_way')     updates.onWayAt     = FieldValue.serverTimestamp();
+      if (newStatus === 'in_session') updates.inSessionAt = FieldValue.serverTimestamp();
+      await db.collection('bookings').doc(booking.id).update(updates);
+      if (newStatus === 'on_way') {
+        await db.collection('therapists').doc(session.docId).update({ sessionActive: true });
+        showMsg('Admin notified — On the way! 🚗');
+      } else if (newStatus === 'in_session') {
+        showMsg('Admin notified — Session started! ✦');
+      }
+    } catch(err) { showMsg(`Error: ${err.message}`, 'error'); }
+  };
+
   const markComplete = async (booking, amount) => {
     try {
       await db.collection('bookings').doc(booking.id).update({
         status: 'completed',
         completedAt: FieldValue.serverTimestamp(),
       });
+      await db.collection('therapists').doc(session.docId).update({ sessionActive: false });
       await db.collection('earnings').add({
         therapistDocId: session.docId,
         therapistId:    session.therapistId,
@@ -656,6 +672,7 @@ function TherapistPortal({ session, onLogout }) {
           onAccept={acceptBooking}
           onDecline={declineBooking}
           onMarkComplete={markComplete}
+          onUpdateStatus={updateSessionStatus}
           onViewEarnings={()=>setActiveTab('earnings')}
           onLogout={onLogout}
         />}
@@ -848,7 +865,7 @@ function TherapistPortal({ session, onLogout }) {
 // ══════════════════════════════════════════════════════
 //  HOME TAB
 // ══════════════════════════════════════════════════════
-function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allBookings, myGPS, onAccept, onDecline, onMarkComplete, onViewEarnings, onLogout }) {
+function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allBookings, myGPS, onAccept, onDecline, onMarkComplete, onUpdateStatus, onViewEarnings, onLogout }) {
   const [earnings, setEarnings] = useState([]);
   const [earningsLoaded, setEarningsLoaded] = useState(false);
   const [markingId,  setMarkingId]  = useState(null);
@@ -889,7 +906,7 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
   const todayStr = now.toLocaleDateString('en-CA');
   const todayStart = new Date(now); todayStart.setHours(0,0,0,0);
   const todayBookings = allBookings.filter(b=>{
-    if(['confirmed','accepted','admin_pending','completed'].includes(b.status)){
+    if(['confirmed','accepted','admin_pending','on_way','in_session','completed'].includes(b.status)){
       const d=b.createdAt?.toDate?.(); return d&&d>=todayStart;
     }
     if(b.status==='scheduled'&&b.scheduledDate===todayStr) return true;
@@ -931,12 +948,16 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
               No bookings for today
             </div>
           : todayBookings.map(b=>{
-              const isCompleted = b.status==='completed';
-              const isActive    = ['confirmed','accepted','admin_pending'].includes(b.status);
-              const isUpcoming  = b.status==='scheduled';
-              const accentColor = isCompleted?'#27ae60':isActive?'var(--gold)':isUpcoming?'#4a9eff':'var(--muted)';
+              const isCompleted  = b.status==='completed';
+              const isConfirmed  = ['confirmed','accepted','admin_pending'].includes(b.status);
+              const isOnWay      = b.status==='on_way';
+              const isInSession  = b.status==='in_session';
+              const isActive     = isConfirmed||isOnWay||isInSession;
+              const isUpcoming   = b.status==='scheduled';
+              const accentColor  = isCompleted?'#27ae60':isInSession?'#ffa500':isOnWay?'#4a9eff':isActive?'var(--gold)':isUpcoming?'#4a9eff':'var(--muted)';
+              const statusLabel  = isCompleted?'Done':isInSession?'In Session':isOnWay?'On the Way':isActive?'Active':isUpcoming?'Upcoming':'Awaiting';
               return(
-                <div key={b.id} style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'14px',padding:'13px 16px',marginBottom:'8px'}}>
+                <div key={b.id} style={{background:'var(--surface)',border:`1px solid ${isInSession?'rgba(255,165,0,0.3)':isOnWay?'rgba(74,158,255,0.3)':'var(--border)'}`,borderRadius:'14px',padding:'13px 16px',marginBottom:'8px'}}>
                   <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px'}}>
                     <div style={{borderLeft:`3px solid ${accentColor}`,paddingLeft:'12px',flex:1,minWidth:0}}>
                       <p style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--text)',marginBottom:'3px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
@@ -948,22 +969,32 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
                           : <><span style={{color:'var(--gold)'}}>⚡</span><span>Immediate</span></>
                         }
                         <span>·</span>
-                        <span style={{color:accentColor,fontWeight:'600'}}>
-                          {isCompleted?'Done':isActive?'Active':isUpcoming?'Upcoming':'Awaiting'}
-                        </span>
+                        <span style={{color:accentColor,fontWeight:'600'}}>{statusLabel}</span>
                       </p>
                     </div>
                     {isCompleted&&<span style={{color:'#27ae60',fontSize:'1.1rem',flexShrink:0}}>✓</span>}
                     {isUpcoming&&<span style={{color:'var(--muted)',fontSize:'1.2rem',flexShrink:0}}>›</span>}
-                    {isActive&&markingId!==b.id&&(
+                    {isConfirmed&&markingId!==b.id&&(
+                      <button onClick={()=>onUpdateStatus(b,'on_way')}
+                        style={{background:'rgba(74,158,255,0.15)',color:'#4a9eff',border:'1px solid rgba(74,158,255,0.35)',borderRadius:'8px',padding:'7px 12px',fontSize:'0.72rem',fontWeight:'700',cursor:'pointer',flexShrink:0,fontFamily:'inherit'}}>
+                        🚗 On My Way
+                      </button>
+                    )}
+                    {isOnWay&&markingId!==b.id&&(
+                      <button onClick={()=>onUpdateStatus(b,'in_session')}
+                        style={{background:'rgba(255,165,0,0.15)',color:'#ffa500',border:'1px solid rgba(255,165,0,0.35)',borderRadius:'8px',padding:'7px 12px',fontSize:'0.72rem',fontWeight:'700',cursor:'pointer',flexShrink:0,fontFamily:'inherit'}}>
+                        ✦ Start Session
+                      </button>
+                    )}
+                    {isInSession&&markingId!==b.id&&(
                       <button onClick={()=>{setMarkingId(b.id);setMarkAmount('');}}
-                        style={{background:'linear-gradient(135deg,var(--gold-dark),var(--gold))',color:'#0a0a0a',border:'none',borderRadius:'8px',padding:'7px 12px',fontSize:'0.72rem',fontWeight:'700',cursor:'pointer',flexShrink:0,fontFamily:'inherit'}}>
-                        ✓ Done
+                        style={{background:'rgba(180,100,255,0.15)',color:'#b464ff',border:'1px solid rgba(180,100,255,0.35)',borderRadius:'8px',padding:'7px 12px',fontSize:'0.72rem',fontWeight:'700',cursor:'pointer',flexShrink:0,fontFamily:'inherit'}}>
+                        🏁 End Session
                       </button>
                     )}
                   </div>
-                  {/* Mark Complete inline form */}
-                  {isActive&&markingId===b.id&&(
+                  {/* End Session inline form */}
+                  {isInSession&&markingId===b.id&&(
                     <div style={{marginTop:'10px',paddingTop:'10px',borderTop:'1px solid var(--border)',display:'flex',gap:'8px',alignItems:'center'}}>
                       <span style={{fontSize:'0.82rem',color:'var(--muted)',flexShrink:0}}>₹</span>
                       <input

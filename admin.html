@@ -445,6 +445,9 @@ function DashboardTab() {
     admin_pending: {color:'#f39c12',     bg:'rgba(243,156,18,0.12)',  label:'Needs Confirm'},
     confirmed:     {color:'#2ecc71',     bg:'rgba(46,204,113,0.12)',  label:'Confirmed'},
     accepted:      {color:'#2ecc71',     bg:'rgba(46,204,113,0.12)',  label:'Accepted'},
+    on_way:        {color:'#4a9eff',     bg:'rgba(74,158,255,0.12)',  label:'On the Way'},
+    in_session:    {color:'#ffa500',     bg:'rgba(255,165,0,0.12)',   label:'In Session'},
+    completed:     {color:'#27ae60',     bg:'rgba(39,174,96,0.12)',   label:'Completed'},
     scheduled:     {color:'#3498db',     bg:'rgba(52,152,219,0.12)',  label:'Upcoming'},
     declined:      {color:'#e74c3c',     bg:'rgba(231,76,60,0.12)',   label:'Declined'},
     expired:       {color:'var(--muted)',bg:'rgba(100,100,100,0.1)',  label:'Expired'},
@@ -1280,10 +1283,13 @@ function BookingsPanel() {
     pending:       bookings.filter(b=>b.status==='pending').length,
     admin_pending: bookings.filter(b=>b.status==='admin_pending').length,
     confirmed:     bookings.filter(b=>b.status==='confirmed').length,
+    on_way:        bookings.filter(b=>b.status==='on_way').length,
+    in_session:    bookings.filter(b=>b.status==='in_session').length,
     scheduled:     bookings.filter(b=>b.status==='scheduled').length,
     declined:      bookings.filter(b=>b.status==='declined').length,
     expired:       bookings.filter(b=>b.status==='expired').length,
   };
+  const therapistAcceptedCount = bookings.filter(b=>b.status==='confirmed'&&b.therapistAccepted===true).length;
 
   const TABS = [
     {id:'all',           label:'All',          color:'var(--text)'},
@@ -1291,18 +1297,23 @@ function BookingsPanel() {
     {id:'admin_pending', label:'Needs Confirm', color:'#f39c12'},
     {id:'scheduled',     label:'Upcoming',      color:'#3498db'},
     {id:'confirmed',     label:'Confirmed',     color:'#2ecc71'},
+    {id:'on_way',        label:'On the Way',    color:'#4a9eff'},
+    {id:'in_session',    label:'In Session',    color:'#ffa500'},
     {id:'declined',      label:'Declined',      color:'#e74c3c'},
     {id:'expired',       label:'Expired',       color:'var(--muted)'},
   ];
 
   const STATUS_CFG = {
-    pending:       {color:'var(--gold)',  bg:'rgba(212,175,55,0.12)',  border:'rgba(212,175,55,0.35)', label:'Pending'},
-    admin_pending: {color:'#f39c12',     bg:'rgba(243,156,18,0.12)',  border:'rgba(243,156,18,0.35)', label:'Needs Confirm'},
-    confirmed:     {color:'#2ecc71',     bg:'rgba(46,204,113,0.12)',  border:'rgba(46,204,113,0.35)', label:'Confirmed'},
-    accepted:      {color:'#2ecc71',     bg:'rgba(46,204,113,0.12)',  border:'rgba(46,204,113,0.35)', label:'Accepted'},
-    scheduled:     {color:'#3498db',     bg:'rgba(52,152,219,0.12)',  border:'rgba(52,152,219,0.35)', label:'Upcoming'},
-    declined:      {color:'#e74c3c',     bg:'rgba(231,76,60,0.12)',   border:'rgba(231,76,60,0.35)',  label:'Declined'},
-    expired:       {color:'var(--muted)',bg:'rgba(100,100,100,0.1)',  border:'rgba(100,100,100,0.25)',label:'Expired'},
+    pending:       {color:'var(--gold)',  bg:'rgba(212,175,55,0.12)',  border:'rgba(212,175,55,0.35)',  label:'Pending'},
+    admin_pending: {color:'#f39c12',     bg:'rgba(243,156,18,0.12)',  border:'rgba(243,156,18,0.35)',  label:'Needs Confirm'},
+    confirmed:     {color:'#2ecc71',     bg:'rgba(46,204,113,0.12)',  border:'rgba(46,204,113,0.35)',  label:'Confirmed'},
+    accepted:      {color:'#2ecc71',     bg:'rgba(46,204,113,0.12)',  border:'rgba(46,204,113,0.35)',  label:'Accepted'},
+    on_way:        {color:'#4a9eff',     bg:'rgba(74,158,255,0.12)',  border:'rgba(74,158,255,0.35)',  label:'On the Way 🚗'},
+    in_session:    {color:'#ffa500',     bg:'rgba(255,165,0,0.12)',   border:'rgba(255,165,0,0.35)',   label:'In Session ✦'},
+    completed:     {color:'#27ae60',     bg:'rgba(39,174,96,0.12)',   border:'rgba(39,174,96,0.35)',   label:'Completed'},
+    scheduled:     {color:'#3498db',     bg:'rgba(52,152,219,0.12)',  border:'rgba(52,152,219,0.35)',  label:'Upcoming'},
+    declined:      {color:'#e74c3c',     bg:'rgba(231,76,60,0.12)',   border:'rgba(231,76,60,0.35)',   label:'Declined'},
+    expired:       {color:'var(--muted)',bg:'rgba(100,100,100,0.1)',  border:'rgba(100,100,100,0.25)', label:'Expired'},
   };
   const cfg = s => STATUS_CFG[s] || STATUS_CFG.expired;
 
@@ -1359,6 +1370,16 @@ function BookingsPanel() {
           {therapistAcceptedCount>0&&(
             <span style={{display:'inline-flex',alignItems:'center',padding:'2px 10px',borderRadius:'20px',fontSize:'0.7rem',fontWeight:'700',background:'rgba(37,211,102,0.12)',color:'#25D366',border:'1px solid rgba(37,211,102,0.35)'}}>
               ✅ {therapistAcceptedCount} accepted — send WhatsApp to client
+            </span>
+          )}
+          {counts.on_way>0&&(
+            <span style={{display:'inline-flex',alignItems:'center',padding:'2px 10px',borderRadius:'20px',fontSize:'0.7rem',fontWeight:'700',background:'rgba(74,158,255,0.12)',color:'#4a9eff',border:'1px solid rgba(74,158,255,0.35)'}}>
+              🚗 {counts.on_way} on the way
+            </span>
+          )}
+          {counts.in_session>0&&(
+            <span style={{display:'inline-flex',alignItems:'center',padding:'2px 10px',borderRadius:'20px',fontSize:'0.7rem',fontWeight:'700',background:'rgba(255,165,0,0.12)',color:'#ffa500',border:'1px solid rgba(255,165,0,0.35)'}}>
+              ✦ {counts.in_session} in session
             </span>
           )}
         </div>
@@ -1525,6 +1546,15 @@ function BookingsPanel() {
                           </button>
                         )}
 
+                        {(b.status==='on_way')&&(
+                          <p style={{fontSize:'0.72rem',color:'#4a9eff',fontWeight:'600',margin:0}}>🚗 Therapist is on the way to client…</p>
+                        )}
+                        {(b.status==='in_session')&&(
+                          <p style={{fontSize:'0.72rem',color:'#ffa500',fontWeight:'600',margin:0}}>✦ Session is currently in progress…</p>
+                        )}
+                        {(b.status==='completed')&&(
+                          <p style={{fontSize:'0.72rem',color:'#27ae60',fontWeight:'600',margin:0}}>✓ Session completed successfully.</p>
+                        )}
                         {(b.status==='pending')&&(
                           <p style={{fontSize:'0.72rem',color:'var(--muted)',fontStyle:'italic',margin:0}}>⏳ Waiting for therapist to accept…</p>
                         )}

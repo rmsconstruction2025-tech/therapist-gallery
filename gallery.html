@@ -314,8 +314,9 @@ function TherapistGallery({ tokenData, clientName, clientPhone, isBlurred }) {
           : db.collection('therapists').where('available','==',true).get();
         const snap = await query;
         const all = snap.docs.map(d=>({id:d.id,...d.data()}));
-        // Filter by working hours for the target day
+        // Filter by working hours; hide therapists currently in an active session
         const filtered = all.filter(t => {
+          if (t.sessionActive === true) return false; // busy with another client
           const wh = t.workingHours;
           if (!wh) return true; // no hours configured → always show
           return wh[filterInfo.dayKey]?.on === true;
