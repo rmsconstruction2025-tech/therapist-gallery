@@ -386,12 +386,16 @@ function LiveTracker() {
       attribution:'© <a href="https://openstreetmap.org">OpenStreetMap</a>',maxZoom:19,
     }).addTo(m);
     mapRef.current = m;
+    // Let React finish layout then recalculate map size
+    setTimeout(()=>m.invalidateSize(), 100);
+    return ()=>{ m.remove(); mapRef.current=null; };
   },[]);
 
   // ── Update markers on data / view / selection change ──
   useEffect(()=>{
     const map = mapRef.current;
     if(!map) return;
+    map.invalidateSize();
     Object.values(markersRef.current).forEach(m=>map.removeLayer(m));
     markersRef.current = {};
     if(onDutyList.length===0) return;
@@ -502,8 +506,8 @@ function LiveTracker() {
           </div>
 
           {/* Map */}
-          <div style={{position:'relative'}}>
-            <div ref={mapContainerRef} style={{width:'100%',height:'100%',minHeight:'420px'}}/>
+          <div style={{position:'relative',height:'calc(100vh - 120px)',minHeight:'480px'}}>
+            <div ref={mapContainerRef} style={{width:'100%',height:'100%'}}/>
 
             {/* Single view overlay */}
             {view==='single' && selId && (()=>{
