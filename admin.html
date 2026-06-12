@@ -1865,10 +1865,17 @@ function BookingsPanel() {
 
   const updateStatus = async (b, newStatus)=>{
     setConfirming(b.id);
+    // Use consistent camelCase timestamp field names (matching therapist portal)
+    const tsField = {
+      confirmed:  'confirmedAt',
+      on_way:     'onWayAt',
+      in_session: 'inSessionAt',
+      completed:  'completedAt',
+    }[newStatus] || `${newStatus}At`;
     try {
       await db.collection('bookings').doc(b.id).update({
         status: newStatus,
-        [`${newStatus}At`]: FieldValue.serverTimestamp(),
+        [tsField]: FieldValue.serverTimestamp(),
       });
       // Clear stale sessionActive flag on therapist when session ends
       if(newStatus==='completed' && b.therapistDocId) {

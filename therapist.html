@@ -569,25 +569,34 @@ function TherapistPortal({ session, onLogout }) {
   const handleStartDuty = async () => {
     if(dutyLoading) return;
     setDutyLoading(true);
+    // Try fast network location first, GPS second, start duty even without location
+    let initialLoc = null;
     try {
       const pos = await new Promise((res, rej) =>
-        navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:true, timeout:10000})
+        navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:false, timeout:6000, maximumAge:60000})
       );
-      const loc = {lat: pos.coords.latitude, lng: pos.coords.longitude};
-      await db.collection('therapists').doc(session.docId).update({
-        onDuty: true,
-        location: loc,
-        locationUpdatedAt: FieldValue.serverTimestamp(),
-        dutyStartedAt: FieldValue.serverTimestamp(),
-      });
+      initialLoc = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+    } catch(_) {
+      try {
+        const pos = await new Promise((res, rej) =>
+          navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:true, timeout:8000})
+        );
+        initialLoc = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+      } catch(_) { /* start duty without location — watchPosition will fill in */ }
+    }
+    try {
+      const updates = { onDuty:true, dutyStartedAt:FieldValue.serverTimestamp(), locationUpdatedAt:FieldValue.serverTimestamp() };
+      if(initialLoc) updates.location = initialLoc;
+      await db.collection('therapists').doc(session.docId).update(updates);
       setOnDuty(true);
       setDutySeconds(0);
       dutyTimerRef.current = setInterval(() => setDutySeconds(s => s + 1), 1000);
       lastLocUpdateRef.current = Date.now();
       watchRef.current = navigator.geolocation.watchPosition(
         p => {
-          if(Date.now() - lastLocUpdateRef.current < 30000) return; // throttle 30s
-          lastLocUpdateRef.current = Date.now();
+          const now = Date.now();
+          if(now - lastLocUpdateRef.current < 30000) return;
+          lastLocUpdateRef.current = now;
           db.collection('therapists').doc(session.docId).update({
             location: {lat: p.coords.latitude, lng: p.coords.longitude},
             locationUpdatedAt: FieldValue.serverTimestamp(),
@@ -596,9 +605,9 @@ function TherapistPortal({ session, onLogout }) {
         ()=>{},
         {enableHighAccuracy:true, maximumAge:10000}
       );
-      showMsg('Duty started — admin can now track your location');
+      showMsg(initialLoc ? 'Duty started — admin can see your location' : 'Duty started — location updating shortly');
     } catch(err) {
-      showMsg('Could not get location: ' + (err.message||'Access denied'), 'error');
+      showMsg(`Error: ${err.message}`, 'error');
     }
     setDutyLoading(false);
   };
@@ -1218,7 +1227,8 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
       {(()=>{
         const b = allBookings.find(b=>b.status==='on_way');
         if(!b) return null;
-        const startMs = b.onWayAt?.toMillis?.() ?? 0;
+        // Accept both camelCase (therapist) and snake_case (admin) field names
+        const startMs = (b.onWayAt || b['on_wayAt'])?.toMillis?.() ?? 0;
         if(!startMs) return null;
         const elapsedMin = Math.floor((nowTs - startMs) / 60000);
         if(elapsedMin < 60) return null;
@@ -1255,7 +1265,8 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
       {(()=>{
         const b = allBookings.find(b=>b.status==='in_session');
         if(!b) return null;
-        const startMs = b.inSessionAt?.toMillis?.() ?? 0;
+        // Accept both camelCase (therapist) and snake_case (admin) field names
+        const startMs = (b.inSessionAt || b['in_sessionAt'])?.toMillis?.() ?? 0;
         if(!startMs) return null;
         const elapsedMin = Math.floor((nowTs - startMs) / 60000);
         if(elapsedMin < 60) return null;
@@ -1340,8 +1351,8 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
               const accentColor = isCompleted?'#27ae60':isInSession?'#ffa500':isOnWay?'#4a9eff':isConfirmed?'var(--gold)':isScheduled?'#4a9eff':'var(--muted)';
               const statusLabel = isCompleted?'Done':isInSession?'In Session':isOnWay?'On the Way':isConfirmed?'Active':'Awaiting';
               // Overdue check
-              const onWayElapsed   = isOnWay    ? Math.floor((nowTs-(b.onWayAt?.toMillis?.()??0))/60000) : 0;
-              const inSessElapsed  = isInSession ? Math.floor((nowTs-(b.inSessionAt?.toMillis?.()??0))/60000) : 0;
+              const onWayElapsed   = isOnWay    ? Math.floor((nowTs-((b.onWayAt||b['on_wayAt'])?.toMillis?.()??0))/60000) : 0;
+              const inSessElapsed  = isInSession ? Math.floor((nowTs-((b.inSessionAt||b['in_sessionAt'])?.toMillis?.()??0))/60000) : 0;
               const isOverdue      = (isOnWay && onWayElapsed>=60) || (isInSession && inSessElapsed>=60);
               const overdueColor   = isOnWay ? '#ef9f27' : '#e74c3c';
               const overdueBg      = isOnWay ? 'rgba(239,159,39,0.15)' : 'rgba(231,76,60,0.15)';
