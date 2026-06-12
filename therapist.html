@@ -1093,9 +1093,9 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
               const accentColor = isCompleted?'#27ae60':isInSession?'#ffa500':isOnWay?'#4a9eff':isConfirmed?'var(--gold)':isScheduled?'#4a9eff':'var(--muted)';
               const statusLabel = isCompleted?'Done':isInSession?'In Session':isOnWay?'On the Way':isConfirmed?'Active':isScheduled?'Upcoming':'Awaiting';
               // Show "On My Way" only within 2 hours of scheduled time (always show for immediate bookings)
-              const canGoOnWay = b.scheduledTime
-                ? (new Date(b.scheduledTime.replace(' ','T')) - new Date()) <= 2*60*60*1000
-                : true;
+              const apptMs     = b.scheduledTime ? new Date(b.scheduledTime.replace(' ','T')) - new Date() : null;
+              const canGoOnWay = b.scheduledTime ? apptMs <= 2*60*60*1000 : true;
+              const minsLeft   = apptMs !== null ? Math.round(apptMs / 60000) : null;
               return(
                 <div key={b.id} style={{background:'var(--surface)',border:`1px solid ${isInSession?'rgba(255,165,0,0.3)':isOnWay?'rgba(74,158,255,0.3)':'var(--border)'}`,borderRadius:'14px',padding:'13px 16px',marginBottom:'8px'}}>
                   <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px'}}>
@@ -1107,7 +1107,7 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
                       </p>
                     </div>
                     {isCompleted&&<span style={{color:'#27ae60',fontSize:'1.1rem',flexShrink:0}}>✓</span>}
-                    {isConfirmed&&markingId!==b.id&&canGoOnWay&&(
+                    {isConfirmed&&markingId!==b.id&&canGoOnWay&&!b.scheduledTime&&(
                       <button onClick={()=>onUpdateStatus(b,'on_way')} style={{background:'rgba(74,158,255,0.15)',color:'#4a9eff',border:'1px solid rgba(74,158,255,0.35)',borderRadius:'8px',padding:'7px 12px',fontSize:'0.72rem',fontWeight:'700',cursor:'pointer',flexShrink:0,fontFamily:'inherit'}}>🚗 On My Way</button>
                     )}
                     {isOnWay&&markingId!==b.id&&(
@@ -1117,6 +1117,20 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
                       <button onClick={()=>{setMarkingId(b.id);setMarkAmount('');}} style={{background:'rgba(180,100,255,0.15)',color:'#b464ff',border:'1px solid rgba(180,100,255,0.35)',borderRadius:'8px',padding:'7px 12px',fontSize:'0.72rem',fontWeight:'700',cursor:'pointer',flexShrink:0,fontFamily:'inherit'}}>🏁 End Session</button>
                     )}
                   </div>
+                  {isConfirmed&&markingId!==b.id&&canGoOnWay&&b.scheduledTime&&(
+                    <div style={{marginTop:'10px',background:'rgba(234,163,0,0.08)',border:'1px solid rgba(234,163,0,0.28)',borderRadius:'10px',padding:'10px 14px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                        <span style={{fontSize:'1.1rem'}}>⏰</span>
+                        <div>
+                          <p style={{fontSize:'0.78rem',fontWeight:'700',color:'#eaa300',margin:0}}>
+                            {minsLeft>0?`${minsLeft} min to appointment`:'Appointment time!'}
+                          </p>
+                          {b.location&&<p style={{fontSize:'0.72rem',color:'rgba(234,163,0,0.65)',margin:0}}>{b.location}</p>}
+                        </div>
+                      </div>
+                      <button onClick={()=>onUpdateStatus(b,'on_way')} style={{background:'rgba(234,163,0,0.15)',color:'#eaa300',border:'1px solid rgba(234,163,0,0.4)',borderRadius:'8px',padding:'7px 12px',fontSize:'0.72rem',fontWeight:'700',cursor:'pointer',flexShrink:0,fontFamily:'inherit'}}>🚗 On My Way</button>
+                    </div>
+                  )}
                   {isInSession&&markingId===b.id&&(
                     <div style={{marginTop:'10px',paddingTop:'10px',borderTop:'1px solid var(--border)',display:'flex',gap:'8px',alignItems:'center'}}>
                       <span style={{fontSize:'0.82rem',color:'var(--muted)',flexShrink:0}}>₹</span>
