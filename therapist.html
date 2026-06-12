@@ -519,10 +519,11 @@ function TherapistPortal({ session, onLogout }) {
         completedAt: FieldValue.serverTimestamp(),
       });
       await db.collection('therapists').doc(session.docId).update({ sessionActive: false });
+      const today = new Date().toISOString().split('T')[0];
       await db.collection('earnings').add({
         therapistDocId: session.docId,
         therapistId:    session.therapistId,
-        date:           new Date().toISOString().split('T')[0],
+        date:           today,
         serviceType:    booking.serviceType || 'Massage',
         amount,
         clientName:     booking.clientName || '',
@@ -531,6 +532,14 @@ function TherapistPortal({ session, onLogout }) {
         bookingId:      booking.id,
         createdAt:      FieldValue.serverTimestamp(),
       });
+      // ── Increment attendance session count + earnings ────
+      await db.collection('attendance').doc(`${session.docId}_${today}`).set({
+        therapistDocId: session.docId,
+        therapistId:    session.therapistId,
+        date:           today,
+        sessions:       FieldValue.increment(1),
+        earnings:       FieldValue.increment(amount),
+      }, { merge: true });
       showMsg(`Session complete! ₹${amount.toLocaleString('en-IN')} added to earnings.`);
     } catch(err) { showMsg(`Error: ${err.message}`, 'error'); }
   };
@@ -581,6 +590,36 @@ function TherapistPortal({ session, onLogout }) {
     setAvailable(next);
     try {
       await db.collection('therapists').doc(session.docId).update({ available: next });
+      // ── Attendance tracking ──────────────────────────────
+      const today  = new Date().toISOString().split('T')[0];
+      const attRef = db.collection('attendance').doc(`${session.docId}_${today}`);
+      if (next) {
+        // Going ON duty → write checkIn if not already set today
+        const snap = await attRef.get();
+        if (!snap.exists || !snap.data()?.checkIn) {
+          await attRef.set({
+            therapistDocId: session.docId,
+            therapistId:    session.therapistId,
+            date:           today,
+            checkIn:        FieldValue.serverTimestamp(),
+            sessions:       0,
+            earnings:       0,
+            status:         'present',
+          }, { merge: true });
+        }
+      } else {
+        // Going OFF duty → write checkOut + compute hours + status
+        const snap = await attRef.get();
+        if (snap.exists && snap.data()?.checkIn) {
+          const checkInMs  = snap.data().checkIn.toMillis();
+          const hoursOnDuty = parseFloat(((Date.now() - checkInMs) / 3600000).toFixed(2));
+          await attRef.update({
+            checkOut:    FieldValue.serverTimestamp(),
+            hoursOnDuty,
+            status:      hoursOnDuty >= 4 ? 'present' : 'half-day',
+          });
+        }
+      }
       showMsg(next ? 'Duty ON — you are now visible to clients' : 'Duty OFF — profile hidden from clients');
     } catch(err) { setAvailable(!next); showMsg(`Error: ${err.message}`, 'error'); }
   };
@@ -632,9 +671,10 @@ function TherapistPortal({ session, onLogout }) {
   const fmt = (t) => { if (!t) return ''; const [h,m]=t.split(':'); const hr=+h; return `${hr===0?12:hr>12?hr-12:hr}:${m} ${hr<12?'AM':'PM'}`; };
 
   const tabs = [
-    { id:'home',     icon:'home',     label:'Home',     badge: pendingBookings.length + newScheduledCount },
-    { id:'earnings', icon:'earnings', label:'Earnings', badge: 0 },
-    { id:'profile',  icon:'profile',  label:'Profile',  badge: completion<100?1:0 },
+    { id:'home',       icon:'home',       label:'Home',       badge: pendingBookings.length + newScheduledCount },
+    { id:'earnings',   icon:'earnings',   label:'Earnings',   badge: 0 },
+    { id:'attendance', icon:'attendance', label:'Attend.',    badge: 0 },
+    { id:'profile',    icon:'profile',    label:'Profile',    badge: completion<100?1:0 },
   ];
 
   const TAB_ICONS = {
@@ -647,6 +687,12 @@ function TherapistPortal({ session, onLogout }) {
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active?'var(--gold)':'var(--muted)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="10"/><path d="M12 6v2m0 8v2m-4-6h8"/>
         <path d="M14.5 9.5A2.5 2.5 0 0012 7a2.5 2.5 0 000 5 2.5 2.5 0 010 5 2.5 2.5 0 01-2.5-2.5"/>
+      </svg>
+    ),
+    attendance: (active) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active?'var(--gold)':'var(--muted)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+        <polyline points="9 16 11 18 15 14"/>
       </svg>
     ),
     profile: (active) => (
@@ -688,6 +734,9 @@ function TherapistPortal({ session, onLogout }) {
 
         {/* ══ EARNINGS TAB ══ */}
         {activeTab==='earnings'&&<div style={{padding:'16px'}}><EarningsTab session={session}/></div>}
+
+        {/* ══ ATTENDANCE TAB ══ */}
+        {activeTab==='attendance'&&<div style={{padding:'16px'}}><AttendanceTab session={session}/></div>}
 
         {/* ══ PROFILE TAB ══ */}
         {activeTab==='profile'&&(<div style={{display:'flex',flexDirection:'column',gap:'16px',padding:'16px'}}>
@@ -1077,6 +1126,7 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
             :upcomingBookings.map(b=>{
               const isOpen=expandedId===b.id;
               return(
+              return(
                 <div key={b.id} onClick={()=>setExpandedId(isOpen?null:b.id)}
                   style={{background:'var(--surface)',border:'1px solid rgba(74,158,255,0.25)',borderRadius:'14px',padding:'13px 15px',cursor:'pointer'}}>
                   <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
@@ -1149,7 +1199,7 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
 function BookingRequestCard({ booking: b, myGPS, onAccept, onDecline }) {
   const [secs, setSecs] = useState(()=>{
     const elapsed = b.createdAt?.toDate ? Math.floor((Date.now()-b.createdAt.toDate())/1000) : 0;
-    return Math.max(0, 180-elapsed); // 3-min window
+    return Math.max(0, 180-elapsed);
   });
 
   useEffect(()=>{
@@ -1162,11 +1212,10 @@ function BookingRequestCard({ booking: b, myGPS, onAccept, onDecline }) {
   const timerStr=`${mins}:${String(ss).padStart(2,'0')}`;
   const timerColor=secs<30?'#e74c3c':secs<60?'#f39c12':'#e74c3c';
   const initial=(b.clientName||'?')[0].toUpperCase();
-  const dist=(myGPS&&b.clientLocation)?haversineKm(myGPS.lat,myGPS.lng,b.clientLocation.lat,b.clientLocation.lng):null;
+  const dist=(myGPS&&b.clientLocation&&b.clientLocation.lat)?haversineKm(myGPS.lat,myGPS.lng,b.clientLocation.lat,b.clientLocation.lng):null;
 
   return (
     <div className="booking-alert" style={{background:'rgba(231,76,60,0.06)',border:'2px solid rgba(231,76,60,0.45)',borderRadius:'16px',padding:'16px'}}>
-      {/* Header row */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'14px'}}>
         <div style={{display:'flex',alignItems:'center',gap:'7px'}}>
           <div style={{width:'8px',height:'8px',borderRadius:'50%',background:'#e74c3c',boxShadow:'0 0 6px #e74c3c'}}/>
@@ -1174,8 +1223,6 @@ function BookingRequestCard({ booking: b, myGPS, onAccept, onDecline }) {
         </div>
         <span style={{fontSize:'1rem',fontWeight:'700',color:timerColor,fontFamily:'monospace',letterSpacing:'1px'}}>{timerStr}</span>
       </div>
-
-      {/* Client info */}
       <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'10px'}}>
         <div style={{width:'40px',height:'40px',borderRadius:'50%',background:'rgba(212,175,55,0.12)',border:'1px solid rgba(212,175,55,0.25)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:'700',color:'var(--gold)',fontSize:'1.05rem',flexShrink:0}}>
           {initial}
@@ -1183,30 +1230,27 @@ function BookingRequestCard({ booking: b, myGPS, onAccept, onDecline }) {
         <div style={{minWidth:0}}>
           <p style={{fontWeight:'700',fontSize:'0.95rem',color:'var(--text)',marginBottom:'2px'}}>{b.clientName||'Client'}</p>
           <p style={{fontSize:'0.74rem',color:'var(--muted)',display:'flex',alignItems:'center',gap:'4px',flexWrap:'wrap'}}>
-            <span style={{color:'var(--gold)'}}>⚡</span>
-            <span>Immediate</span>
+            <span style={{color:'var(--gold)'}}>⚡</span><span>Immediate</span>
             {dist!==null&&<><span>·</span><span>{fmtDist(dist)}</span></>}
           </p>
         </div>
       </div>
-
-      {/* Service info */}
       {(b.serviceType||b.notes||b.duration)&&(
         <p style={{fontSize:'0.82rem',color:'var(--muted)',marginBottom:'14px',display:'flex',alignItems:'center',gap:'5px'}}>
-          <span>📋</span>
-          <span>{[b.serviceType,b.duration].filter(Boolean).join(', ')||b.notes||''}</span>
+          <span>📋</span><span>{[b.serviceType,b.duration].filter(Boolean).join(', ')||b.notes||''}</span>
         </p>
       )}
-
-      {/* Location link */}
-      {b.clientLocation&&(
+      {b.clientLocation&&b.clientLocation.lat&&(
         <a href={`https://maps.google.com?q=${b.clientLocation.lat},${b.clientLocation.lng}`} target="_blank" rel="noopener noreferrer"
           style={{color:'var(--gold)',fontSize:'0.78rem',textDecoration:'none',display:'inline-flex',alignItems:'center',gap:'4px',marginBottom:'14px'}}>
           📍 Open in Maps
         </a>
       )}
-
-      {/* Action buttons */}
+      {b.clientLocation&&b.clientLocation.address&&!b.clientLocation.lat&&(
+        <p style={{fontSize:'0.78rem',color:'var(--muted)',marginBottom:'14px',display:'flex',alignItems:'center',gap:'4px'}}>
+          📍 {b.clientLocation.address}
+        </p>
+      )}
       <div style={{display:'flex',gap:'10px'}}>
         <button onClick={()=>onDecline(b)} style={{flex:1,background:'rgba(231,76,60,0.1)',color:'var(--danger)',border:'1px solid rgba(231,76,60,0.3)',borderRadius:'12px',padding:'14px',fontWeight:'700',fontSize:'0.9rem',cursor:'pointer',minHeight:'50px',fontFamily:'inherit'}}>
           ✕ Decline
@@ -1285,7 +1329,6 @@ function EarningsTab({ session }) {
     } catch(e) { alert(`Error: ${e.message}`); }
   };
 
-  // Aggregates
   const now        = new Date();
   const weekStart  = new Date(now); weekStart.setDate(now.getDate()-now.getDay()); weekStart.setHours(0,0,0,0);
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -1307,8 +1350,6 @@ function EarningsTab({ session }) {
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:'14px'}}>
-
-      {/* Summary card */}
       <div style={{background:'var(--surface)',border:'1px solid var(--border-gold)',borderRadius:'16px',padding:'18px'}}>
         <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:'16px'}}>
           <div>
@@ -1330,7 +1371,6 @@ function EarningsTab({ session }) {
         </div>
       </div>
 
-      {/* Add entry form */}
       {showForm&&(
         <div className="fade-in" style={{background:'var(--surface)',border:'1px solid var(--border-gold)',borderRadius:'16px',padding:'18px'}}>
           <p style={{fontWeight:'700',fontSize:'0.82rem',color:'var(--gold)',marginBottom:'14px',letterSpacing:'1.5px',textTransform:'uppercase'}}>New Earning Entry</p>
@@ -1374,7 +1414,6 @@ function EarningsTab({ session }) {
         </div>
       )}
 
-      {/* Filter pills */}
       <div style={{display:'flex',gap:'7px'}}>
         {[['week','This Week'],['month','This Month'],['all','All Time']].map(([k,l])=>(
           <button key={k} onClick={()=>setFilter(k)}
@@ -1384,7 +1423,6 @@ function EarningsTab({ session }) {
         ))}
       </div>
 
-      {/* Entries list */}
       <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
         {loading
           ? <div style={{textAlign:'center',padding:'32px',color:'var(--muted)'}}><span className="spin" style={{color:'var(--gold)'}}>✦</span></div>
@@ -1422,17 +1460,291 @@ function EarningsTab({ session }) {
   );
 }
 
-// ── Shared ────────────────────────────────────────────
-function SectionTitle({children}) {
-  return <h2 style={{fontSize:'0.82rem',color:'var(--gold)',letterSpacing:'2.5px',textTransform:'uppercase',marginBottom:'20px',paddingBottom:'10px',borderBottom:'1px solid var(--border)'}}>{children}</h2>;
-}
-function Center({children}) {
-  return <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100vh'}}>{children}</div>;
-}
-const labelSt = {color:'var(--muted)',fontSize:'0.76rem',letterSpacing:'1px',textTransform:'uppercase'};
-const inputSt = {background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'9px',padding:'11px 14px',color:'var(--text)',fontSize:'0.95rem',outline:'none',width:'100%'};
-const goldBtn = {background:'linear-gradient(135deg,var(--gold-dark),var(--gold))',color:'#0a0a0a',border:'none',borderRadius:'10px',fontWeight:'700',cursor:'pointer'};
 
+// ══════════════════════════════════════════════════════
+//  ATTENDANCE TAB
+// ══════════════════════════════════════════════════════
+function AttendanceTab({ session }) {
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [tab,     setTab]     = useState('cal');
+  const [selDay,  setSelDay]  = useState(null);
+
+  const now         = new Date();
+  const todayStr    = now.toISOString().split('T')[0];
+  const yr          = now.getFullYear();
+  const mo          = now.getMonth();
+  const daysInMonth = new Date(yr, mo+1, 0).getDate();
+  const monthStart  = `${yr}-${String(mo+1).padStart(2,'0')}-01`;
+  const monthEnd    = `${yr}-${String(mo+1).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`;
+
+  useEffect(()=>{
+    setLoading(true);
+    db.collection('attendance')
+      .where('therapistDocId','==',session.docId)
+      .where('date','>=',monthStart)
+      .where('date','<=',monthEnd)
+      .get()
+      .then(snap=>{ setRecords(snap.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); })
+      .catch(()=>setLoading(false));
+  },[]);
+
+  const byDate = {};
+  records.forEach(r=>{ byDate[r.date]=r; });
+  const todayRec = byDate[todayStr]||null;
+
+  const getStatus = (dayNum)=>{
+    const ds   = `${yr}-${String(mo+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
+    const date = new Date(yr,mo,dayNum);
+    if(ds>todayStr) return 'future';
+    if(date.getDay()===0) return 'weekend';
+    const r = byDate[ds];
+    if(!r) return 'absent';
+    return r.status||'present';
+  };
+
+  const S_COLOR = { present:'#27ae60','half-day':'#f39c12',absent:'#e74c3c',weekend:'#1e1e1e',future:'transparent' };
+  const S_TEXT  = { present:'#9be09b','half-day':'#f5c86f',absent:'#f1a8a8',weekend:'#444',future:'#333' };
+  const S_LABEL = { present:'Present','half-day':'Half day',absent:'Absent',weekend:'Weekend',future:'' };
+
+  const presentCount  = records.filter(r=>r.status==='present').length;
+  const halfCount     = records.filter(r=>r.status==='half-day').length;
+  const absentCount   = Array.from({length:daysInMonth},(_,i)=>i+1).filter(d=>getStatus(d)==='absent').length;
+  const totalHours    = records.reduce((s,r)=>s+(r.hoursOnDuty||0),0);
+  const totalSessions = records.reduce((s,r)=>s+(r.sessions||0),0);
+  const totalEarnings = records.reduce((s,r)=>s+(r.earnings||0),0);
+
+  const fmtTime = ts=>{ if(!ts?.toDate) return '—'; return ts.toDate().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}); };
+  const fmtHrs  = h=>{ if(!h) return '—'; const hr=Math.floor(h),min=Math.round((h-hr)*60); return min>0?`${hr}h ${min}m`:`${hr}h`; };
+
+  const firstDow = new Date(yr,mo,1).getDay();
+  const tabBtn = (id,lbl)=>(
+    <button onClick={()=>setTab(id)} style={{flex:1,background:'transparent',border:'none',
+      borderBottom:`2px solid ${tab===id?'var(--gold)':'transparent'}`,
+      padding:'9px 4px',fontSize:'0.68rem',fontWeight:'700',letterSpacing:'0.5px',textTransform:'uppercase',
+      cursor:'pointer',fontFamily:'inherit',color:tab===id?'var(--gold)':'var(--muted)',transition:'color .15s',marginBottom:'-1px'}}>
+      {lbl}
+    </button>
+  );
+
+  const selDs  = selDay?`${yr}-${String(mo+1).padStart(2,'0')}-${String(selDay).padStart(2,'0')}`:null;
+  const selRec = selDs?byDate[selDs]||null:null;
+
+  if(loading) return <div style={{textAlign:'center',padding:'60px',color:'var(--muted)'}}><span className="spin" style={{color:'var(--gold)',fontSize:'1.5rem'}}>✦</span></div>;
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:'14px'}}>
+      <div style={{background:todayRec?'rgba(39,174,96,0.06)':'var(--surface)',
+        border:`1px solid ${todayRec?'rgba(39,174,96,0.3)':'var(--border)'}`,borderRadius:'16px',padding:'16px'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'}}>
+          <span style={{fontSize:'0.68rem',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'1px'}}>
+            Today — {now.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})}
+          </span>
+          {todayRec&&<span style={{fontSize:'0.62rem',fontWeight:'700',padding:'3px 10px',borderRadius:'20px',
+            background:S_COLOR[todayRec.status]+'22',color:S_COLOR[todayRec.status],
+            border:`1px solid ${S_COLOR[todayRec.status]}44`}}>{S_LABEL[todayRec.status]}</span>}
+        </div>
+        {todayRec?(
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'8px'}}>
+            {[['Check in',fmtTime(todayRec.checkIn)],['On duty',fmtHrs(todayRec.hoursOnDuty)],['Sessions',String(todayRec.sessions||0)]].map(([l,v])=>(
+              <div key={l} style={{background:'var(--elevated)',borderRadius:'10px',padding:'9px 6px',textAlign:'center'}}>
+                <p style={{fontSize:'1rem',fontWeight:'700',color:'var(--text)',margin:0}}>{v}</p>
+                <p style={{fontSize:'0.6rem',color:'var(--muted)',margin:'3px 0 0',textTransform:'uppercase',letterSpacing:'0.5px'}}>{l}</p>
+              </div>
+            ))}
+          </div>
+        ):(
+          <p style={{fontSize:'0.82rem',color:'var(--muted)',textAlign:'center',padding:'6px 0'}}>
+            Toggle duty <strong style={{color:'var(--gold)'}}>ON</strong> to start today's check-in
+          </p>
+        )}
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'8px'}}>
+        {[
+          [`${presentCount}${halfCount>0?` +${halfCount}½`:''}`, 'Present','#27ae60'],
+          [String(absentCount),'Absent','#e74c3c'],
+          [`${totalHours.toFixed(0)}h`,'Hours','var(--text)'],
+        ].map(([v,l,c])=>(
+          <div key={l} style={{background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'12px',padding:'11px 8px',textAlign:'center'}}>
+            <p style={{fontSize:'1.15rem',fontWeight:'700',color:c,marginBottom:'3px'}}>{v}</p>
+            <p style={{fontSize:'0.6rem',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'0.5px'}}>{l}</p>
+          </div>
+        ))}
+      </div>
+      <div style={{display:'flex',borderBottom:'1px solid var(--border)'}}>
+        {tabBtn('cal','Calendar')}{tabBtn('log','Log')}{tabBtn('streak','Streak')}
+      </div>
+      {tab==='cal'&&(
+        <div>
+          <p style={{fontSize:'0.75rem',fontWeight:'700',color:'var(--gold)',textAlign:'center',marginBottom:'12px',letterSpacing:'1px'}}>
+            {now.toLocaleDateString('en-IN',{month:'long',year:'numeric'})}
+          </p>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'3px',marginBottom:'4px',textAlign:'center'}}>
+            {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d=><div key={d} style={{fontSize:'0.62rem',color:'var(--muted)',paddingBottom:'4px'}}>{d}</div>)}
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'3px'}}>
+            {Array.from({length:firstDow},(_,i)=><div key={'e'+i}/>)}
+            {Array.from({length:daysInMonth},(_,i)=>{
+              const day=i+1, s=getStatus(day), isToday=day===now.getDate(), isSel=selDay===day;
+              const ds2=`${yr}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+              return(
+                <div key={day} onClick={()=>{ if(s!=='future') setSelDay(isSel?null:day); }}
+                  style={{aspectRatio:'1',borderRadius:'8px',background:S_COLOR[s],
+                    border:isToday?`2px solid var(--gold)`:isSel?`2px solid rgba(255,255,255,0.7)`:'2px solid transparent',
+                    cursor:s!=='future'?'pointer':'default',opacity:s==='future'?0.2:1,
+                    display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'2px'}}>
+                  <span style={{fontSize:'0.7rem',fontWeight:'700',color:S_TEXT[s]}}>{day}</span>
+                  {(s==='present'||s==='half-day')&&(byDate[ds2]?.sessions>0)&&(
+                    <div style={{width:'4px',height:'4px',borderRadius:'50%',background:'rgba(255,255,255,0.6)'}}/>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div style={{display:'flex',gap:'10px',flexWrap:'wrap',marginTop:'12px',justifyContent:'center'}}>
+            {[['#27ae60','Present'],['#f39c12','Half day'],['#e74c3c','Absent']].map(([c,l])=>(
+              <div key={l} style={{display:'flex',alignItems:'center',gap:'4px'}}>
+                <div style={{width:'10px',height:'10px',borderRadius:'3px',background:c}}/>
+                <span style={{fontSize:'0.65rem',color:'var(--muted)'}}>{l}</span>
+              </div>
+            ))}
+          </div>
+          {selDay&&(
+            <div style={{marginTop:'12px',background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'12px',padding:'12px 14px'}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'}}>
+                <span style={{fontSize:'0.78rem',fontWeight:'700',color:'var(--text)'}}>
+                  {new Date(yr,mo,selDay).toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})}
+                </span>
+                <span style={{fontSize:'0.62rem',fontWeight:'700',padding:'2px 9px',borderRadius:'20px',
+                  background:S_COLOR[getStatus(selDay)]+'22',color:S_COLOR[getStatus(selDay)],
+                  border:`1px solid ${S_COLOR[getStatus(selDay)]}44`}}>
+                  {S_LABEL[getStatus(selDay)]}
+                </span>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'8px'}}>
+                {[['Check in',selRec?fmtTime(selRec.checkIn):'—'],['Hours',selRec?fmtHrs(selRec.hoursOnDuty):'—'],['Sessions',selRec?String(selRec.sessions||0):'—']].map(([l,v])=>(
+                  <div key={l} style={{background:'var(--surface)',borderRadius:'9px',padding:'9px 6px',textAlign:'center',border:'1px solid var(--border)'}}>
+                    <p style={{fontSize:'0.9rem',fontWeight:'700',color:'var(--text)',margin:0}}>{v}</p>
+                    <p style={{fontSize:'0.6rem',color:'var(--muted)',margin:'3px 0 0',textTransform:'uppercase',letterSpacing:'0.5px'}}>{l}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {tab==='log'&&(
+        <div style={{display:'flex',flexDirection:'column',gap:'7px'}}>
+          {records.length===0?(
+            <div style={{textAlign:'center',padding:'40px',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'14px'}}>
+              <p style={{color:'var(--muted)',fontSize:'0.85rem'}}>No records this month</p>
+              <p style={{color:'var(--muted)',fontSize:'0.75rem',marginTop:'4px'}}>Toggle duty ON to start tracking</p>
+            </div>
+          ):records.sort((a,b)=>b.date.localeCompare(a.date)).map(r=>{
+            const c=S_COLOR[r.status]||'#888';
+            return(
+              <div key={r.id} style={{display:'flex',alignItems:'center',gap:'10px',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'12px',padding:'11px 14px'}}>
+                <div style={{width:'8px',height:'8px',borderRadius:'50%',background:c,flexShrink:0}}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <p style={{fontWeight:'700',fontSize:'0.83rem',color:'var(--text)',marginBottom:'2px'}}>
+                    {new Date(r.date+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})}
+                  </p>
+                  <p style={{fontSize:'0.68rem',color:'var(--muted)'}}>
+                    {fmtTime(r.checkIn)} → {r.checkOut?fmtTime(r.checkOut):'ongoing'} · {r.sessions||0} sessions
+                  </p>
+                </div>
+                <div style={{textAlign:'right',flexShrink:0}}>
+                  <span style={{fontSize:'0.62rem',fontWeight:'700',padding:'2px 9px',borderRadius:'20px',background:c+'22',color:c,border:`1px solid ${c}44`}}>
+                    {S_LABEL[r.status]||r.status}
+                  </span>
+                  {r.earnings>0&&<p style={{fontSize:'0.7rem',color:'var(--gold)',fontWeight:'700',marginTop:'3px'}}>₹{(r.earnings||0).toLocaleString('en-IN')}</p>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {tab==='streak'&&(
+        <div style={{display:'flex',flexDirection:'column',gap:'14px'}}>
+          {(()=>{
+            let streak=0;
+            for(let d=now.getDate();d>=1;d--){
+              const ds=`${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+              if(new Date(yr,mo,d).getDay()===0) continue;
+              const r=byDate[ds];
+              if(r&&(r.status==='present'||r.status==='half-day')) streak++;
+              else if(ds<todayStr) break;
+            }
+            return(
+              <div style={{textAlign:'center',padding:'12px 0 4px'}}>
+                <p style={{fontSize:'3rem',fontWeight:'700',color:'var(--gold)',lineHeight:'1'}}>{streak}</p>
+                <p style={{fontSize:'0.78rem',color:'var(--muted)',marginTop:'4px'}}>day streak 🔥</p>
+              </div>
+            );
+          })()}
+          <div>
+            <p style={{fontSize:'0.62rem',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'1.5px',marginBottom:'8px'}}>This month</p>
+            <div style={{display:'flex',gap:'4px',flexWrap:'wrap'}}>
+              {Array.from({length:daysInMonth},(_,i)=>{
+                const day=i+1, s=getStatus(day);
+                return(
+                  <div key={day} style={{width:'28px',height:'28px',borderRadius:'6px',background:S_COLOR[s],
+                    opacity:s==='future'?0.2:1,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                    <span style={{fontSize:'0.55rem',fontWeight:'700',color:S_TEXT[s]}}>{day}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px'}}>
+            {[
+              ['Sessions', totalSessions,'var(--text)'],
+              ['Earnings',`₹${totalEarnings.toLocaleString('en-IN')}`,'var(--gold)'],
+              ['Days present',`${presentCount+halfCount}/${daysInMonth}`,'#27ae60'],
+              ['Total hours',`${totalHours.toFixed(0)}h`,'var(--text)'],
+            ].map(([l,v,c])=>(
+              <div key={l} style={{background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'12px',padding:'12px'}}>
+                <p style={{fontSize:'0.65rem',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:'5px'}}>{l}</p>
+                <p style={{fontSize:'1.15rem',fontWeight:'700',color:c,margin:0}}>{v}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Shared ────────────────────────────────────────────
+function SectionTitle({ children, action }) {
+  return (
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'8px',marginTop:'4px'}}>
+      <h3 style={{fontSize:'0.68rem',fontWeight:'700',color:'var(--muted)',letterSpacing:'2px',textTransform:'uppercase',margin:0}}>{children}</h3>
+      {action}
+    </div>
+  );
+}
+
+function Center({ children, style={} }) {
+  return <div style={{display:'flex',alignItems:'center',justifyContent:'center',...style}}>{children}</div>;
+}
+
+const labelSt = {
+  display:'block',fontSize:'0.7rem',fontWeight:'600',color:'var(--muted)',
+  textTransform:'uppercase',letterSpacing:'1px',marginBottom:'6px'
+};
+const inputSt = {
+  width:'100%',background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'10px',
+  padding:'12px 14px',fontSize:'0.9rem',color:'var(--text)',fontFamily:'inherit',
+  outline:'none',boxSizing:'border-box',transition:'border-color .15s'
+};
+const goldBtn = {
+  background:'rgba(212,175,55,0.12)',border:'1px solid rgba(212,175,55,0.35)',borderRadius:'12px',
+  padding:'12px 20px',color:'var(--gold)',fontWeight:'700',fontSize:'0.85rem',
+  cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',gap:'6px'
+};
+
+// ── Boot ──────────────────────────────────────────────
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>

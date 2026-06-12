@@ -1052,6 +1052,248 @@ function LinkCreator() {
   );
 }
 
+// ══════════════════════════════════════════════════════
+//  ADMIN DIRECT BOOKING FORM
+// ══════════════════════════════════════════════════════
+function AdminBookingForm({ therapistList, onClose }) {
+  const [type,        setType]        = useState('now'); // 'now'|'later'
+  const [clientName,  setClientName]  = useState('');
+  const [clientPhone, setClientPhone] = useState('');
+  const [serviceType, setServiceType] = useState('Massage');
+  const [duration,    setDuration]    = useState('60 min');
+  const [therapistId, setTherapistId] = useState('');
+  const [notes,       setNotes]       = useState('');
+  const [schedDate,   setSchedDate]   = useState('');
+  const [schedTime,   setSchedTime]   = useState('');
+  const [locMethod,   setLocMethod]   = useState('text'); // 'text'|'link'|'gps'
+  const [locText,     setLocText]     = useState('');
+  const [locLink,     setLocLink]     = useState('');
+  const [gpsCoords,   setGpsCoords]   = useState(null);
+  const [gpsLoading,  setGpsLoading]  = useState(false);
+  const [saving,      setSaving]      = useState(false);
+  const [err,         setErr]         = useState('');
+  const [done,        setDone]        = useState(false);
+
+  const getGPS = () => {
+    if (!navigator.geolocation) { setErr('GPS not available in this browser'); return; }
+    setGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      p => { setGpsCoords({lat:p.coords.latitude,lng:p.coords.longitude}); setGpsLoading(false); },
+      () => { setErr('Could not get location. Check browser permissions.'); setGpsLoading(false); },
+      { enableHighAccuracy:true, timeout:10000 }
+    );
+  };
+
+  const parseMapLink = (url) => {
+    const patterns = [/@(-?\d+\.?\d*),(-?\d+\.?\d*)/, /q=(-?\d+\.?\d*),(-?\d+\.?\d*)/];
+    for (const p of patterns) {
+      const m = url.match(p);
+      if (m) {
+        const lat = parseFloat(m[1]), lng = parseFloat(m[2]);
+        if (!isNaN(lat) && !isNaN(lng)) return {lat, lng};
+      }
+    }
+    return null;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!clientName.trim()) { setErr('Client name is required'); return; }
+    if (type === 'later' && (!schedDate || !schedTime)) { setErr('Date and time required for scheduled booking'); return; }
+    setSaving(true); setErr('');
+    try {
+      let clientLocation = null;
+      if (locMethod==='text'  && locText.trim())  clientLocation = { address: locText.trim() };
+      if (locMethod==='link'  && locLink.trim())  clientLocation = parseMapLink(locLink.trim()) || { address: locLink.trim() };
+      if (locMethod==='gps'   && gpsCoords)       clientLocation = gpsCoords;
+
+      const t = therapistList.find(x=>x.id===therapistId);
+      const payload = {
+        clientName:      clientName.trim(),
+        clientPhone:     clientPhone.trim(), // stored in Firestore — NEVER displayed to therapist
+        serviceType,
+        duration,
+        notes:           notes.trim(),
+        status:          type==='now' ? 'confirmed' : 'scheduled',
+        bookedByAdmin:   true,
+        confirmedAt:     FieldValue.serverTimestamp(),
+        createdAt:       FieldValue.serverTimestamp(),
+      };
+      if (clientLocation) payload.clientLocation = clientLocation;
+      if (therapistId) {
+        payload.therapistDocId    = therapistId;
+        payload.therapistId       = t?.therapistId || therapistId;
+        payload.therapistName     = t?.name || t?.therapistId || therapistId;
+        payload.therapistPhone    = t?.phone || null;
+        payload.therapistAccepted = true;
+      }
+      if (type==='later') {
+        payload.scheduledDate = schedDate;
+        payload.scheduledTime = schedTime;
+      }
+      await db.collection('bookings').add(payload);
+      setDone(true);
+      setTimeout(onClose, 1500);
+    } catch(e) { setErr(e.message); }
+    setSaving(false);
+  };
+
+  const INP = {width:'100%',background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'9px',padding:'9px 14px',color:'var(--text)',fontSize:'0.88rem',outline:'none',fontFamily:'inherit'};
+  const LBL = {display:'block',fontSize:'0.7rem',color:'var(--muted)',letterSpacing:'1px',textTransform:'uppercase',fontWeight:'600',marginBottom:'5px'};
+
+  if (done) return (
+    <div className="fade-in" style={{background:'rgba(46,204,113,0.07)',border:'1px solid rgba(46,204,113,0.35)',borderRadius:'12px',padding:'20px',textAlign:'center'}}>
+      <div style={{fontSize:'1.6rem',marginBottom:'6px'}}>✅</div>
+      <p style={{color:'#2ecc71',fontWeight:'700',fontSize:'0.9rem'}}>Booking created successfully!</p>
+    </div>
+  );
+
+  return (
+    <div className="fade-in" style={{background:'var(--card)',border:'1px solid var(--border-gold)',borderRadius:'14px',padding:'20px'}}>
+      <p style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--gold)',marginBottom:'14px',letterSpacing:'1px',textTransform:'uppercase'}}>New Booking</p>
+
+      <form onSubmit={handleSubmit} style={{display:'flex',flexDirection:'column',gap:'14px'}}>
+        {/* Book type toggle */}
+        <div style={{display:'flex',gap:'8px'}}>
+          {[['now','⚡ Book Now','Immediate — confirmed right away'],['later','📅 Book Later','Scheduled date & time']].map(([v,l,sub])=>(
+            <button key={v} type="button" onClick={()=>setType(v)}
+              style={{flex:1,padding:'10px 8px',borderRadius:'10px',cursor:'pointer',textAlign:'left',
+                border:`1px solid ${type===v?'var(--gold)':'var(--border)'}`,
+                background:type===v?'rgba(212,175,55,0.09)':'transparent',
+                color:type===v?'var(--gold)':'var(--muted)',
+                fontSize:'0.82rem',fontWeight:type===v?'700':'500',fontFamily:'inherit',transition:'all .15s'}}>
+              <p style={{margin:0}}>{l}</p>
+              <p style={{margin:'2px 0 0',fontSize:'0.65rem',opacity:.75,fontWeight:'400'}}>{sub}</p>
+            </button>
+          ))}
+        </div>
+
+        {/* Client */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}} className="form-grid">
+          <div>
+            <label style={LBL}>Client Name *</label>
+            <input type="text" value={clientName} onChange={e=>setClientName(e.target.value)} style={INP} placeholder="Full name" required/>
+          </div>
+          <div>
+            <label style={LBL}>Phone <span style={{fontWeight:400,fontSize:'0.7rem',letterSpacing:0,color:'#555',textTransform:'none'}}>(admin only)</span></label>
+            <input type="tel" value={clientPhone} onChange={e=>setClientPhone(e.target.value)} style={INP} placeholder="9876543210"/>
+          </div>
+        </div>
+
+        {/* Service + Duration */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}} className="form-grid">
+          <div>
+            <label style={LBL}>Service</label>
+            <select value={serviceType} onChange={e=>setServiceType(e.target.value)} style={INP}>
+              {['Massage','Facial','Body Wrap','Head Massage','Other'].map(s=><option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={LBL}>Duration</label>
+            <select value={duration} onChange={e=>setDuration(e.target.value)} style={INP}>
+              {['30 min','45 min','60 min','90 min','120 min'].map(d=><option key={d}>{d}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* Therapist */}
+        <div>
+          <label style={LBL}>Assign Therapist <span style={{fontWeight:400,fontSize:'0.7rem',letterSpacing:0,color:'#555',textTransform:'none'}}>(optional)</span></label>
+          <select value={therapistId} onChange={e=>setTherapistId(e.target.value)} style={INP}>
+            <option value="">— Not assigned yet —</option>
+            {therapistList.map(t=>(
+              <option key={t.id} value={t.id}>{t.name||t.therapistId}{t.available?' 🟢':''}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Date + Time for Book Later */}
+        {type==='later'&&(
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}} className="form-grid">
+            <div>
+              <label style={LBL}>Date *</label>
+              <input type="date" value={schedDate} onChange={e=>setSchedDate(e.target.value)}
+                style={{...INP,colorScheme:'dark'}} min={new Date().toISOString().split('T')[0]} required/>
+            </div>
+            <div>
+              <label style={LBL}>Time *</label>
+              <input type="time" value={schedTime} onChange={e=>setSchedTime(e.target.value)}
+                style={{...INP,colorScheme:'dark'}} required/>
+            </div>
+          </div>
+        )}
+
+        {/* Location */}
+        <div>
+          <label style={LBL}>Client Location</label>
+          <div style={{display:'flex',gap:'6px',marginBottom:'8px'}}>
+            {[['text','📝 Address'],['link','🗺️ Maps Link'],['gps','📍 GPS']].map(([v,l])=>(
+              <button key={v} type="button" onClick={()=>setLocMethod(v)}
+                style={{flex:1,padding:'7px 4px',borderRadius:'8px',cursor:'pointer',
+                  border:`1px solid ${locMethod===v?'rgba(212,175,55,0.5)':'var(--border)'}`,
+                  background:locMethod===v?'rgba(212,175,55,0.08)':'transparent',
+                  color:locMethod===v?'var(--gold)':'var(--muted)',
+                  fontSize:'0.72rem',fontWeight:locMethod===v?'700':'500',fontFamily:'inherit',transition:'all .15s'}}>
+                {l}
+              </button>
+            ))}
+          </div>
+          {locMethod==='text'&&(
+            <textarea value={locText} onChange={e=>setLocText(e.target.value)} rows={2}
+              placeholder="e.g. 123 Main St, Apartment 4B, Chennai — or any landmark"
+              style={{...INP,resize:'none',lineHeight:'1.5'}}/>
+          )}
+          {locMethod==='link'&&(
+            <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+              <input type="text" value={locLink} onChange={e=>setLocLink(e.target.value)}
+                placeholder="Paste Google Maps link (lat/lng auto-extracted)"
+                style={INP}/>
+              {locLink&&(()=>{
+                const p=parseMapLink(locLink);
+                return p
+                  ? <p style={{fontSize:'0.72rem',color:'#2ecc71'}}>✓ Coords detected: {p.lat.toFixed(5)}, {p.lng.toFixed(5)}</p>
+                  : <p style={{fontSize:'0.72rem',color:'var(--muted)'}}>No coords found — address will be saved as text</p>;
+              })()}
+            </div>
+          )}
+          {locMethod==='gps'&&(
+            <div style={{display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap'}}>
+              <button type="button" onClick={getGPS} disabled={gpsLoading}
+                style={{padding:'9px 16px',borderRadius:'9px',border:'1px solid rgba(212,175,55,0.35)',
+                  background:'rgba(212,175,55,0.08)',color:'var(--gold)',cursor:'pointer',
+                  fontSize:'0.82rem',fontWeight:'700',fontFamily:'inherit',
+                  opacity:gpsLoading?.6:1}}>
+                {gpsLoading?'Getting location…':'📍 Get Current Location'}
+              </button>
+              {gpsCoords&&(
+                <a href={`https://maps.google.com?q=${gpsCoords.lat},${gpsCoords.lng}`} target="_blank" rel="noopener noreferrer"
+                  style={{fontSize:'0.75rem',color:'#2ecc71',fontFamily:'monospace',textDecoration:'none'}}>
+                  ✓ {gpsCoords.lat.toFixed(5)}, {gpsCoords.lng.toFixed(5)} ↗
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Notes */}
+        <div>
+          <label style={LBL}>Notes <span style={{fontWeight:400,fontSize:'0.7rem',letterSpacing:0,color:'#555',textTransform:'none'}}>(optional)</span></label>
+          <input type="text" value={notes} onChange={e=>setNotes(e.target.value)} style={INP} placeholder="Any special instructions…"/>
+        </div>
+
+        {err&&<div style={{background:'var(--danger-bg)',border:'1px solid rgba(231,76,60,.3)',borderRadius:'8px',padding:'9px 14px',color:'var(--danger)',fontSize:'0.82rem'}}>{err}</div>}
+
+        <div style={{display:'flex',gap:'8px'}}>
+          <button type="button" onClick={onClose} style={{flex:1,padding:'11px',borderRadius:'9px',border:'1px solid var(--border)',background:'transparent',color:'var(--muted)',fontSize:'0.85rem',cursor:'pointer',fontFamily:'inherit'}}>Cancel</button>
+          <button type="submit" disabled={saving} className="btn btn-gold" style={{flex:2,padding:'11px',fontSize:'0.88rem',borderRadius:'9px'}}>
+            {saving?<span className="spin">✦</span>:type==='now'?'⚡ Confirm Now':'📅 Schedule Booking'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // ── Shared helpers ─────────────────────────────────────
 function SectionTitle({children}) {
   return <h2 style={{fontSize:'0.82rem',color:'var(--gold)',letterSpacing:'2.5px',textTransform:'uppercase',marginBottom:'24px',paddingBottom:'12px',borderBottom:'1px solid var(--border)'}}>{children}</h2>;
@@ -1226,9 +1468,10 @@ function BookingsPanel() {
   const [selectedTherapist, setSelectedTherapist] = useState({});
   const [expandedRows,      setExpandedRows]      = useState({});
   const toggleRow = id => setExpandedRows(prev=>({...prev,[id]:!prev[id]}));
-  const [search,     setSearch]     = useState('');
-  const [deleting,   setDeleting]   = useState(null);
-  const [confirming, setConfirming] = useState(null);
+  const [search,       setSearch]       = useState('');
+  const [deleting,     setDeleting]     = useState(null);
+  const [confirming,   setConfirming]   = useState(null);
+  const [showBookForm, setShowBookForm] = useState(false);
   const seenInitRef = useRef(false);
 
   useEffect(()=>{
@@ -1365,6 +1608,20 @@ function BookingsPanel() {
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:'16px'}}>
+
+      {/* New Booking button + form */}
+      <div>
+        <button onClick={()=>setShowBookForm(v=>!v)} className={`btn btn-sm ${showBookForm?'btn-ghost':'btn-gold'}`}
+          style={{gap:'6px',display:'inline-flex',alignItems:'center',marginBottom:showBookForm?'10px':'0'}}>
+          {showBookForm?'✕ Cancel':'📅 New Booking'}
+        </button>
+        {showBookForm&&(
+          <AdminBookingForm
+            therapistList={therapistList}
+            onClose={()=>setShowBookForm(false)}
+          />
+        )}
+      </div>
 
       {/* Stats grid — click to filter */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(90px,1fr))',gap:'8px'}}>

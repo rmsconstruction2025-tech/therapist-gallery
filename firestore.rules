@@ -52,5 +52,13 @@ service cloud.firestore {
     match /earnings/{earnId} {
       allow read, write: if true;
     }
+
+    // Attendance: therapists write their own records (duty on/off + session count);
+    // admin can read all. Doc IDs follow pattern: {therapistDocId}_{YYYY-MM-DD}
+    match /attendance/{attendId} {
+      allow read:          if true;                // admin + therapist can read
+      allow create, update: if true;               // therapist portal writes without Firebase auth
+      allow delete:        if isAdmin();
+    }
   }
 }
