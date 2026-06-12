@@ -1,3 +1,4 @@
+<!-- v2 google-maps + route-line + 8148243019 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,8 +8,9 @@
 
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css"/>
-  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
+  <script async defer
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAw7KXjgZaHM833PZDwTLUSNGNk7WJx_sY&callback=onGoogleMapsReady">
+  </script>
 
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
@@ -16,31 +18,31 @@
 
     #map{position:fixed;top:0;left:0;right:0;bottom:0;z-index:1}
 
-    /* ── overlays ── */
+    /* ── top bar ── */
     .top-bar{position:fixed;top:0;left:0;right:0;z-index:1000;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;pointer-events:none}
     .logo-pill{background:rgba(26,26,46,0.92);backdrop-filter:blur(10px);border-radius:14px;padding:7px 13px;display:flex;align-items:center;gap:6px;pointer-events:auto}
-    .eta-pill-top{background:rgba(26,26,46,0.92);backdrop-filter:blur(10px);border-radius:20px;padding:7px 14px;display:flex;align-items:center;gap:6px;color:#fff;font-size:12px;font-weight:600}
+    .live-pill{background:rgba(26,26,46,0.92);backdrop-filter:blur(10px);border-radius:20px;padding:7px 14px;display:flex;align-items:center;gap:6px;color:#fff;font-size:12px;font-weight:600}
 
     /* ── bottom sheet ── */
     .sheet{position:fixed;bottom:0;left:0;right:0;z-index:1000;background:#1a1a2e;border-radius:22px 22px 0 0;padding:14px 20px 36px}
     .handle{width:36px;height:4px;background:rgba(255,255,255,0.18);border-radius:2px;margin:0 auto 14px}
     .eta-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
     .eta-badge{background:#ff6b35;color:#fff;border-radius:20px;padding:5px 16px;font-size:14px;font-weight:700}
+    .dist-badge{background:rgba(255,107,53,0.12);color:#ff6b35;border-radius:20px;padding:5px 14px;font-size:13px;font-weight:600;border:1px solid rgba(255,107,53,0.3)}
     .prog-track{width:100%;height:3px;background:rgba(255,255,255,0.1);border-radius:2px;overflow:hidden;margin-bottom:16px}
-    .prog-fill{height:100%;background:#ff6b35;border-radius:2px;transition:width 1.2s ease}
+    .prog-fill{height:100%;background:#ff6b35;border-radius:2px;transition:width 1.5s ease}
     .t-row{display:flex;align-items:center;gap:12px;padding-top:14px;border-top:0.5px solid rgba(255,255,255,0.08)}
     .avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,#ff6b35,#f7931e);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;flex-shrink:0}
-    .call-btn{width:100%;margin-top:14px;background:rgba(255,255,255,0.07);border:0.5px solid rgba(255,255,255,0.15);border-radius:13px;padding:14px;color:#fff;font-size:14px;font-weight:600;text-align:center;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit}
-    .call-btn:active{background:rgba(255,255,255,0.12)}
+    .call-btn{width:100%;margin-top:14px;background:rgba(255,107,53,0.1);border:1px solid rgba(255,107,53,0.3);border-radius:13px;padding:14px;color:#ff6b35;font-size:14px;font-weight:700;text-align:center;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;font-family:inherit;letter-spacing:0.2px}
+    .call-btn:active{background:rgba(255,107,53,0.2)}
 
     /* ── screens ── */
     #loading-screen,#error-screen{position:fixed;inset:0;z-index:9999;background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-align:center;padding:32px;gap:16px}
     .spinner{width:38px;height:38px;border:3px solid rgba(255,107,53,0.25);border-top-color:#ff6b35;border-radius:50%;animation:spin .8s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
-    .arrived-banner{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:2000;background:#1a1a2e;border:2px solid #ff6b35;border-radius:20px;padding:24px 36px;text-align:center;color:#fff}
 
-    /* hide Leaflet attribution on mobile */
-    .leaflet-control-attribution{display:none}
+    /* hide Google Maps default controls clutter */
+    .gm-style-cc,.gm-bundled-control{display:none!important}
   </style>
 </head>
 <body>
@@ -57,7 +59,7 @@
   <span style="font-size:52px">🔒</span>
   <h2 style="font-size:20px;font-weight:600" id="err-title">Link Expired</h2>
   <p style="font-size:14px;color:rgba(255,255,255,0.5);max-width:270px" id="err-msg">This tracking link is no longer active.</p>
-  <p style="font-size:13px;margin-top:8px;color:rgba(255,255,255,0.3)">Please contact Feel Free Spa for help.</p>
+  <p style="font-size:13px;margin-top:8px;color:rgba(255,255,255,0.3)">Call Feel Free Spa: <a href="tel:+918148243019" style="color:#ff6b35">8148243019</a></p>
 </div>
 
 <!-- Map -->
@@ -66,12 +68,12 @@
 <!-- Top bar -->
 <div class="top-bar" id="topBar" style="display:none">
   <div class="logo-pill">
-    <span style="font-size:16px">🚗</span>
+    <span style="font-size:15px">🌿</span>
     <span style="font-size:12px;font-weight:700;color:#ff6b35">Feel Free</span>
     <span style="font-size:12px;color:rgba(255,255,255,0.7)">Spa</span>
   </div>
-  <div class="eta-pill-top">
-    <span style="color:#ff6b35;font-size:8px">●</span>
+  <div class="live-pill">
+    <span style="width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block;animation:pulse 1.5s infinite"></span>
     <span id="eta-top">Live</span>
   </div>
 </div>
@@ -81,16 +83,19 @@
   <div class="handle"></div>
   <div class="eta-row">
     <span style="font-size:13px;color:rgba(255,255,255,0.45)">Therapist on the way</span>
-    <span class="eta-badge" id="eta-badge">Live</span>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span class="dist-badge" id="dist-badge" style="display:none">— km</span>
+      <span class="eta-badge" id="eta-badge">Live</span>
+    </div>
   </div>
-  <div class="prog-track"><div class="prog-fill" id="prog" style="width:15%"></div></div>
+  <div class="prog-track"><div class="prog-fill" id="prog" style="width:10%"></div></div>
   <div class="t-row">
     <div class="avatar" id="t-avatar">?</div>
     <div style="flex:1;min-width:0">
-      <p style="font-size:14px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="t-name">—</p>
-      <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-top:2px">
+      <p style="font-size:15px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" id="t-name">—</p>
+      <p style="font-size:12px;color:rgba(255,255,255,0.45);margin-top:3px">
         <span style="width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block;margin-right:4px;vertical-align:middle"></span>
-        En route to you
+        En route to your location
       </p>
     </div>
     <div style="text-align:right;flex-shrink:0">
@@ -98,11 +103,15 @@
       <p style="font-size:11px;color:rgba(255,255,255,0.25);margin-top:2px" id="t-updated">—</p>
     </div>
   </div>
-  <button class="call-btn" id="callBtn">📞 Call Spa</button>
+  <button class="call-btn" id="callBtn">📞 Call Feel Free Spa</button>
 </div>
 
+<style>
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.6;transform:scale(1.3)}}
+</style>
+
 <script>
-// ── Firebase ──────────────────────────────────────────────────────────────
+// ── Firebase ────────────────────────────────────────────────────────────────
 firebase.initializeApp({
   apiKey:            "AIzaSyAw7KXjgZaHM833PZDwTLUSNGNk7WJx_sY",
   authDomain:        "therapist-gallery.firebaseapp.com",
@@ -113,46 +122,44 @@ firebase.initializeApp({
 });
 const db = firebase.firestore();
 
-// ── Car SVG (orange, top-down Rapido style) ───────────────────────────────
-const CAR_SVG = `<svg width="32" height="54" viewBox="0 0 32 54" xmlns="http://www.w3.org/2000/svg">
-  <ellipse cx="16" cy="50" rx="11" ry="4" fill="rgba(0,0,0,0.2)"/>
-  <rect x="3" y="7" width="26" height="40" rx="9" fill="#ff6b35"/>
-  <rect x="5" y="11" width="22" height="15" rx="3" fill="rgba(255,255,255,0.55)"/>
-  <rect x="5" y="30" width="22" height="9" rx="2.5" fill="rgba(255,255,255,0.25)"/>
-  <rect x="3" y="7" width="8" height="5" rx="1.5" fill="#fbbf24"/>
-  <rect x="21" y="7" width="8" height="5" rx="1.5" fill="#fbbf24"/>
-  <rect x="3" y="42" width="7" height="5" rx="1" fill="#ef4444"/>
-  <rect x="22" y="42" width="7" height="5" rx="1" fill="#ef4444"/>
-  <rect x="0" y="8" width="5" height="13" rx="2.5" fill="#c74e20"/>
-  <rect x="27" y="8" width="5" height="13" rx="2.5" fill="#c74e20"/>
-  <rect x="0" y="33" width="5" height="13" rx="2.5" fill="#c74e20"/>
-  <rect x="27" y="33" width="5" height="13" rx="2.5" fill="#c74e20"/>
-  <rect x="6" y="21" width="20" height="3" rx="1.5" fill="rgba(255,255,255,0.75)"/>
-  <rect x="8" y="26" width="16" height="2" rx="1" fill="rgba(255,255,255,0.45)"/>
-</svg>`;
+// ── Google Maps ready promise ─────────────────────────────────────────────
+let resolveMapReady;
+const mapReadyPromise = new Promise(r => resolveMapReady = r);
+window.onGoogleMapsReady = resolveMapReady;
 
 // ── State ─────────────────────────────────────────────────────────────────
-let map, carMarker, carAngle = 0, prevLat = null, prevLng = null;
+let gmap, carMarker, routeLine, destMarker;
+let carAngle = 0, prevLat = null, prevLng = null;
+let clientLat = null, clientLng = null;
+let totalDist = null;
 let watchUnsub = null;
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 const initials = n => (n||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
 
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLng = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function bearing(lat1, lng1, lat2, lng2) {
+  const dLng = (lng2-lng1)*Math.PI/180;
+  const φ1 = lat1*Math.PI/180, φ2 = lat2*Math.PI/180;
+  const y = Math.sin(dLng)*Math.cos(φ2);
+  const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(dLng);
+  return (Math.atan2(y, x)*180/Math.PI+360)%360;
+}
+
 function timeSince(ts) {
   if (!ts) return '';
   const s = Math.floor((Date.now() - (ts.toMillis ? ts.toMillis() : +ts)) / 1000);
   if (s < 15) return 'just now';
   if (s < 60)  return s + 's ago';
-  return Math.floor(s / 60) + 'm ago';
-}
-
-function bearing(lat1, lng1, lat2, lng2) {
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
-  const y = Math.sin(dLng) * Math.cos(φ2);
-  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(dLng);
-  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  return Math.floor(s/60) + 'm ago';
 }
 
 function getToken() {
@@ -167,41 +174,179 @@ function showError(title, msg) {
   $('err-msg').textContent   = msg   || 'This tracking link is no longer active.';
 }
 
-// ── Map init ──────────────────────────────────────────────────────────────
-function initMap(lat, lng) {
-  map = L.map('map', {
-    center: [lat, lng], zoom: 15,
-    zoomControl: false, attributionControl: false
-  });
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
-
-  carMarker = L.marker([lat, lng], {
-    icon: L.divIcon({ html: CAR_SVG, iconSize:[32,54], iconAnchor:[16,27], className:'' }),
-    zIndexOffset: 1000
-  }).addTo(map);
+// ── Car SVG (rotatable) ───────────────────────────────────────────────────
+function carSvgUrl(angle) {
+  const inner = `
+    <ellipse cx="16" cy="50" rx="11" ry="4" fill="rgba(0,0,0,0.18)"/>
+    <rect x="3" y="7" width="26" height="40" rx="9" fill="#ff6b35"/>
+    <rect x="5" y="11" width="22" height="15" rx="3" fill="rgba(255,255,255,0.55)"/>
+    <rect x="5" y="30" width="22" height="9" rx="2.5" fill="rgba(255,255,255,0.22)"/>
+    <rect x="3" y="7" width="8" height="5" rx="1.5" fill="#fbbf24"/>
+    <rect x="21" y="7" width="8" height="5" rx="1.5" fill="#fbbf24"/>
+    <rect x="3" y="42" width="7" height="5" rx="1" fill="#ef4444"/>
+    <rect x="22" y="42" width="7" height="5" rx="1" fill="#ef4444"/>
+    <rect x="0" y="8" width="5" height="13" rx="2.5" fill="#c74e20"/>
+    <rect x="27" y="8" width="5" height="13" rx="2.5" fill="#c74e20"/>
+    <rect x="0" y="33" width="5" height="13" rx="2.5" fill="#c74e20"/>
+    <rect x="27" y="33" width="5" height="13" rx="2.5" fill="#c74e20"/>
+    <rect x="6" y="21" width="20" height="3" rx="1.5" fill="rgba(255,255,255,0.75)"/>
+    <rect x="8" y="26" width="16" height="2" rx="1" fill="rgba(255,255,255,0.4)"/>`;
+  const svg = `<svg width="32" height="54" viewBox="0 0 32 54" xmlns="http://www.w3.org/2000/svg"><g transform="rotate(${angle},16,27)">${inner}</g></svg>`;
+  return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
 }
 
-function moveCar(lat, lng, updatedAt) {
-  if (!map || !carMarker) return;
+// ── Destination pin SVG ───────────────────────────────────────────────────
+function destPinUrl() {
+  const svg = `<svg width="32" height="42" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="16" cy="40" rx="8" ry="2.5" fill="rgba(0,0,0,0.2)"/>
+    <path d="M16 0C9.4 0 4 5.4 4 12c0 9 12 28 12 28s12-19 12-28C28 5.4 22.6 0 16 0z" fill="#22c55e"/>
+    <circle cx="16" cy="12" r="5" fill="white"/>
+    <text x="16" y="16.5" text-anchor="middle" font-size="8" fill="#22c55e" font-weight="bold" font-family="sans-serif">YOU</text>
+  </svg>`;
+  return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+}
 
-  // Rotate car toward direction of movement
+// ── Google Maps init ──────────────────────────────────────────────────────
+function initGoogleMap(tLat, tLng) {
+  const center = clientLat
+    ? { lat: (tLat + clientLat) / 2, lng: (tLng + clientLng) / 2 }
+    : { lat: tLat, lng: tLng };
+
+  gmap = new google.maps.Map($('map'), {
+    center,
+    zoom: clientLat ? 13 : 15,
+    disableDefaultUI: true,
+    zoomControl: false,
+    mapTypeControl: false,
+    streetViewControl: false,
+    fullscreenControl: false,
+    styles: [
+      { elementType:'geometry', stylers:[{color:'#1d2c4d'}] },
+      { elementType:'labels.text.fill', stylers:[{color:'#8ec3b9'}] },
+      { elementType:'labels.text.stroke', stylers:[{color:'#1a3646'}] },
+      { featureType:'administrative.country', elementType:'geometry.stroke', stylers:[{color:'#4b6878'}] },
+      { featureType:'road', elementType:'geometry', stylers:[{color:'#304a7d'}] },
+      { featureType:'road', elementType:'labels.text.fill', stylers:[{color:'#98a5be'}] },
+      { featureType:'road.highway', elementType:'geometry', stylers:[{color:'#2c6675'}] },
+      { featureType:'water', elementType:'geometry', stylers:[{color:'#0e1626'}] },
+      { featureType:'water', elementType:'labels.text.fill', stylers:[{color:'#4e6d70'}] },
+      { featureType:'poi', elementType:'labels', stylers:[{visibility:'off'}] },
+      { featureType:'transit', stylers:[{visibility:'off'}] },
+    ]
+  });
+
+  // Car marker
+  carMarker = new google.maps.Marker({
+    position: { lat: tLat, lng: tLng },
+    map: gmap,
+    icon: {
+      url: carSvgUrl(0),
+      scaledSize: new google.maps.Size(32, 54),
+      anchor: new google.maps.Point(16, 27),
+    },
+    zIndex: 10,
+    optimized: false,
+  });
+
+  // Destination marker (client location)
+  if (clientLat) {
+    destMarker = new google.maps.Marker({
+      position: { lat: clientLat, lng: clientLng },
+      map: gmap,
+      icon: {
+        url: destPinUrl(),
+        scaledSize: new google.maps.Size(32, 42),
+        anchor: new google.maps.Point(16, 40),
+      },
+      zIndex: 9,
+      optimized: false,
+    });
+
+    // Route line (dashed orange)
+    routeLine = new google.maps.Polyline({
+      path: [
+        { lat: tLat, lng: tLng },
+        { lat: clientLat, lng: clientLng }
+      ],
+      strokeColor: '#ff6b35',
+      strokeOpacity: 0,
+      strokeWeight: 0,
+      icons: [{
+        icon: {
+          path: 'M 0,-1 0,1',
+          strokeOpacity: 0.85,
+          strokeWeight: 3,
+          scale: 4,
+        },
+        offset: '0',
+        repeat: '18px'
+      }],
+      map: gmap,
+    });
+
+    // Fit bounds to show both points
+    const bounds = new google.maps.LatLngBounds();
+    bounds.extend({ lat: tLat, lng: tLng });
+    bounds.extend({ lat: clientLat, lng: clientLng });
+    gmap.fitBounds(bounds, { top: 80, bottom: 220, left: 40, right: 40 });
+
+    // Set total distance
+    totalDist = haversineKm(tLat, tLng, clientLat, clientLng);
+  }
+}
+
+// ── Update car position ───────────────────────────────────────────────────
+function moveCar(lat, lng, updatedAt) {
+  if (!gmap || !carMarker) return;
+
+  // Bearing & rotation
   if (prevLat !== null && prevLng !== null) {
-    const moved = Math.abs(lat - prevLat) > 0.00002 || Math.abs(lng - prevLng) > 0.00002;
-    if (moved) {
-      carAngle = bearing(prevLat, prevLng, lat, lng);
-      const el = carMarker.getElement();
-      if (el) {
-        const svg = el.querySelector('svg');
-        if (svg) svg.style.transform = `rotate(${carAngle}deg)`;
-        el.style.transformOrigin = '50% 50%';
-      }
+    const moved = Math.abs(lat-prevLat) > 0.00002 || Math.abs(lng-prevLng) > 0.00002;
+    if (moved) carAngle = bearing(prevLat, prevLng, lat, lng);
+  }
+
+  carMarker.setPosition({ lat, lng });
+  carMarker.setIcon({
+    url: carSvgUrl(carAngle),
+    scaledSize: new google.maps.Size(32, 54),
+    anchor: new google.maps.Point(16, 27),
+  });
+
+  // Update route line
+  if (routeLine && clientLat) {
+    routeLine.setPath([
+      { lat, lng },
+      { lat: clientLat, lng: clientLng }
+    ]);
+
+    // Distance + progress
+    const dist = haversineKm(lat, lng, clientLat, clientLng);
+    const distTxt = dist < 1 ? Math.round(dist*1000)+'m away' : dist.toFixed(1)+' km away';
+    $('dist-badge').textContent = distTxt;
+    $('dist-badge').style.display = 'inline-block';
+    $('eta-top').textContent = distTxt;
+
+    // Progress bar (100% = arrived, 10% = far)
+    if (totalDist && totalDist > 0) {
+      const pct = Math.max(10, Math.min(95, (1 - dist/totalDist)*100));
+      $('prog').style.width = pct + '%';
+    }
+
+    // ETA badge
+    const avgSpeedKmh = 25;
+    const etaMins = Math.round((dist / avgSpeedKmh) * 60);
+    if (etaMins <= 0) {
+      $('eta-badge').textContent = 'Arrived!';
+    } else if (etaMins < 60) {
+      $('eta-badge').textContent = etaMins + ' min';
+    } else {
+      $('eta-badge').textContent = Math.round(etaMins/60) + ' hr';
     }
   }
 
-  carMarker.setLatLng([lat, lng]);
-  map.panTo([lat, lng], { animate: true, duration: 1.2 });
+  // Smooth pan
+  gmap.panTo({ lat, lng });
   prevLat = lat; prevLng = lng;
-
   $('t-updated').textContent = timeSince(updatedAt);
 }
 
@@ -210,63 +355,66 @@ async function main() {
   const token = getToken();
   if (!token) { showError('Invalid Link', 'No tracking token found.'); return; }
 
-  // 1. Load tracking link doc
+  // 1. Load tracking link
   let linkSnap;
   try { linkSnap = await db.collection('trackingLinks').doc(token).get(); }
   catch(e) { showError('Error', 'Could not load tracking info.'); return; }
 
-  if (!linkSnap.exists) { showError('Link Not Found', 'This link does not exist or has been removed.'); return; }
+  if (!linkSnap.exists) { showError('Not Found', 'This link does not exist or has been removed.'); return; }
   const link = linkSnap.data();
+  if (!link.active) { showError('Expired', 'This tracking link is no longer active.'); return; }
+  if (link.expiresAt?.toDate?.() < new Date()) { showError('Expired', 'This tracking link has expired.'); return; }
 
-  if (!link.active) { showError('Link Expired', 'This tracking link is no longer active.'); return; }
-  if (link.expiresAt && link.expiresAt.toDate && link.expiresAt.toDate() < new Date()) {
-    showError('Link Expired', 'This tracking link has expired.'); return;
+  // 2. Load booking → client location
+  if (link.bookingId) {
+    try {
+      const bSnap = await db.collection('bookings').doc(link.bookingId).get();
+      if (bSnap.exists) {
+        const b = bSnap.data();
+        if (b.clientLocation?.lat && b.clientLocation?.lng) {
+          clientLat = b.clientLocation.lat;
+          clientLng = b.clientLocation.lng;
+        }
+      }
+    } catch(e) { /* no client location — continue */ }
   }
 
-  // 2. Load therapist
+  // 3. Load therapist
   let tSnap;
   try { tSnap = await db.collection('therapists').doc(link.therapistDocId).get(); }
   catch(e) { showError('Error', 'Could not load therapist info.'); return; }
-
   if (!tSnap.exists) { showError('Not Found', 'Therapist not found.'); return; }
   const t = tSnap.data();
 
-  // 3. Populate UI
+  // 4. Populate UI
   const name = t.name || link.therapistName || 'Your Therapist';
   $('t-name').textContent    = name;
   $('t-avatar').textContent  = initials(name);
   $('t-service').textContent = link.serviceName || 'Spa Service';
 
-  // 4. Init map
-  const lat = t.location?.lat || 13.15;
-  const lng = t.location?.lng || 79.92;
-  initMap(lat, lng);
-  prevLat = lat; prevLng = lng;
+  // 5. Wait for Google Maps + init
+  await mapReadyPromise;
+  const tLat = t.location?.lat || 13.0827;
+  const tLng = t.location?.lng || 80.2707;
+  prevLat = tLat; prevLng = tLng;
+  initGoogleMap(tLat, tLng);
 
-  // 5. Show UI
+  // 6. Show UI
   $('loading-screen').style.display = 'none';
   $('topBar').style.display  = 'flex';
   $('sheet').style.display   = 'block';
 
-  // 6. Real-time location updates via onSnapshot
+  // 7. Real-time updates
   watchUnsub = db.collection('therapists').doc(link.therapistDocId).onSnapshot(snap => {
     if (!snap.exists) return;
     const d = snap.data();
     if (!d.location) return;
     moveCar(d.location.lat, d.location.lng, d.locationUpdatedAt);
   });
-
-  // 7. Update "last updated" text every 20s
-  setInterval(() => {
-    // Re-fetch last snapshot time from marker position (already stored in DOM text)
-    // Just refresh the time display
-    const el = $('t-updated');
-    if (el && el._ts) el.textContent = timeSince(el._ts);
-  }, 20000);
 }
 
-// ── Spa phone ─────────────────────────────────────────────────────────────
-$('callBtn').onclick = () => { window.location.href = 'tel:+91XXXXXXXXXX'; };
+// ── Call Spa ───────────────────────────────────────────────────────────────
+document.getElementById('callBtn').onclick = () => { window.location.href = 'tel:+918148243019'; };
 
 main();
 </script>
