@@ -585,10 +585,11 @@ function TherapistPortal({ session, onLogout }) {
       } catch(_) { /* start duty without location — watchPosition will fill in */ }
     }
     try {
-      const updates = { onDuty:true, dutyStartedAt:FieldValue.serverTimestamp(), locationUpdatedAt:FieldValue.serverTimestamp() };
+      const updates = { onDuty:true, available:true, dutyStartedAt:FieldValue.serverTimestamp(), locationUpdatedAt:FieldValue.serverTimestamp() };
       if(initialLoc) updates.location = initialLoc;
       await db.collection('therapists').doc(session.docId).update(updates);
       setOnDuty(true);
+      setAvailable(true);
       setDutySeconds(0);
       dutyTimerRef.current = setInterval(() => setDutySeconds(s => s + 1), 1000);
       lastLocUpdateRef.current = Date.now();
@@ -618,8 +619,9 @@ function TherapistPortal({ session, onLogout }) {
     if(watchRef.current !== null){ navigator.geolocation.clearWatch(watchRef.current); watchRef.current = null; }
     if(dutyTimerRef.current){ clearInterval(dutyTimerRef.current); dutyTimerRef.current = null; }
     try {
-      await db.collection('therapists').doc(session.docId).update({ onDuty: false, locationUpdatedAt: FieldValue.serverTimestamp() });
+      await db.collection('therapists').doc(session.docId).update({ onDuty: false, available: false, locationUpdatedAt: FieldValue.serverTimestamp() });
       setOnDuty(false);
+      setAvailable(false);
       setDutySeconds(0);
       showMsg('Duty ended');
     } catch(err) { showMsg(`Error: ${err.message}`, 'error'); }
