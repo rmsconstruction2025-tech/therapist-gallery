@@ -73,6 +73,19 @@ const FIREBASE_CONFIG = {
 };
 const ADMIN_WHATSAPP = "918148243019";
 
+// ── Distance helpers ──────────────────────────────────
+function haversine(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const toRad = x => x * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function fmtDist(km) {
+  return km < 1 ? `${Math.round(km*1000)} m` : `${km.toFixed(1)} km`;
+}
+
 // ── Sound alert (Web Audio API — no file needed) ──────
 function playAlert(type='new') {
   try {
@@ -105,9 +118,10 @@ function getTokenFromUrl() {
 //  APP
 // ══════════════════════════════════════════════════════
 function App() {
-  const [status,      setStatus]      = useState('loading'); // loading|invalid|expired|info|gallery
+  const [status,      setStatus]      = useState('loading'); // loading|invalid|expired|info|loc-prompt|gallery
   const [tokenData,   setTokenData]   = useState(null);
   const [client,      setClient]      = useState({name:'',phone:''});
+  const [clientLoc,   setClientLoc]   = useState(null);
   const [isBlurred,   setIsBlurred]   = useState(false);
   const [isDuplicate, setIsDuplicate] = useState(false);
   const tokenStr = getTokenFromUrl();
@@ -191,7 +205,7 @@ function App() {
         setTokenData(data);
         if (data.clientName && data.clientPhone) {
           setClient({name:data.clientName, phone:data.clientPhone});
-          setStatus('gallery');
+          setStatus('loc-prompt');
         } else {
           setStatus('info');
         }
@@ -212,7 +226,8 @@ function App() {
   if (status==='loading') return <FullScreen><span className="spin" style={{fontSize:'2.5rem',color:'var(--gold)'}}>✦</span><p style={{color:'var(--muted)',marginTop:'16px'}}>Validating access…</p></FullScreen>;
   if (status==='invalid') return <FullScreen><div style={{fontSize:'3rem',color:'var(--gold)',marginBottom:'16px'}}>⚠</div><h2 style={msgTitle}>Invalid Link</h2><p style={msgSub}>This gallery link is invalid.</p></FullScreen>;
   if (status==='expired') return <FullScreen><div style={{fontSize:'3rem',color:'var(--gold)',marginBottom:'16px'}}>⏱</div><h2 style={msgTitle}>Link Expired</h2><p style={msgSub}>This gallery link has expired. Please contact us for a new link.</p></FullScreen>;
-  if (status==='info')    return <ClientInfoForm tokenData={tokenData} onConfirmed={(n,p)=>{ setClient({name:n,phone:p}); setStatus('gallery'); }}/>;
+  if (status==='info')    return <ClientInfoForm tokenData={tokenData} onConfirmed={(n,p)=>{ setClient({name:n,phone:p}); setStatus('loc-prompt'); }}/>;
+  if (status==='loc-prompt') return <LocationPrompt onDone={loc=>{ setClientLoc(loc); setStatus('gallery'); }}/>;
 
   return (
     <div style={{position:'relative'}}>
@@ -230,7 +245,7 @@ function App() {
         </div>
       )}
 
-      <TherapistGallery tokenData={tokenData} clientName={client.name} clientPhone={client.phone} isBlurred={isBlurred}/>
+      <TherapistGallery tokenData={tokenData} clientName={client.name} clientPhone={client.phone} clientLoc={clientLoc} isBlurred={isBlurred}/>
     </div>
   );
 }
@@ -292,6 +307,45 @@ function ClientInfoForm({ tokenData, onConfirmed }) {
 }
 
 // ══════════════════════════════════════════════════════
+//  LOCATION PROMPT
+// ══════════════════════════════════════════════════════
+function LocationPrompt({ onDone }) {
+  const [loading, setLoading] = useState(false);
+  const [err,     setErr]     = useState('');
+
+  const ask = () => {
+    setLoading(true); setErr('');
+    if (!navigator.geolocation) { setErr('GPS not available on this device.'); setLoading(false); return; }
+    navigator.geolocation.getCurrentPosition(
+      p  => { setLoading(false); onDone({ lat: p.coords.latitude, lng: p.coords.longitude }); },
+      () => { setLoading(false); setErr('Location access denied. Tap Skip to continue.'); },
+      { timeout: 8000, maximumAge: 60000 }
+    );
+  };
+
+  return (
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'radial-gradient(ellipse at 50% 0%,#1a1000,var(--bg) 65%)',padding:'24px'}}>
+      <div className="fade-in" style={{background:'var(--surface)',border:'1px solid var(--border-gold)',borderRadius:'20px',padding:'40px 32px',maxWidth:'380px',width:'100%',textAlign:'center',boxShadow:'0 0 30px rgba(212,175,55,.1)'}}>
+        <div style={{fontSize:'3.5rem',marginBottom:'12px'}}>📍</div>
+        <h2 style={{color:'var(--gold)',fontSize:'1.3rem',fontWeight:'700',letterSpacing:'1px',marginBottom:'10px'}}>Find Your Nearest Therapist</h2>
+        <p style={{color:'var(--muted)',fontSize:'0.85rem',lineHeight:'1.65',marginBottom:'28px'}}>
+          Share your location so we can show therapists sorted by distance — find who can reach you fastest.
+        </p>
+        {err&&<p style={{color:'var(--danger)',fontSize:'0.8rem',marginBottom:'14px'}}>{err}</p>}
+        <button onClick={ask} disabled={loading}
+          style={{background:'linear-gradient(135deg,#a07820,#d4af37)',color:'#000',border:'none',borderRadius:'12px',padding:'15px',width:'100%',fontWeight:'700',fontSize:'0.95rem',cursor:'pointer',marginBottom:'12px',minHeight:'50px',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}>
+          {loading?<><span className="spin">✦</span> Locating…</>:<>📍 Share My Location</>}
+        </button>
+        <button onClick={()=>onDone(null)}
+          style={{background:'transparent',color:'var(--muted)',border:'none',fontSize:'0.82rem',cursor:'pointer',padding:'8px',width:'100%',textDecoration:'underline',letterSpacing:'0.3px'}}>
+          Skip — show all therapists
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
 //  THERAPIST GALLERY
 // ══════════════════════════════════════════════════════
 const DAY_KEYS = ['sun','mon','tue','wed','thu','fri','sat'];
@@ -310,11 +364,32 @@ function getFilterInfo(tokenData) {
   return { dayKey: DAY_KEYS[today.getDay()], label: DAY_FULL[today.getDay()] };
 }
 
-function TherapistGallery({ tokenData, clientName, clientPhone, isBlurred }) {
+function TherapistGallery({ tokenData, clientName, clientPhone, clientLoc, isBlurred }) {
   const [therapists, setTherapists] = useState([]);
   const [loading,    setLoading]    = useState(true);
 
   const filterInfo = getFilterInfo(tokenData);
+
+  // Compute display list — sort by distance when client location is known
+  const displayList = React.useMemo(() => {
+    if (!clientLoc) return therapists;
+    const withDist = therapists.map(t => {
+      const tLat = t.location?.lat ?? t.lat ?? null;
+      const tLng = t.location?.lng ?? t.lng ?? null;
+      const dist = (tLat != null && tLng != null)
+        ? haversine(clientLoc.lat, clientLoc.lng, tLat, tLng)
+        : null;
+      return { ...t, _dist: dist };
+    });
+    return withDist.sort((a, b) => {
+      if (a._dist != null && b._dist != null) return a._dist - b._dist;
+      if (a._dist != null) return -1;
+      if (b._dist != null) return 1;
+      return 0;
+    });
+  }, [therapists, clientLoc]);
+
+  const hasDistances = clientLoc && displayList.some(t => t._dist != null);
 
   useEffect(()=>{
     (async()=>{
@@ -375,13 +450,18 @@ function TherapistGallery({ tokenData, clientName, clientPhone, isBlurred }) {
         <div style={{marginTop:'12px',display:'inline-flex',alignItems:'center',gap:'6px',background:'rgba(212,175,55,0.1)',border:'1px solid rgba(212,175,55,0.25)',borderRadius:'20px',padding:'5px 16px',fontSize:'0.8rem',color:'var(--muted)'}}>
           📅 Showing therapists available on <strong style={{color:'var(--gold)',marginLeft:'4px'}}>{filterInfo.label}</strong>
         </div>
+        {hasDistances&&(
+          <div style={{marginTop:'8px',display:'inline-flex',alignItems:'center',gap:'5px',background:'rgba(39,174,96,0.09)',border:'1px solid rgba(39,174,96,0.25)',borderRadius:'20px',padding:'4px 14px',fontSize:'0.76rem',color:'#27ae60'}}>
+            📍 Sorted by distance from your location
+          </div>
+        )}
       </header>
       {loading
         ? <div style={{display:'flex',flexDirection:'column',alignItems:'center',padding:'80px 20px'}}><span className="spin" style={{fontSize:'2rem',color:'var(--gold)'}}>✦</span><p style={{color:'var(--muted)',marginTop:'12px'}}>Loading gallery…</p></div>
         : therapists.length===0
           ? <div style={{textAlign:'center',padding:'80px 20px',color:'var(--muted)'}}>No therapists available on {filterInfo.label}.</div>
           : <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:'24px',padding:'32px 20px',maxWidth:'1100px',margin:'0 auto'}}>
-              {therapists.map(t=><TherapistCard key={t.id} therapist={t} tokenData={tokenData} clientName={clientName} clientPhone={clientPhone}/>)}
+              {displayList.map((t,i)=><TherapistCard key={t.id} therapist={t} tokenData={tokenData} clientName={clientName} clientPhone={clientPhone} isNearest={!!(hasDistances && i===0 && t._dist!=null)}/>)}
             </div>
       }
       <footer style={{textAlign:'center',color:'var(--muted)',fontSize:'0.75rem',padding:'20px',borderTop:'1px solid var(--border)'}}>
@@ -976,7 +1056,7 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
 // ══════════════════════════════════════════════════════
 //  THERAPIST CARD
 // ══════════════════════════════════════════════════════
-function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
+function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNearest }) {
   const [viewCount,    setViewCount]    = useState(0);
   const [limitReached, setLimitReached] = useState(false);
   const [isVisible,    setIsVisible]    = useState(false);
@@ -1131,7 +1211,7 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
   const status = getOnlineStatus();
 
   return (
-    <div style={{background:'var(--surface)',border:`1px solid ${therapist.available?'rgba(39,174,96,0.25)':'var(--border)'}`,borderRadius:'16px',overflow:'hidden',boxShadow:'0 4px 24px rgba(0,0,0,.4)'}}>
+    <div style={{background:'var(--surface)',border:`1px solid ${isNearest&&therapist._dist!=null?'rgba(39,174,96,0.5)':therapist.available?'rgba(39,174,96,0.25)':'var(--border)'}`,borderRadius:'16px',overflow:'hidden',boxShadow:isNearest&&therapist._dist!=null?'0 4px 24px rgba(37,162,64,.15)':'0 4px 24px rgba(0,0,0,.4)'}}>
       <canvas ref={canvasRef} style={{display:'none'}}/>
       <div style={{position:'relative',aspectRatio:'3/4',background:'#0d0d0d',overflow:'hidden'}}>
 
@@ -1146,6 +1226,13 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
           </div>
           <span style={{fontSize:'0.65rem',fontWeight:'700',color:'#fff',letterSpacing:'0.3px'}}>{status.label}</span>
         </div>
+
+        {/* Nearest badge */}
+        {isNearest&&therapist._dist!=null&&(
+          <div style={{position:'absolute',top:'40px',left:'10px',zIndex:10,background:'linear-gradient(135deg,#1a6e2e,#25a240)',color:'#fff',fontSize:'0.62rem',fontWeight:'700',borderRadius:'10px',padding:'3px 9px',border:'1px solid rgba(39,174,96,0.4)',letterSpacing:'0.5px',boxShadow:'0 2px 8px rgba(37,162,64,.25)'}}>
+            📍 Nearest
+          </div>
+        )}
 
         {/* Watermarked photo */}
         {isVisible&&canvasUrl&&(
@@ -1194,6 +1281,13 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone }) {
           )}
           {therapist.bio && (
             <p style={{color:'var(--muted)',fontSize:'0.76rem',marginTop:'4px',lineHeight:'1.5',fontStyle:'italic'}}>{therapist.bio}</p>
+          )}
+          {therapist._dist!=null&&(
+            <div style={{display:'inline-flex',alignItems:'center',gap:'4px',marginTop:'6px',background:isNearest?'rgba(39,174,96,0.08)':'rgba(255,255,255,0.04)',border:`1px solid ${isNearest?'rgba(39,174,96,0.3)':'rgba(255,255,255,0.07)'}`,borderRadius:'20px',padding:'3px 10px',fontSize:'0.74rem',color:isNearest?'#27ae60':'var(--muted)'}}>
+              <span>📍</span>
+              <span>~{fmtDist(therapist._dist)} away</span>
+              {isNearest&&<span style={{background:'#27ae60',color:'#fff',fontSize:'0.6rem',fontWeight:'700',borderRadius:'8px',padding:'1px 6px',marginLeft:'3px'}}>Nearest</span>}
+            </div>
           )}
         </div>
         <button onClick={()=>setShowBooking(true)} style={{background:'linear-gradient(135deg,#1a6e2e,#25a240)',color:'#fff',border:'none',borderRadius:'8px',padding:'11px 16px',fontSize:'0.85rem',fontWeight:'700',cursor:'pointer',display:'block',boxShadow:'0 2px 12px rgba(37,162,64,.3)',textAlign:'center',width:'100%'}}>

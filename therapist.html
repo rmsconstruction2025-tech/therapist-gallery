@@ -899,6 +899,9 @@ function TherapistPortal({ session, onLogout }) {
             </button>
           </div>
 
+          {/* My Location */}
+          <LocationCard session={session}/>
+
           {/* Therapist ID + Logout */}
           <div style={{background:'rgba(212,175,55,.04)',border:'1px solid var(--border-gold)',borderRadius:'12px',padding:'16px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'12px'}}>
             <div>
@@ -1315,6 +1318,72 @@ function BookingRequestCard({ booking: b, myGPS, onAccept, onDecline }) {
 // ══════════════════════════════════════════════════════
 //  EARNINGS TAB
 // ══════════════════════════════════════════════════════
+// ── Location Card (inside Profile tab) ────────────────
+function LocationCard({ session }) {
+  const [loc,     setLoc]     = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [saved,   setSaved]   = useState(false);
+  const [err,     setErr]     = useState('');
+
+  useEffect(()=>{
+    db.collection('therapists').doc(session.docId).get().then(snap=>{
+      if(snap.exists){
+        const d = snap.data();
+        const lat = d.location?.lat ?? d.lat ?? null;
+        const lng = d.location?.lng ?? d.lng ?? null;
+        if(lat!=null) setLoc({lat,lng});
+      }
+    }).catch(()=>{});
+  },[]);
+
+  const handleUpdate = ()=>{
+    setLoading(true); setErr(''); setSaved(false);
+    if(!navigator.geolocation){ setErr('GPS not available.'); setLoading(false); return; }
+    navigator.geolocation.getCurrentPosition(
+      async p=>{
+        const newLoc = { lat: p.coords.latitude, lng: p.coords.longitude };
+        try {
+          await db.collection('therapists').doc(session.docId).update({ location: newLoc });
+          setLoc(newLoc); setSaved(true);
+          setTimeout(()=>setSaved(false), 3000);
+        } catch(e){ setErr('Failed to save: ' + e.message); }
+        finally{ setLoading(false); }
+      },
+      ()=>{ setErr('Location access denied.'); setLoading(false); },
+      { timeout: 8000, maximumAge: 0 }
+    );
+  };
+
+  const mapsUrl = loc ? `https://maps.google.com?q=${loc.lat},${loc.lng}` : null;
+
+  return (
+    <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'16px',padding:'20px'}}>
+      <div style={{color:'var(--gold)',fontSize:'0.7rem',letterSpacing:'2px',textTransform:'uppercase',fontWeight:'700',marginBottom:'14px'}}>My Location</div>
+      {loc ? (
+        <div style={{background:'rgba(39,174,96,0.07)',border:'1px solid rgba(39,174,96,0.25)',borderRadius:'10px',padding:'12px 14px',marginBottom:'12px'}}>
+          <p style={{color:'#27ae60',fontSize:'0.82rem',fontWeight:'700',marginBottom:'3px'}}>✅ Location set</p>
+          <p style={{color:'var(--muted)',fontSize:'0.72rem',fontFamily:'monospace'}}>{loc.lat.toFixed(5)}, {loc.lng.toFixed(5)}</p>
+          <a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{color:'var(--gold)',fontSize:'0.75rem',textDecoration:'none',display:'inline-block',marginTop:'4px'}}>🗺️ View on Google Maps</a>
+        </div>
+      ) : (
+        <div style={{background:'rgba(255,255,255,0.03)',border:'1px solid var(--border)',borderRadius:'10px',padding:'12px 14px',marginBottom:'12px'}}>
+          <p style={{color:'var(--muted)',fontSize:'0.82rem'}}>📍 No location set yet</p>
+          <p style={{color:'var(--muted)',fontSize:'0.72rem',marginTop:'3px',lineHeight:'1.5'}}>Clients will see your distance once you set your location.</p>
+        </div>
+      )}
+      {err&&<p style={{color:'var(--danger)',fontSize:'0.78rem',marginBottom:'8px'}}>{err}</p>}
+      {saved&&<p style={{color:'#27ae60',fontSize:'0.78rem',marginBottom:'8px'}}>✅ Location updated!</p>}
+      <button onClick={handleUpdate} disabled={loading}
+        style={{background:'linear-gradient(135deg,#a07820,#d4af37)',color:'#000',border:'none',borderRadius:'10px',padding:'12px',width:'100%',fontWeight:'700',fontSize:'0.88rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',minHeight:'44px'}}>
+        {loading ? <><span className="spin">✦</span> Getting location…</> : <>📍 Update My Current Location</>}
+      </button>
+      <p style={{color:'var(--muted)',fontSize:'0.7rem',marginTop:'8px',lineHeight:'1.5',textAlign:'center'}}>
+        Tap to share your current GPS position. Clients will see distance to you in the gallery.
+      </p>
+    </div>
+  );
+}
+
 function EarningsTab({ session }) {
   const [entries,  setEntries]  = useState([]);
   const [loading,  setLoading]  = useState(true);
