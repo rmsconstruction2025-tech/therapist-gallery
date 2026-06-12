@@ -324,8 +324,9 @@ function TherapistGallery({ tokenData, clientName, clientPhone, isBlurred }) {
             if (tid) busyDocIds.add(tid);
           });
         } catch(e) { /* ignore if rules block */ }
-        // Filter by working hours; hide therapists currently in an active session
+        // Filter by working hours; hide therapists currently in an active session or without a photo
         const filtered = all.filter(t => {
+          if (!t.imageUrl) return false;              // no photo → hidden from gallery
           if (t.sessionActive === true) return false; // busy (flag set)
           if (busyDocIds.has(t.id)) return false;    // busy (active booking)
           const wh = t.workingHours;

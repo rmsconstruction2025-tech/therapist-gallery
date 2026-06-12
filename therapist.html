@@ -965,6 +965,23 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
         </div>
       </div>
 
+      {/* ⚠️ No photo warning — hidden from gallery until uploaded */}
+      {!data?.imageUrl&&(
+        <div style={{margin:'14px 16px 0',borderRadius:'14px',overflow:'hidden',border:'1px solid rgba(255,165,0,0.4)',background:'rgba(255,140,0,0.07)'}}>
+          <div style={{display:'flex',gap:'12px',alignItems:'flex-start',padding:'14px 16px'}}>
+            <div style={{fontSize:'1.5rem',flexShrink:0,lineHeight:1}}>📷</div>
+            <div style={{flex:1}}>
+              <p style={{fontWeight:'700',fontSize:'0.88rem',color:'#ffa500',marginBottom:'4px'}}>Profile photo missing</p>
+              <p style={{fontSize:'0.78rem',color:'var(--muted)',lineHeight:'1.45'}}>You are currently <strong style={{color:'#ffa500'}}>not visible</strong> in the client gallery. Upload a profile photo to start receiving bookings.</p>
+            </div>
+          </div>
+          <div style={{borderTop:'1px solid rgba(255,165,0,0.2)',padding:'10px 16px',background:'rgba(255,140,0,0.05)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <span style={{fontSize:'0.7rem',color:'var(--muted)'}}>Ask your admin to upload your photo</span>
+            <span style={{fontSize:'0.7rem',fontWeight:'700',color:'#ffa500',letterSpacing:'0.5px'}}>HIDDEN FROM GALLERY</span>
+          </div>
+        </div>
+      )}
+
       {/* Incoming booking request */}
       {firstPending&&(
         <div style={{padding:'14px 16px 0'}}>
