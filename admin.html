@@ -764,7 +764,7 @@ function TherapistManager() {
 //  LINK CREATOR
 // ══════════════════════════════════════════════════════
 function LinkCreator() {
-  const [form, setForm] = useState({clientName:'',clientPhone:'',expiryMinutes:60,maxViewsPerImage:2,viewDurationSeconds:3});
+  const [form, setForm] = useState({bookType:'now',scheduledDate:'',clientName:'',clientPhone:'',expiryMinutes:60,maxViewsPerImage:2,viewDurationSeconds:3});
   const [links,    setLinks]    = useState([]);
   const [creating, setCreating] = useState(false);
   const [newLink,  setNewLink]  = useState('');
@@ -789,20 +789,24 @@ function LinkCreator() {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    if (!form.clientName.trim()) return;
+    if (!form.clientName.trim() || !form.clientPhone.trim()) return;
+    if (form.bookType === 'later' && !form.scheduledDate) return;
     setCreating(true);
     try {
       const token     = genToken();
       const expiresAt = new Date(Date.now() + Number(form.expiryMinutes)*60000);
-      await db.collection('galleryTokens').add({
+      const doc = {
         token, expiresAt: firebase.firestore.Timestamp.fromDate(expiresAt),
         maxViewsPerImage: Number(form.maxViewsPerImage),
         viewDurationSeconds: Number(form.viewDurationSeconds),
         clientName: form.clientName.trim(), clientPhone: form.clientPhone.trim(),
+        bookType: form.bookType,
         used: false, createdAt: FieldValue.serverTimestamp(),
-      });
+      };
+      if (form.bookType === 'later') doc.scheduledDate = form.scheduledDate;
+      await db.collection('galleryTokens').add(doc);
       setNewLink(galleryUrl(token));
-      setForm(f=>({...f,clientName:'',clientPhone:''}));
+      setForm(f=>({...f,clientName:'',clientPhone:'',scheduledDate:''}));
       await fetchLinks();
     } catch(err) { alert(`Failed: ${err.message}`); }
     finally { setCreating(false); }
@@ -844,20 +848,75 @@ function LinkCreator() {
           <h2 style={{fontSize:'0.95rem',fontWeight:'700',color:'var(--text)'}}>Generate Gallery Link</h2>
         </div>
         <form onSubmit={handleCreate}>
+
+          {/* ── Book type toggle ── */}
+          <div style={{marginBottom:'18px'}}>
+            <label className="form-label">Booking Type</label>
+            <div style={{display:'flex',gap:'8px'}}>
+              {[['now','⚡ Book Now'],['later','📅 Book Later']].map(([bt,lbl])=>(
+                <button type="button" key={bt}
+                  onClick={()=>setForm(f=>({...f,bookType:bt,scheduledDate:''}))}
+                  className="btn btn-md"
+                  style={{flex:1,
+                    background: form.bookType===bt ? 'linear-gradient(135deg,var(--gold-dark),var(--gold))' : 'var(--elevated)',
+                    color: form.bookType===bt ? '#0a0a0a' : 'var(--text)',
+                    border: form.bookType===bt ? 'none' : '1px solid var(--border)',
+                  }}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="form-grid" style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:'16px',marginBottom:'20px'}}>
+
+            {/* Date picker — Book Later only */}
+            {form.bookType==='later' && (
+              <div style={{gridColumn:'1/-1'}}>
+                <label className="form-label">Scheduled Date <span style={{color:'var(--danger)'}}>*</span></label>
+                <input type="date" value={form.scheduledDate} min={new Date().toISOString().split('T')[0]}
+                  onChange={e=>setForm(p=>({...p,scheduledDate:e.target.value}))} className="form-input" required/>
+                {form.scheduledDate && (
+                  <p style={{fontSize:'0.74rem',color:'var(--muted)',marginTop:'5px'}}>
+                    {(()=>{
+                      const [y,m,d]=form.scheduledDate.split('-').map(Number);
+                      const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                      return `📅 ${days[new Date(y,m-1,d).getDay()]} — only therapists working this day will appear in the gallery`;
+                    })()}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Client name — required */}
+            <div>
+              <label className="form-label">Client Name <span style={{color:'var(--danger)'}}>*</span></label>
+              <input type="text" value={form.clientName}
+                onChange={e=>setForm(p=>({...p,clientName:e.target.value}))}
+                className="form-input" placeholder="Full name" required/>
+            </div>
+
+            {/* Client phone — required */}
+            <div>
+              <label className="form-label">Client Phone <span style={{color:'var(--danger)'}}>*</span></label>
+              <input type="tel" value={form.clientPhone}
+                onChange={e=>setForm(p=>({...p,clientPhone:e.target.value}))}
+                className="form-input" placeholder="10-digit number" required/>
+            </div>
+
+            {/* Link settings */}
             {[
-              ['clientName','Client Name','Full name','text'],
-              ['clientPhone','WhatsApp Number','10-digit number','tel'],
               ['expiryMinutes','Link Expiry (mins)','60','number'],
               ['maxViewsPerImage','Max Views / Photo','2','number'],
               ['viewDurationSeconds','View Duration (sec)','3','number'],
             ].map(([key,label,ph,type])=>(
               <div key={key}>
-                <label className="form-label">{label}{key==='clientName'&&<span style={{color:'var(--danger)'}}> *</span>}</label>
-                <input type={type} value={form[key]} onChange={e=>setForm(p=>({...p,[key]:e.target.value}))} className="form-input" placeholder={ph} required={key==='clientName'}/>
+                <label className="form-label">{label}</label>
+                <input type={type} value={form[key]} onChange={e=>setForm(p=>({...p,[key]:e.target.value}))} className="form-input" placeholder={ph}/>
               </div>
             ))}
           </div>
+
           <button type="submit" disabled={creating} className="btn btn-gold btn-md" style={{minWidth:'200px'}}>
             {creating?<span className="spin">✦</span>:'✦ Generate Link'}
           </button>
@@ -898,11 +957,19 @@ function LinkCreator() {
                       <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'12px',marginBottom:'8px'}}>
                         <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
                           <div style={{width:'36px',height:'36px',borderRadius:'50%',background:expired?'var(--elevated)':'var(--gold-glow)',border:`1px solid ${expired?'var(--border)':'var(--border-gold)'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.9rem',flexShrink:0}}>
-                            {expired?'⏱':'👤'}
+                            {l.bookType==='later'?'📅':(expired?'⏱':'👤')}
                           </div>
                           <div>
                             <div style={{fontWeight:'600',fontSize:'0.92rem'}}>{l.clientName}</div>
                             {l.clientPhone&&<div style={{color:'var(--muted)',fontSize:'0.78rem'}}>📱 {l.clientPhone}</div>}
+                            <div style={{marginTop:'5px',display:'flex',gap:'6px',alignItems:'center',flexWrap:'wrap'}}>
+                              <span className={`badge ${l.bookType==='later'?'badge-gold':'badge-gray'}`}>{l.bookType==='later'?'📅 Book Later':'⚡ Book Now'}</span>
+                              {l.bookType==='later'&&l.scheduledDate&&(()=>{
+                                const [y,m,d]=l.scheduledDate.split('-').map(Number);
+                                const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+                                return <span style={{fontSize:'0.72rem',color:'var(--muted)'}}>{days[new Date(y,m-1,d).getDay()]}, {l.scheduledDate}</span>;
+                              })()}
+                            </div>
                           </div>
                         </div>
                         <div style={{display:'flex',gap:'8px',alignItems:'center',flexShrink:0}}>
