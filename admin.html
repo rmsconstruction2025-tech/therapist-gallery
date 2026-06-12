@@ -476,12 +476,30 @@ function LiveTracker() {
                 allowFullScreen loading="lazy" title="Live Location"
               />
             ) : view==='all' && onDutyList.length>0 ? (
-              <iframe
-                key={`a-${onDutyList.map(t=>t.id).join('-')}-${Math.floor(now/30000)}`}
-                src={allMapSrc()}
-                style={{width:'100%',height:'100%',border:'none',display:'block'}}
-                allowFullScreen loading="lazy" title="All Locations"
-              />
+              <div style={{
+                display:'grid',
+                gridTemplateColumns: onDutyList.length===1 ? '1fr' : 'repeat(2, 1fr)',
+                gridTemplateRows: onDutyList.length<=2 ? '1fr' : 'repeat(2, 1fr)',
+                width:'100%', height:'100%', gap:'2px', background:'#111'
+              }}>
+                {onDutyList.map(t=>(
+                  <div key={t.id} style={{position:'relative',overflow:'hidden'}}>
+                    <iframe
+                      key={`a-${t.id}-${Math.floor((t.locationUpdatedAt?.toMillis?.()??0)/30000)}`}
+                      src={singleMapSrc(t)}
+                      style={{width:'100%',height:'100%',border:'none',display:'block'}}
+                      allowFullScreen loading="lazy" title={t.name||t.therapistId}
+                    />
+                    <div style={{position:'absolute',bottom:'10px',left:'10px',zIndex:10,background:'rgba(12,12,12,0.88)',border:'1px solid rgba(255,255,255,0.12)',borderRadius:'9px',padding:'5px 10px',display:'flex',alignItems:'center',gap:'7px',pointerEvents:'none'}}>
+                      <div style={{width:'8px',height:'8px',borderRadius:'50%',background:tAvatarColor(t.name||t.therapistId||''),flexShrink:0}}/>
+                      <div>
+                        <p style={{margin:0,fontWeight:'700',fontSize:'0.75rem',color:'#fff'}}>{t.name||t.therapistId||'Therapist'}</p>
+                        <p style={{margin:0,fontSize:'0.6rem',color:'rgba(255,255,255,0.45)'}}>{t._ago}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
               <div style={{height:'100%',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--muted)',flexDirection:'column',gap:'10px'}}>
                 <span style={{fontSize:'2rem'}}>🗺️</span>
@@ -500,21 +518,6 @@ function LiveTracker() {
               </div>
             )}
 
-            {/* All legend */}
-            {view==='all' && (
-              <div style={{position:'absolute',top:'12px',left:'12px',zIndex:10,background:'rgba(12,12,12,0.86)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'11px',padding:'9px 13px',pointerEvents:'none'}}>
-                <p style={{margin:'0 0 7px',fontSize:'0.62rem',color:'rgba(255,255,255,0.45)',letterSpacing:'1px',textTransform:'uppercase'}}>On duty</p>
-                <div style={{display:'flex',flexDirection:'column',gap:'5px'}}>
-                  {onDutyList.map(t=>(
-                    <div key={t.id} style={{display:'flex',alignItems:'center',gap:'7px'}}>
-                      <div style={{width:'8px',height:'8px',borderRadius:'50%',background:tAvatarColor(t.name||t.therapistId||''),flexShrink:0}}/>
-                      <span style={{fontSize:'0.75rem',color:'rgba(255,255,255,0.88)',fontWeight:'700'}}>{t.name||t.therapistId||'Therapist'}</span>
-                      <span style={{fontSize:'0.63rem',color:'rgba(255,255,255,0.4)'}}>{t._ago}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
         </div>
