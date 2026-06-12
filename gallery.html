@@ -306,7 +306,13 @@ function TherapistGallery({ tokenData, clientName, clientPhone, isBlurred }) {
   useEffect(()=>{
     (async()=>{
       try {
-        const snap = await db.collection('therapists').where('available','==',true).get();
+        // Book Later: fetch all therapists (offline status doesn't matter for future dates)
+        // Book Now: only fetch therapists currently online
+        const isBookLater = tokenData?.bookType === 'later';
+        const query = isBookLater
+          ? db.collection('therapists').get()
+          : db.collection('therapists').where('available','==',true).get();
+        const snap = await query;
         const all = snap.docs.map(d=>({id:d.id,...d.data()}));
         // Filter by working hours for the target day
         const filtered = all.filter(t => {
