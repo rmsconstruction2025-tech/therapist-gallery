@@ -1126,7 +1126,6 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
             :upcomingBookings.map(b=>{
               const isOpen=expandedId===b.id;
               return(
-              return(
                 <div key={b.id} onClick={()=>setExpandedId(isOpen?null:b.id)}
                   style={{background:'var(--surface)',border:'1px solid rgba(74,158,255,0.25)',borderRadius:'14px',padding:'13px 15px',cursor:'pointer'}}>
                   <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
