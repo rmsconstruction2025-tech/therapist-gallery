@@ -566,22 +566,23 @@ function TherapistPortal({ session, onLogout }) {
         setSpeciality(d.speciality || '');
         setBio(d.bio || '');
         setPhone(d.phone || '');
-        // If already on duty on page load, ensure today's attendance record exists
+        // If already on duty on page load, silently ensure today's attendance record exists
         if (d.available) {
-          const today   = new Date().toISOString().split('T')[0];
-          const attRef  = db.collection('attendance').doc(`${session.docId}_${today}`);
-          const attSnap = await attRef.get();
-          if (!attSnap.exists || !attSnap.data()?.checkIn) {
-            attRef.set({
-              therapistDocId: session.docId,
-              therapistId:    session.therapistId,
-              date:           today,
-              checkIn:        FieldValue.serverTimestamp(),
-              sessions:       attSnap.exists ? (attSnap.data().sessions || 0) : 0,
-              earnings:       attSnap.exists ? (attSnap.data().earnings || 0) : 0,
-              status:         'present',
-            }, { merge: true });
-          }
+          const today  = new Date().toISOString().split('T')[0];
+          const attRef = db.collection('attendance').doc(`${session.docId}_${today}`);
+          attRef.get().then(attSnap => {
+            if (!attSnap.exists || !attSnap.data()?.checkIn) {
+              attRef.set({
+                therapistDocId: session.docId,
+                therapistId:    session.therapistId,
+                date:           today,
+                checkIn:        FieldValue.serverTimestamp(),
+                sessions:       attSnap.exists ? (attSnap.data().sessions || 0) : 0,
+                earnings:       attSnap.exists ? (attSnap.data().earnings || 0) : 0,
+                status:         'present',
+              }, { merge: true }).catch(()=>{});
+            }
+          }).catch(()=>{}); // silent — Firestore rules may not be deployed yet
         }
       }
     } finally { setLoading(false); }
@@ -607,11 +608,13 @@ function TherapistPortal({ session, onLogout }) {
     setAvailable(next);
     try {
       await db.collection('therapists').doc(session.docId).update({ available: next });
-      // ── Attendance tracking ──────────────────────────────
+      showMsg(next ? 'Duty ON — you are now visible to clients' : 'Duty OFF — profile hidden from clients');
+    } catch(err) { setAvailable(!next); showMsg(`Error: ${err.message}`, 'error'); return; }
+    // ── Attendance tracking (silent — don't block or error on rules issues) ──
+    try {
       const today  = new Date().toISOString().split('T')[0];
       const attRef = db.collection('attendance').doc(`${session.docId}_${today}`);
       if (next) {
-        // Going ON duty → write checkIn if not already set today
         const snap = await attRef.get();
         if (!snap.exists || !snap.data()?.checkIn) {
           await attRef.set({
@@ -625,20 +628,18 @@ function TherapistPortal({ session, onLogout }) {
           }, { merge: true });
         }
       } else {
-        // Going OFF duty → write checkOut + compute hours + status
         const snap = await attRef.get();
         if (snap.exists && snap.data()?.checkIn) {
-          const checkInMs  = snap.data().checkIn.toMillis();
+          const checkInMs   = snap.data().checkIn.toMillis();
           const hoursOnDuty = parseFloat(((Date.now() - checkInMs) / 3600000).toFixed(2));
           await attRef.update({
-            checkOut:    FieldValue.serverTimestamp(),
+            checkOut: FieldValue.serverTimestamp(),
             hoursOnDuty,
-            status:      hoursOnDuty >= 4 ? 'present' : 'half-day',
+            status:   hoursOnDuty >= 4 ? 'present' : 'half-day',
           });
         }
       }
-      showMsg(next ? 'Duty ON — you are now visible to clients' : 'Duty OFF — profile hidden from clients');
-    } catch(err) { setAvailable(!next); showMsg(`Error: ${err.message}`, 'error'); }
+    } catch(_) {} // attendance write failure is non-fatal
   };
 
   const pickFile = (f) => {
