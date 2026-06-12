@@ -1743,6 +1743,17 @@ function BookingsPanel() {
     setDeleting(null);
   };
 
+  const updateStatus = async (b, newStatus)=>{
+    setConfirming(b.id);
+    try {
+      await db.collection('bookings').doc(b.id).update({
+        status: newStatus,
+        [`${newStatus}At`]: FieldValue.serverTimestamp(),
+      });
+    } catch(err){ alert(`Error: ${err.message}`); }
+    setConfirming(null);
+  };
+
   const confirmBooking = async (b)=>{
     setConfirming(b.id);
     try {
@@ -2076,16 +2087,38 @@ function BookingsPanel() {
                           </button>
                         )}
 
-                        {(b.status==='on_way')&&(
-                          <p style={{fontSize:'0.72rem',color:'#4a9eff',fontWeight:'600',margin:0}}>🚗 Therapist is on the way to client…</p>
+                        {/* ── Admin status controls ── */}
+                        {b.status==='confirmed'&&(
+                          <div style={{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center'}}>
+                            <p style={{fontSize:'0.72rem',color:'#27ae60',fontWeight:'600',margin:0,flex:'0 0 auto'}}>✓ Confirmed</p>
+                            <button onClick={()=>updateStatus(b,'on_way')} disabled={confirming===b.id}
+                              style={{background:'rgba(74,158,255,0.12)',color:'#4a9eff',border:'1px solid rgba(74,158,255,0.4)',borderRadius:'7px',padding:'6px 12px',fontWeight:'700',fontSize:'0.75rem',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'5px',minHeight:'32px'}}>
+                              {confirming===b.id?<span className="spin">✦</span>:<>🚗 Mark On the Way</>}
+                            </button>
+                          </div>
                         )}
-                        {(b.status==='in_session')&&(
-                          <p style={{fontSize:'0.72rem',color:'#ffa500',fontWeight:'600',margin:0}}>✦ Session is currently in progress…</p>
+                        {b.status==='on_way'&&(
+                          <div style={{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center'}}>
+                            <p style={{fontSize:'0.72rem',color:'#4a9eff',fontWeight:'600',margin:0,flex:'0 0 auto'}}>🚗 On the way…</p>
+                            <button onClick={()=>updateStatus(b,'in_session')} disabled={confirming===b.id}
+                              style={{background:'rgba(255,165,0,0.12)',color:'#ffa500',border:'1px solid rgba(255,165,0,0.4)',borderRadius:'7px',padding:'6px 12px',fontWeight:'700',fontSize:'0.75rem',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'5px',minHeight:'32px'}}>
+                              {confirming===b.id?<span className="spin">✦</span>:<>✦ Mark In Session</>}
+                            </button>
+                          </div>
                         )}
-                        {(b.status==='completed')&&(
+                        {b.status==='in_session'&&(
+                          <div style={{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'center'}}>
+                            <p style={{fontSize:'0.72rem',color:'#ffa500',fontWeight:'600',margin:0,flex:'0 0 auto'}}>✦ In session…</p>
+                            <button onClick={()=>updateStatus(b,'completed')} disabled={confirming===b.id}
+                              style={{background:'rgba(39,174,96,0.12)',color:'#27ae60',border:'1px solid rgba(39,174,96,0.4)',borderRadius:'7px',padding:'6px 12px',fontWeight:'700',fontSize:'0.75rem',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'5px',minHeight:'32px'}}>
+                              {confirming===b.id?<span className="spin">✦</span>:<>✓ Mark Complete</>}
+                            </button>
+                          </div>
+                        )}
+                        {b.status==='completed'&&(
                           <p style={{fontSize:'0.72rem',color:'#27ae60',fontWeight:'600',margin:0}}>✓ Session completed successfully.</p>
                         )}
-                        {(b.status==='pending')&&(
+                        {b.status==='pending'&&(
                           <p style={{fontSize:'0.72rem',color:'var(--muted)',fontStyle:'italic',margin:0}}>⏳ Waiting for therapist to accept…</p>
                         )}
                         {(b.status==='declined'||b.status==='expired')&&(
