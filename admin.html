@@ -465,7 +465,9 @@ function DashboardTab() {
   };
   const lastSeen = t => {
     if(t.sessionActive) return {text:'In Session', color:'#ffa500'};
-    if(!t.lastActiveAt) return {text:'Never opened app', color:'var(--muted)'};
+    if(!t.lastActiveAt) return t.available
+      ? {text:'Currently online', color:'#2ecc71'}
+      : {text:'', color:'var(--muted)'};
     const d = t.lastActiveAt.toDate?.(); if(!d) return {text:'—',color:'var(--muted)'};
     const s = (Date.now()-d)/1000;
     if(s<60)    return {text:'Last seen just now', color:'#2ecc71'};
