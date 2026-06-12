@@ -37,6 +37,8 @@
     .spin { display: inline-block; animation: spin 0.7s linear infinite; }
     @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
     .fade-in { animation: fadeIn 0.25s ease forwards; }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+    .pulse { animation: pulse 2s ease-in-out infinite; }
 
     /* Layout */
     .admin-layout { display:flex; min-height:100vh; }
@@ -335,6 +337,98 @@ function AdminLogin() {
 }
 
 // ══════════════════════════════════════════════════════
+//  LIVE TRACKER
+// ══════════════════════════════════════════════════════
+function LiveTracker() {
+  const [therapists, setTherapists] = useState([]);
+  const [selected,   setSelected]   = useState(null);
+
+  useEffect(()=>{
+    const unsub = db.collection('therapists').onSnapshot(snap=>{
+      setTherapists(snap.docs.map(d=>({id:d.id,...d.data()})));
+    });
+    return ()=>unsub();
+  },[]);
+
+  const onDutyList = therapists.filter(t => t.onDuty && t.location?.lat != null);
+
+  const timeAgo = ts => {
+    if(!ts?.toDate) return '?';
+    const s = (Date.now() - ts.toDate().getTime()) / 1000;
+    if(s < 60)   return `${Math.floor(s)}s ago`;
+    if(s < 3600) return `${Math.floor(s/60)} min ago`;
+    return `${Math.floor(s/3600)}h ago`;
+  };
+
+  // Auto-select first on-duty therapist
+  const selId = selected && onDutyList.find(t=>t.id===selected) ? selected : (onDutyList[0]?.id || null);
+  const selT  = onDutyList.find(t=>t.id===selId) || null;
+
+  return (
+    <div className="tab-content">
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'18px',flexWrap:'wrap',gap:'10px'}}>
+        <h2 style={{margin:0}}>Live Tracker</h2>
+        <span style={{fontSize:'0.75rem',color:'var(--muted)',background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'20px',padding:'4px 12px'}}>
+          {onDutyList.length} therapist{onDutyList.length!==1?'s':''} on duty
+        </span>
+      </div>
+
+      {onDutyList.length===0 ? (
+        <div className="card" style={{textAlign:'center',padding:'48px 24px'}}>
+          <div style={{fontSize:'3rem',marginBottom:'14px'}}>📍</div>
+          <p style={{fontWeight:'700',fontSize:'1rem',color:'var(--text)',marginBottom:'6px'}}>No therapists on duty</p>
+          <p style={{fontSize:'0.83rem',color:'var(--muted)',lineHeight:'1.5'}}>Therapists appear here when they tap "Start Duty" in their portal</p>
+        </div>
+      ) : (
+        <div style={{display:'grid',gridTemplateColumns:'minmax(220px,280px) 1fr',gap:'16px',alignItems:'start'}}>
+          {/* Therapist list */}
+          <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+            {onDutyList.map(t=>(
+              <div key={t.id} onClick={()=>setSelected(t.id)} style={{
+                background:'var(--surface)',
+                border:`2px solid ${selId===t.id?'var(--gold)':'var(--border)'}`,
+                borderRadius:'14px',padding:'13px 15px',cursor:'pointer',
+                transition:'border-color .15s',
+              }}>
+                <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'5px'}}>
+                  <div style={{width:'8px',height:'8px',borderRadius:'50%',background:'#27ae60',boxShadow:'0 0 6px #27ae60',flexShrink:0,animation:'pulse 2s infinite'}}/>
+                  <span style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.name||t.therapistId||'Therapist'}</span>
+                </div>
+                <p style={{fontSize:'0.7rem',color:'var(--muted)',margin:0}}>🕒 Updated: {timeAgo(t.locationUpdatedAt)}</p>
+                {t.location?.lat!=null&&(
+                  <p style={{fontSize:'0.67rem',color:'var(--muted)',margin:'3px 0 0',fontFamily:'monospace',opacity:0.7}}>
+                    {t.location.lat.toFixed(4)}, {t.location.lng.toFixed(4)}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Map */}
+          {selT?.location?.lat!=null ? (
+            <div style={{borderRadius:'16px',overflow:'hidden',border:'1px solid var(--border)',height:'430px',background:'var(--elevated)'}}>
+              <iframe
+                key={`${selT.id}-${Math.floor((selT.locationUpdatedAt?.toMillis?.()??0)/30000)}`}
+                src={`https://maps.google.com/maps?q=${selT.location.lat},${selT.location.lng}&z=16&output=embed`}
+                style={{width:'100%',height:'100%',border:'none',display:'block'}}
+                allowFullScreen
+                loading="lazy"
+                title="Live Location"
+              />
+            </div>
+          ) : (
+            <div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'16px',height:'430px',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--muted)',flexDirection:'column',gap:'10px'}}>
+              <span style={{fontSize:'2.5rem'}}>🗺️</span>
+              <span style={{fontSize:'0.85rem'}}>Select a therapist to view map</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
 //  DASHBOARD
 // ══════════════════════════════════════════════════════
 function Dashboard({ user }) {
@@ -347,6 +441,7 @@ function Dashboard({ user }) {
     { id:'accounts',   icon:'👤', label:'Accounts' },
     { id:'bookings',   icon:'📋', label:'Bookings' },
     { id:'attendance', icon:'📅', label:'Attendance' },
+    { id:'tracker',    icon:'📍', label:'Live Tracker' },
   ];
   return (
     <div className="admin-layout">
@@ -407,6 +502,7 @@ function Dashboard({ user }) {
           {tab==='accounts'   && <TherapistAccounts/>}
           {tab==='bookings'   && <BookingsPanel/>}
           {tab==='attendance' && <AttendanceAdmin/>}
+          {tab==='tracker'    && <LiveTracker/>}
         </div>
       </div>
     </div>
