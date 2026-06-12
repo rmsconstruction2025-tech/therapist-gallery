@@ -1115,6 +1115,12 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
   const [markSaving,    setMarkSaving]    = useState(false);
   const [homeTab,       setHomeTab]       = useState('today'); // 'today'|'upcoming'|'history'
   const [expandedId,    setExpandedId]    = useState(null);
+  const [nowTs,         setNowTs]         = useState(Date.now()); // ticks every 30s for elapsed timers
+
+  useEffect(()=>{
+    const t = setInterval(()=>setNowTs(Date.now()), 30000);
+    return ()=>clearInterval(t);
+  },[]);
 
   const handleMarkComplete = async (b) => {
     if (!markAmount || isNaN(Number(markAmount)) || Number(markAmount) <= 0) return;
@@ -1208,6 +1214,71 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
         onSOS={onSOS}
       />
 
+      {/* ⚠️ On-the-way overdue warning (>1 hr) */}
+      {(()=>{
+        const b = allBookings.find(b=>b.status==='on_way');
+        if(!b) return null;
+        const startMs = b.onWayAt?.toMillis?.() ?? 0;
+        if(!startMs) return null;
+        const elapsedMin = Math.floor((nowTs - startMs) / 60000);
+        if(elapsedMin < 60) return null;
+        const h = Math.floor(elapsedMin/60), m = elapsedMin%60;
+        const elapsed = m>0?`${h}h ${m}m`:`${h}h`;
+        const loc = b.clientLocation;
+        const mapsUrl = loc?.lat!=null ? `https://maps.google.com?q=${loc.lat},${loc.lng}` : null;
+        const locLabel = loc?.address || (loc?.lat!=null?`${Number(loc.lat).toFixed(4)}, ${Number(loc.lng).toFixed(4)}`:null);
+        return (
+          <div style={{margin:'14px 16px 0',borderRadius:'14px',overflow:'hidden',border:'1px solid rgba(239,159,39,0.5)',background:'rgba(239,159,39,0.07)'}}>
+            <div style={{display:'flex',gap:'12px',alignItems:'flex-start',padding:'14px 16px'}}>
+              <div style={{width:'38px',height:'38px',borderRadius:'50%',background:'rgba(239,159,39,0.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:'1.2rem'}}>🚗</div>
+              <div style={{flex:1}}>
+                <p style={{fontWeight:'700',fontSize:'0.88rem',color:'#ef9f27',margin:'0 0 4px'}}>Still on the way — {elapsed}</p>
+                <p style={{fontSize:'0.78rem',color:'var(--muted)',lineHeight:'1.55',margin:0}}>You've been <strong style={{color:'#ef9f27'}}>On the Way</strong> for over an hour. Quick to reach client location and start session.</p>
+              </div>
+            </div>
+            {mapsUrl&&locLabel&&(
+              <div style={{padding:'0 16px 12px',display:'flex',alignItems:'center',gap:'10px'}}>
+                <span style={{fontSize:'0.78rem',color:'var(--muted)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>📍 {locLabel}</span>
+                <a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{background:'rgba(239,159,39,0.15)',color:'#ef9f27',border:'1px solid rgba(239,159,39,0.35)',borderRadius:'8px',padding:'6px 12px',fontSize:'0.75rem',fontWeight:'700',textDecoration:'none',flexShrink:0}}>Open Maps</a>
+              </div>
+            )}
+            <div style={{borderTop:'1px solid rgba(239,159,39,0.2)',padding:'10px 16px',background:'rgba(239,159,39,0.04)'}}>
+              <button onClick={()=>onUpdateStatus(b,'in_session')} style={{width:'100%',padding:'11px',background:'rgba(239,159,39,0.2)',color:'#ef9f27',border:'1px solid rgba(239,159,39,0.4)',borderRadius:'10px',fontSize:'0.85rem',fontWeight:'700',cursor:'pointer',fontFamily:'inherit'}}>
+                ▶ Start Session Now
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ⚠️ In-session overdue warning (>1 hr) */}
+      {(()=>{
+        const b = allBookings.find(b=>b.status==='in_session');
+        if(!b) return null;
+        const startMs = b.inSessionAt?.toMillis?.() ?? 0;
+        if(!startMs) return null;
+        const elapsedMin = Math.floor((nowTs - startMs) / 60000);
+        if(elapsedMin < 60) return null;
+        const h = Math.floor(elapsedMin/60), m = elapsedMin%60;
+        const elapsed = m>0?`${h}h ${m}m`:`${h}h`;
+        return (
+          <div style={{margin:'14px 16px 0',borderRadius:'14px',overflow:'hidden',border:'1px solid rgba(231,76,60,0.45)',background:'rgba(231,76,60,0.07)'}}>
+            <div style={{display:'flex',gap:'12px',alignItems:'flex-start',padding:'14px 16px'}}>
+              <div style={{width:'38px',height:'38px',borderRadius:'50%',background:'rgba(231,76,60,0.18)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:'1.2rem'}}>⏱️</div>
+              <div style={{flex:1}}>
+                <p style={{fontWeight:'700',fontSize:'0.88rem',color:'#e74c3c',margin:'0 0 4px'}}>Session still open — {elapsed}</p>
+                <p style={{fontSize:'0.78rem',color:'var(--muted)',lineHeight:'1.55',margin:0}}>Your session has been running for over an hour. Please close this session so you can receive new bookings.</p>
+              </div>
+            </div>
+            <div style={{borderTop:'1px solid rgba(231,76,60,0.2)',padding:'10px 16px',background:'rgba(231,76,60,0.04)'}}>
+              <button onClick={()=>setMarkingId(b.id)} style={{width:'100%',padding:'11px',background:'#e74c3c',color:'#fff',border:'none',borderRadius:'10px',fontSize:'0.85rem',fontWeight:'700',cursor:'pointer',fontFamily:'inherit'}}>
+                ✓ Close Session Now
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ⚠️ No photo warning — hidden from gallery until uploaded */}
       {!data?.imageUrl&&(
         <div style={{margin:'14px 16px 0',borderRadius:'14px',overflow:'hidden',border:'1px solid rgba(255,165,0,0.4)',background:'rgba(255,140,0,0.07)'}}>
@@ -1265,9 +1336,15 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
               const isConfirmed = ['confirmed','accepted','admin_pending'].includes(b.status);
               const isOnWay     = b.status==='on_way';
               const isInSession = b.status==='in_session';
-              const isScheduled = b.bookingType==='later'; // has a scheduled date/time
+              const isScheduled = b.bookingType==='later';
               const accentColor = isCompleted?'#27ae60':isInSession?'#ffa500':isOnWay?'#4a9eff':isConfirmed?'var(--gold)':isScheduled?'#4a9eff':'var(--muted)';
               const statusLabel = isCompleted?'Done':isInSession?'In Session':isOnWay?'On the Way':isConfirmed?'Active':'Awaiting';
+              // Overdue check
+              const onWayElapsed   = isOnWay    ? Math.floor((nowTs-(b.onWayAt?.toMillis?.()??0))/60000) : 0;
+              const inSessElapsed  = isInSession ? Math.floor((nowTs-(b.inSessionAt?.toMillis?.()??0))/60000) : 0;
+              const isOverdue      = (isOnWay && onWayElapsed>=60) || (isInSession && inSessElapsed>=60);
+              const overdueColor   = isOnWay ? '#ef9f27' : '#e74c3c';
+              const overdueBg      = isOnWay ? 'rgba(239,159,39,0.15)' : 'rgba(231,76,60,0.15)';
               // Show "On My Way" only within 2 hours of scheduled time (always show for immediate bookings)
               const apptMs     = (b.scheduledDate&&b.scheduledTime) ? new Date(`${b.scheduledDate}T${b.scheduledTime}`) - new Date() : null;
               const canGoOnWay = apptMs!==null ? apptMs <= 2*60*60*1000 : true;
@@ -1276,13 +1353,14 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
               const locDisplay = b.clientLocation ? (b.clientLocation.address || (b.clientLocation.lat!=null?`${b.clientLocation.lat.toFixed(4)}, ${b.clientLocation.lng.toFixed(4)}`:null)) : null;
               const isTodayExpanded = expandedId===b.id;
               return(
-                <div key={b.id} style={{background:'var(--surface)',border:`1px solid ${isInSession?'rgba(255,165,0,0.3)':isOnWay?'rgba(74,158,255,0.3)':'var(--border)'}`,borderRadius:'14px',padding:'13px 16px',marginBottom:'8px'}}>
+                <div key={b.id} style={{background:'var(--surface)',border:`1px solid ${isOverdue?(isOnWay?'rgba(239,159,39,0.4)':'rgba(231,76,60,0.4)'):isInSession?'rgba(255,165,0,0.3)':isOnWay?'rgba(74,158,255,0.3)':'var(--border)'}`,borderRadius:'14px',padding:'13px 16px',marginBottom:'8px'}}>
                   <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'10px',cursor:'pointer'}} onClick={()=>setExpandedId(isTodayExpanded?null:b.id)}>
-                    <div style={{borderLeft:`3px solid ${accentColor}`,paddingLeft:'12px',flex:1,minWidth:0}}>
+                    <div style={{borderLeft:`3px solid ${isOverdue?overdueColor:accentColor}`,paddingLeft:'12px',flex:1,minWidth:0}}>
                       <p style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--text)',marginBottom:'3px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{b.clientName||'—'}</p>
                       <p style={{fontSize:'0.73rem',color:'var(--muted)',display:'flex',alignItems:'center',gap:'5px',flexWrap:'wrap'}}>
                         {isScheduled?<><span style={{color:'#4a9eff'}}>📅</span><span>{b.scheduledTime||'Scheduled'}</span></>:<><span style={{color:'var(--gold)'}}>⚡</span><span>Now</span></>}
-                        <span>·</span><span style={{color:accentColor,fontWeight:'600'}}>{statusLabel}</span>
+                        <span>·</span><span style={{color:isOverdue?overdueColor:accentColor,fontWeight:'600'}}>{statusLabel}</span>
+                        {isOverdue&&<span style={{background:overdueBg,color:overdueColor,fontSize:'0.6rem',padding:'2px 7px',borderRadius:'10px',fontWeight:'700'}}>Overdue</span>}
                       </p>
                     </div>
                     {isCompleted&&<span style={{color:'#27ae60',fontSize:'1.1rem',flexShrink:0}}>✓</span>}
