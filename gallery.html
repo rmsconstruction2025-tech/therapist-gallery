@@ -414,11 +414,12 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
   const lockedDate = tokenData?.bookType === 'later' ? (tokenData.scheduledDate || '') : '';
   const [step,         setStep]         = useState('choose');
   const [timeLeft,     setTimeLeft]     = useState(180);
-  const [form,         setForm]         = useState({ date: lockedDate, time:'', notes:'' });
+  const [form,         setForm]         = useState({ date: lockedDate, time:'', notes:'', landmark:'' });
   const [saving,       setSaving]       = useState(false);
   const [mapUrl,       setMapUrl]       = useState('');
   const [locError,     setLocError]     = useState('');
   const [gpsLoading,   setGpsLoading]   = useState(false);
+  const [clientMapsLink, setClientMapsLink] = useState('');
   const timerRef    = useRef(null);
   const unsubRef    = useRef(null);
   const bookingIdRef = useRef(null);
@@ -487,7 +488,7 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
   });
 
   // Submit "Book Now" after location is chosen
-  const submitBookNow = async (loc)=>{
+  const submitBookNow = async (loc, lmk, mapsLink)=>{
     setStep('loading');
     try {
       // ── Duplicate guard: one active booking per client at a time ──
@@ -546,6 +547,8 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
         clientName,
         clientPhone,          // stored for admin only — never shown to therapist
         clientLocation: loc,
+        landmark:       lmk||'',
+        clientMapsLink: mapsLink||'',
         bookingType:    'now',
         status:         'pending',
         createdAt:      FieldValue.serverTimestamp(),
@@ -602,15 +605,21 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
     setGpsLoading(true); setLocError('');
     const loc = await getGPS();
     setGpsLoading(false);
-    if(loc){ submitBookNow(loc); }
-    else { setLocError('Could not get location. Please enter a Google Maps link below.'); }
+    if(loc){
+      const ml = `https://maps.google.com?q=${loc.lat},${loc.lng}`;
+      setClientMapsLink(ml);
+      submitBookNow(loc, form.landmark, ml);
+    } else { setLocError('Could not get location. Please enter a Google Maps link below.'); }
   };
 
   const handleUseMapUrl = ()=>{
     if(!mapUrl.trim()){ setLocError('Please paste a Google Maps link.'); return; }
     const parsed = parseGoogleMapsUrl(mapUrl.trim());
-    if(parsed){ submitBookNow(parsed); }
-    else { setLocError('Invalid link. Open Google Maps → Share → Copy Link, then paste here.'); }
+    if(parsed){
+      const ml = mapUrl.trim();
+      setClientMapsLink(ml);
+      submitBookNow(parsed, form.landmark, ml);
+    } else { setLocError('Invalid link. Open Google Maps → Share → Copy Link, then paste here.'); }
   };
 
   const handleBookLater = async ()=>{
@@ -626,6 +635,8 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
         .limit(1).get();
       if(!dupSnap.empty){ alert('You already have a booking for this date and time.'); setSaving(false); return; }
       const loc = await Promise.race([getGPS(), new Promise(r=>setTimeout(()=>r(null),4000))]);
+      const ml = loc ? `https://maps.google.com?q=${loc.lat},${loc.lng}` : '';
+      setClientMapsLink(ml);
       await db.collection('bookings').add({
         therapistDocId: therapist.id,
         therapistId:    therapist.therapistId,
@@ -633,6 +644,8 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
         clientName,
         clientPhone,          // stored for admin only — never shown to therapist
         clientLocation: loc,
+        landmark:       form.landmark.trim(),
+        clientMapsLink: ml,
         bookingType:    'later',
         scheduledDate:  form.date,
         scheduledTime:  form.time,
@@ -716,6 +729,15 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
           <h2 style={{textAlign:'center',color:'var(--text)',fontSize:'1rem',fontWeight:'600',marginBottom:'6px'}}>Where should the therapist come?</h2>
           <p style={{textAlign:'center',color:'var(--muted)',fontSize:'0.78rem',marginBottom:'18px'}}>Share your location so the therapist can reach you</p>
 
+          {/* Landmark */}
+          <div style={{marginBottom:'14px'}}>
+            <label style={lbl}>Landmark <span style={{opacity:0.45}}>(optional)</span></label>
+            <input type="text" value={form.landmark}
+              onChange={e=>setForm(f=>({...f,landmark:e.target.value}))}
+              placeholder="e.g. Near City Mall, Opp. Reliance Fresh…"
+              style={inp}/>
+          </div>
+
           {/* GPS option */}
           <button onClick={handleUseGPS} disabled={gpsLoading}
             style={{...goldBtn,display:'flex',alignItems:'center',justifyContent:'center',gap:'10px',marginBottom:'14px'}}>
@@ -777,24 +799,42 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
         )}
 
         {/* ── Accepted ── */}
-        {step==='accepted'&&(
+        {step==='accepted'&&(()=>{
+          const tName       = therapist.name||therapist.therapistId;
+          const lmk         = form.landmark.trim()||'Not provided';
+          const loc         = clientMapsLink||'Not provided';
+          const therapistWa = therapist.phone ? '91'+therapist.phone.replace(/\D/g,'').replace(/^91/,'') : null;
+          const adminMsg    = encodeURIComponent(`Hi, my booking with ${tName} has been accepted!\nClient: ${clientName}\nAppointment: Immediate (Now)\nLandmark: ${lmk}\nLocation: ${loc}\nKindly confirm. — ${clientName}`);
+          const therapistMsg= encodeURIComponent(`Hi ${tName}, you have a new confirmed booking!\nClient: ${clientName}\nAppointment: Immediate (Now)\nLandmark: ${lmk}\nLocation: ${loc}\nPlease proceed. — Feel Free Spa`);
+          return (
           <div style={{textAlign:'center'}}>
             <div style={{fontSize:'3rem',marginBottom:'10px'}}>✅</div>
             <h2 style={{color:'#27ae60',fontSize:'1.15rem',fontWeight:'700',marginBottom:'8px'}}>Therapist Accepted!</h2>
             <p style={{color:'var(--muted)',fontSize:'0.85rem',marginBottom:'12px'}}>
-              <strong style={{color:'var(--text)'}}>{therapist.name||therapist.therapistId}</strong> has accepted your request.
+              <strong style={{color:'var(--text)'}}>{tName}</strong> has accepted your request.
             </p>
             <div style={{background:'rgba(212,175,55,0.08)',border:'1px solid var(--border-gold)',borderRadius:'12px',padding:'14px',marginBottom:'16px',textAlign:'left'}}>
               <p style={{color:'var(--gold)',fontSize:'0.85rem',fontWeight:'700',marginBottom:'5px'}}>⏳ Next: Admin Confirmation</p>
               <p style={{color:'var(--muted)',fontSize:'0.8rem',lineHeight:'1.6'}}>Admin will verify and confirm your appointment. Confirmation will be sent to your WhatsApp.</p>
+              {form.landmark&&<p style={{color:'var(--muted)',fontSize:'0.78rem',marginTop:'6px'}}>📍 Landmark: <strong style={{color:'var(--text)'}}>{form.landmark}</strong></p>}
+              {clientMapsLink&&<p style={{color:'var(--muted)',fontSize:'0.78rem',marginTop:'4px'}}>🗺️ <a href={clientMapsLink} target="_blank" rel="noopener noreferrer" style={{color:'var(--gold)',textDecoration:'none'}}>View on Google Maps</a></p>}
             </div>
-            <a href={`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent('Hi, my booking with '+(therapist.name||therapist.therapistId)+' has been accepted. Kindly confirm my appointment. — '+clientName)}`}
+            <a href={`https://wa.me/${ADMIN_WHATSAPP}?text=${adminMsg}`}
               target="_blank" rel="noopener noreferrer"
               style={{display:'block',background:'#25D366',color:'#fff',borderRadius:'10px',padding:'13px',fontWeight:'700',textDecoration:'none',marginBottom:'10px',fontSize:'0.9rem',textAlign:'center'}}>
-              💬 Contact Admin on WhatsApp
+              💬 Send Details to Admin
             </a>
+            {therapistWa&&(
+              <a href={`https://wa.me/${therapistWa}?text=${therapistMsg}`}
+                target="_blank" rel="noopener noreferrer"
+                style={{display:'block',background:'#128C7E',color:'#fff',borderRadius:'10px',padding:'13px',fontWeight:'700',textDecoration:'none',marginBottom:'10px',fontSize:'0.9rem',textAlign:'center'}}>
+                💬 Send Location to Therapist
+              </a>
+            )}
             <button onClick={onClose} style={{...goldBtn,background:'transparent',border:'1px solid var(--border)',color:'var(--muted)'}}>Close</button>
           </div>
+          );
+        })()}
         )}
 
         {/* ── Declined ── */}
@@ -884,6 +924,13 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
                 rows={2} placeholder="Any special requests or preferences…"
                 style={{...inp,resize:'none',fontFamily:'inherit'}}/>
             </div>
+            <div>
+              <label style={lbl}>Landmark <span style={{opacity:0.45}}>(optional)</span></label>
+              <input type="text" value={form.landmark}
+                onChange={e=>setForm(f=>({...f,landmark:e.target.value}))}
+                placeholder="e.g. Near City Mall, Opp. Reliance Fresh…"
+                style={inp}/>
+            </div>
             <button onClick={handleBookLater} disabled={!form.date||!form.time||saving}
               style={{...goldBtn,opacity:(!form.date||!form.time)?0.5:1}}>
               {saving?<span className="spin">✦</span>:'Confirm Booking'}
@@ -892,24 +939,41 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
         </>)}
 
         {/* ── Later Done ── */}
-        {step==='later-done'&&(
+        {step==='later-done'&&(()=>{
+          const tName        = therapist.name||therapist.therapistId;
+          const lmk          = form.landmark.trim()||'Not provided';
+          const loc          = clientMapsLink||'Not provided';
+          const therapistWa  = therapist.phone ? '91'+therapist.phone.replace(/\D/g,'').replace(/^91/,'') : null;
+          const adminMsg     = encodeURIComponent(`Hi, I scheduled an appointment with ${tName}!\nClient: ${clientName}\nDate: ${form.date}\nTime: ${form.time}\nLandmark: ${lmk}\nLocation: ${loc}\nPlease confirm. — ${clientName}`);
+          const therapistMsg = encodeURIComponent(`Hi ${tName}, upcoming booking confirmed!\nClient: ${clientName}\nDate: ${form.date}\nTime: ${form.time}\nLandmark: ${lmk}\nLocation: ${loc}\nPlease note and prepare. — Feel Free Spa`);
+          return (
           <div style={{textAlign:'center'}}>
             <div style={{fontSize:'3rem',marginBottom:'10px'}}>🎉</div>
             <h2 style={{color:'var(--gold)',fontSize:'1.15rem',fontWeight:'700',marginBottom:'8px'}}>Appointment Scheduled!</h2>
-            <p style={{color:'var(--muted)',fontSize:'0.83rem',marginBottom:'10px'}}>Booking with <strong style={{color:'var(--text)'}}>{therapist.name||therapist.therapistId}</strong> submitted.</p>
-            <div style={{background:'var(--elevated)',borderRadius:'10px',padding:'10px 16px',marginBottom:'14px',border:'1px solid rgba(212,175,55,0.3)',display:'inline-block',textAlign:'left'}}>
+            <p style={{color:'var(--muted)',fontSize:'0.83rem',marginBottom:'10px'}}>Booking with <strong style={{color:'var(--text)'}}>{tName}</strong> submitted.</p>
+            <div style={{background:'var(--elevated)',borderRadius:'10px',padding:'10px 16px',marginBottom:'14px',border:'1px solid rgba(212,175,55,0.3)',textAlign:'left'}}>
               <p style={{color:'var(--gold)',fontSize:'0.88rem',fontWeight:'600'}}>📅 {form.date}</p>
               <p style={{color:'var(--gold)',fontSize:'0.88rem',fontWeight:'600'}}>🕐 {form.time}</p>
+              {form.landmark&&<p style={{color:'var(--muted)',fontSize:'0.82rem',marginTop:'6px'}}>📍 {form.landmark}</p>}
+              {clientMapsLink&&<p style={{color:'var(--muted)',fontSize:'0.8rem',marginTop:'4px'}}>🗺️ <a href={clientMapsLink} target="_blank" rel="noopener noreferrer" style={{color:'var(--gold)',textDecoration:'none'}}>View on Google Maps</a></p>}
             </div>
-            <p style={{color:'var(--muted)',fontSize:'0.76rem',marginBottom:'14px'}}>Your appointment is listed as <strong style={{color:'var(--gold)'}}>upcoming</strong>. Admin and therapist have been notified.</p>
-            <a href={`https://wa.me/${ADMIN_WHATSAPP}?text=${encodeURIComponent('Hi, I just scheduled an upcoming appointment with '+(therapist.name||therapist.therapistId)+' for '+form.date+' at '+form.time+'. Please confirm. — '+clientName)}`}
+            <p style={{color:'var(--muted)',fontSize:'0.76rem',marginBottom:'14px'}}>Share these details with admin and therapist on WhatsApp.</p>
+            <a href={`https://wa.me/${ADMIN_WHATSAPP}?text=${adminMsg}`}
               target="_blank" rel="noopener noreferrer"
               style={{display:'block',background:'#25D366',color:'#fff',borderRadius:'10px',padding:'12px',fontWeight:'700',textDecoration:'none',marginBottom:'10px',fontSize:'0.88rem',textAlign:'center'}}>
-              💬 Contact Admin on WhatsApp
+              💬 Send Details to Admin
             </a>
+            {therapistWa&&(
+              <a href={`https://wa.me/${therapistWa}?text=${therapistMsg}`}
+                target="_blank" rel="noopener noreferrer"
+                style={{display:'block',background:'#128C7E',color:'#fff',borderRadius:'10px',padding:'12px',fontWeight:'700',textDecoration:'none',marginBottom:'10px',fontSize:'0.88rem',textAlign:'center'}}>
+                💬 Send Details to Therapist
+              </a>
+            )}
             <button onClick={onClose} style={goldBtn}>Done ✓</button>
           </div>
-        )}
+          );
+        })()}
 
       </div>
     </div>
