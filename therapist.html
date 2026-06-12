@@ -1479,13 +1479,16 @@ function AttendanceTab({ session }) {
 
   useEffect(()=>{
     setLoading(true);
-    db.collection('attendance')
+    // Use real-time listener so duty toggle writes appear instantly
+    const unsub = db.collection('attendance')
       .where('therapistDocId','==',session.docId)
       .where('date','>=',monthStart)
       .where('date','<=',monthEnd)
-      .get()
-      .then(snap=>{ setRecords(snap.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); })
-      .catch(()=>setLoading(false));
+      .onSnapshot(
+        snap=>{ setRecords(snap.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); },
+        ()=>setLoading(false)
+      );
+    return ()=>unsub();
   },[]);
 
   const byDate = {};
