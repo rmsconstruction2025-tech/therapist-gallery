@@ -1492,19 +1492,26 @@ function AttendanceTab({ session }) {
   records.forEach(r=>{ byDate[r.date]=r; });
   const todayRec = byDate[todayStr]||null;
 
+  // First day therapist has a record this month (track from first use, not month start)
+  const firstRecordDate = records.length > 0
+    ? records.reduce((min,r)=>r.date<min?r.date:min, records[0].date)
+    : null;
+
   const getStatus = (dayNum)=>{
     const ds   = `${yr}-${String(mo+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
     const date = new Date(yr,mo,dayNum);
     if(ds>todayStr) return 'future';
     if(date.getDay()===0) return 'weekend';
     const r = byDate[ds];
-    if(!r) return 'absent';
-    return r.status||'present';
+    if(r) return r.status||'present';
+    // Only mark absent for days AFTER the first record date (tracking started)
+    if(firstRecordDate && ds>=firstRecordDate && ds<todayStr) return 'absent';
+    return 'no-data';
   };
 
-  const S_COLOR = { present:'#27ae60','half-day':'#f39c12',absent:'#e74c3c',weekend:'#1e1e1e',future:'transparent' };
-  const S_TEXT  = { present:'#9be09b','half-day':'#f5c86f',absent:'#f1a8a8',weekend:'#444',future:'#333' };
-  const S_LABEL = { present:'Present','half-day':'Half day',absent:'Absent',weekend:'Weekend',future:'' };
+  const S_COLOR = { present:'#27ae60','half-day':'#f39c12',absent:'#e74c3c',weekend:'#1e1e1e',future:'transparent','no-data':'#222' };
+  const S_TEXT  = { present:'#9be09b','half-day':'#f5c86f',absent:'#f1a8a8',weekend:'#444',future:'#333','no-data':'#444' };
+  const S_LABEL = { present:'Present','half-day':'Half day',absent:'Absent',weekend:'Weekend',future:'','no-data':'' };
 
   const presentCount  = records.filter(r=>r.status==='present').length;
   const halfCount     = records.filter(r=>r.status==='half-day').length;
@@ -1672,7 +1679,7 @@ function AttendanceTab({ session }) {
               if(new Date(yr,mo,d).getDay()===0) continue;
               const r=byDate[ds];
               if(r&&(r.status==='present'||r.status==='half-day')) streak++;
-              else if(ds<todayStr) break;
+              else if(ds<=todayStr) break;
             }
             return(
               <div style={{textAlign:'center',padding:'12px 0 4px'}}>
@@ -1687,8 +1694,9 @@ function AttendanceTab({ session }) {
               {Array.from({length:daysInMonth},(_,i)=>{
                 const day=i+1, s=getStatus(day);
                 return(
-                  <div key={day} style={{width:'28px',height:'28px',borderRadius:'6px',background:S_COLOR[s],
-                    opacity:s==='future'?0.2:1,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <div key={day} style={{width:'28px',height:'28px',borderRadius:'6px',
+                    background:S_COLOR[s],border:s==='no-data'?'1px solid #333':'none',
+                    opacity:(s==='future'||s==='no-data')?0.35:1,display:'flex',alignItems:'center',justifyContent:'center'}}>
                     <span style={{fontSize:'0.55rem',fontWeight:'700',color:S_TEXT[s]}}>{day}</span>
                   </div>
                 );
