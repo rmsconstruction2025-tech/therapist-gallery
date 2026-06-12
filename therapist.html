@@ -1516,7 +1516,12 @@ function DutyCard({ onDuty, dutySeconds, dutyLoading, onStartDuty, onEndDuty, on
             </div>
           </div>
         )}
-        {!onDuty&&<div/>}
+        {!onDuty&&(
+          <div>
+            <p style={{fontWeight:'700',fontSize:'0.85rem',color:'var(--muted)',margin:0}}>Location Private</p>
+            <p style={{fontSize:'0.7rem',color:'var(--muted)',margin:'2px 0 0',opacity:0.6}}>Tap Start Duty to go live</p>
+          </div>
+        )}
         <button
           onClick={onDuty ? onEndDuty : onStartDuty}
           disabled={dutyLoading}
