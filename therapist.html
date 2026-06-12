@@ -606,7 +606,6 @@ function TherapistPortal({ session, onLogout }) {
         ()=>{},
         {enableHighAccuracy:true, maximumAge:10000}
       );
-      showMsg(initialLoc ? 'Duty started — admin can see your location' : 'Duty started — location updating shortly');
     } catch(err) {
       showMsg(`Error: ${err.message}`, 'error');
     }
