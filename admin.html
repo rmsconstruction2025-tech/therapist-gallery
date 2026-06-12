@@ -1314,10 +1314,11 @@ function AttendanceAdmin() {
   useEffect(()=>{
     Promise.all([
       db.collection('therapists').get(),
-      db.collection('attendance').where('date','>=',monthStart).where('date','<=',monthEnd).get()
+      db.collection('attendance').get()
     ]).then(([tSnap, aSnap])=>{
       setTherapists(tSnap.docs.map(d=>({id:d.id,...d.data()})));
-      setRecords(aSnap.docs.map(d=>({id:d.id,...d.data()})));
+      // Filter client-side — avoids composite index requirement
+      setRecords(aSnap.docs.map(d=>({id:d.id,...d.data()})).filter(r=>r.date>=monthStart&&r.date<=monthEnd));
       setLoading(false);
     }).catch(()=>setLoading(false));
   },[]);

@@ -1496,13 +1496,16 @@ function AttendanceTab({ session }) {
 
   useEffect(()=>{
     setLoading(true);
-    // Use real-time listener so duty toggle writes appear instantly
+    // Single-field equality only — no composite index needed.
+    // Date range filtered client-side.
     const unsub = db.collection('attendance')
       .where('therapistDocId','==',session.docId)
-      .where('date','>=',monthStart)
-      .where('date','<=',monthEnd)
       .onSnapshot(
-        snap=>{ setRecords(snap.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); },
+        snap=>{
+          const all = snap.docs.map(d=>({id:d.id,...d.data()}));
+          setRecords(all.filter(r=>r.date>=monthStart && r.date<=monthEnd));
+          setLoading(false);
+        },
         ()=>setLoading(false)
       );
     return ()=>unsub();
