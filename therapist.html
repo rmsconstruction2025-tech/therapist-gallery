@@ -498,6 +498,7 @@ function TherapistPortal({ session, onLogout }) {
         await db.collection('therapists').doc(session.docId).update({ sessionActive: true });
         showMsg('Admin notified — On the way! 🚗');
       } else if (newStatus === 'in_session') {
+        await db.collection('therapists').doc(session.docId).update({ sessionActive: true });
         showMsg('Admin notified — Session started! ✦');
       }
     } catch(err) { showMsg(`Error: ${err.message}`, 'error'); }

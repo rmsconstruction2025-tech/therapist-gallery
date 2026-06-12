@@ -314,9 +314,20 @@ function TherapistGallery({ tokenData, clientName, clientPhone, isBlurred }) {
           : db.collection('therapists').where('available','==',true).get();
         const snap = await query;
         const all = snap.docs.map(d=>({id:d.id,...d.data()}));
+        // Also query active bookings to catch therapists on_way/in_session
+        let busyDocIds = new Set();
+        try {
+          const activeSnap = await db.collection('bookings')
+            .where('status','in',['on_way','in_session']).get();
+          activeSnap.docs.forEach(d => {
+            const tid = d.data().therapistDocId;
+            if (tid) busyDocIds.add(tid);
+          });
+        } catch(e) { /* ignore if rules block */ }
         // Filter by working hours; hide therapists currently in an active session
         const filtered = all.filter(t => {
-          if (t.sessionActive === true) return false; // busy with another client
+          if (t.sessionActive === true) return false; // busy (flag set)
+          if (busyDocIds.has(t.id)) return false;    // busy (active booking)
           const wh = t.workingHours;
           if (!wh) return true; // no hours configured → always show
           return wh[filterInfo.dayKey]?.on === true;
