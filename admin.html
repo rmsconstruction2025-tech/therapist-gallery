@@ -179,12 +179,12 @@
       }
       .bottom-nav-item {
         flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
-        gap:3px; background:transparent; border:none; color:var(--muted);
-        font-size:0.58rem; font-weight:600; cursor:pointer; font-family:inherit;
-        padding:8px 4px 10px; letter-spacing:0.3px; text-transform:uppercase; min-height:56px;
+        gap:4px; background:transparent; border:none; color:var(--muted);
+        font-size:0.6rem; font-weight:600; cursor:pointer; font-family:inherit;
+        padding:8px 4px 10px; letter-spacing:0.2px; min-height:58px;
         position:relative;
       }
-      .bottom-nav-item .bnav-icon { font-size:1.35rem; line-height:1; transition:transform .15s; }
+      .bottom-nav-item .bnav-icon { font-size:1.45rem; line-height:1; transition:transform .15s; }
       .bottom-nav-item.active { color:var(--gold); }
       .bottom-nav-item.active .bnav-icon { transform:scale(1.08); }
       .bottom-nav-item.active::before {
@@ -193,9 +193,10 @@
       }
 
       /* Topbar */
-      .topbar { padding:11px 14px; }
+      .topbar { padding:10px 14px; min-height:52px; }
       .topbar-email { display:none !important; }
-      .content { padding:12px; gap:16px !important; }
+      .topbar-title { font-size:1rem !important; }
+      .content { padding:14px 12px; gap:16px !important; }
 
       /* Cards */
       .card-gold { padding:16px !important; }
@@ -682,6 +683,13 @@ function Dashboard({ user }) {
     { id:'attendance', icon:'📅', label:'Attendance' },
     { id:'tracker',    icon:'📍', label:'Live Tracker' },
   ];
+  // Mobile bottom nav — 4 key tabs only
+  const mobileTabs = [
+    { id:'dashboard', icon:'⊞', label:'Home' },
+    { id:'tracker',   icon:'📍', label:'Tracker' },
+    { id:'accounts',  icon:'👤', label:'Accounts' },
+    { id:'bookings',  icon:'📋', label:'Bookings' },
+  ];
 
   return (
     <div className="admin-layout">
@@ -742,18 +750,18 @@ function Dashboard({ user }) {
           </div>
         </div>
 
-        {/* Bottom nav (mobile only) */}
+        {/* Bottom nav (mobile only — 4 tabs) */}
         <nav className="bottom-nav">
-          {tabs.map(t=>(
+          {mobileTabs.map(t=>(
             <button key={t.id} className={`bottom-nav-item${tab===t.id?' active':''}`} onClick={()=>setTab(t.id)}>
               <span className="bnav-icon">{t.icon}</span>
-              {t.label.split(' ')[0]}
+              {t.label}
             </button>
           ))}
         </nav>
 
         <div className="content">
-          {tab==='dashboard'  && <DashboardTab/>}
+          {tab==='dashboard'  && <DashboardTab onNavigate={setTab}/>}
           {tab==='therapists' && <TherapistManager/>}
           {tab==='links'      && <LinkCreator/>}
           {tab==='accounts'   && <TherapistAccounts/>}
@@ -769,7 +777,7 @@ function Dashboard({ user }) {
 // ══════════════════════════════════════════════════════
 //  DASHBOARD TAB
 // ══════════════════════════════════════════════════════
-function DashboardTab() {
+function DashboardTab({ onNavigate = ()=>{} }) {
   const [bookings,   setBookings]   = useState([]);
   const [therapists, setTherapists] = useState([]);
   const [loadingB,   setLoadingB]   = useState(true);
@@ -812,6 +820,12 @@ function DashboardTab() {
   const confirmedCount         = bookings.filter(b=>b.status==='confirmed').length;
   const therapistAcceptedCount = bookings.filter(b=>b.status==='confirmed'&&b.therapistAccepted===true).length;
   const onlineCount            = therapists.filter(t=>t.available).length;
+  const noGPSCount             = therapists.filter(t=>t.available&&!t.lat&&!t.latitude&&!t.lastLocation).length;
+  const ratedTherps            = therapists.filter(t=>t.rating!=null&&parseFloat(t.rating)>0);
+  const avgRating              = ratedTherps.length>0?(ratedTherps.reduce((s,t)=>s+parseFloat(t.rating||0),0)/ratedTherps.length).toFixed(1):'—';
+  const activeTherps           = therapists.filter(t=>t.available).slice(0,5);
+  const hour                   = new Date().getHours();
+  const greeting               = hour<12?'Morning':hour<17?'Afternoon':'Evening';
 
   const STATUS_CFG = {
     pending:       {color:'var(--gold)',  bg:'rgba(212,175,55,0.12)',  label:'Pending'},
@@ -864,79 +878,131 @@ function DashboardTab() {
   ];
 
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:'20px'}}>
-      <div>
-        <h1 style={{fontSize:'1.05rem',fontWeight:'700',color:'var(--text)',marginBottom:'3px'}}>Overview</h1>
-        <p style={{fontSize:'0.78rem',color:'var(--muted)'}}>{new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</p>
+    <div style={{display:'flex',flexDirection:'column'}}>
+
+      {/* ── Greeting ── */}
+      <div style={{marginBottom:'16px'}}>
+        <p style={{fontSize:'0.72rem',color:'var(--muted)',marginBottom:'2px'}}>
+          {new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
+        </p>
+        <h1 style={{fontSize:'1.08rem',fontWeight:'700',color:'var(--text)',letterSpacing:'-.3px'}}>
+          Good {greeting}, {ADMIN_NAME} 👋
+        </h1>
       </div>
 
-      {/* Stat cards */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))',gap:'12px'}}>
-        {stats.map(s=>(
-          <div key={s.label} className="card" style={{padding:'16px 18px'}}>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'}}>
-              <span style={{fontSize:'0.62rem',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'1px'}}>{s.label}</span>
-              <div style={{width:'26px',height:'26px',borderRadius:'7px',background:`${s.color}18`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.82rem'}}>{s.icon}</div>
-            </div>
-            <p style={{fontSize:'1.9rem',fontWeight:'700',color:s.color,lineHeight:'1',margin:'0 0 4px'}}>{loadingB?'—':s.value}</p>
-            <p style={{fontSize:'0.66rem',color:'var(--muted)',margin:0}}>{s.sub}</p>
-          </div>
-        ))}
+      {/* ── 2×2 Stat Grid ── */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'22px'}}>
+
+        {/* On Duty Now */}
+        <div className="card" style={{padding:'14px 16px'}}>
+          <div style={{width:'32px',height:'32px',borderRadius:'9px',background:'var(--success-bg)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'10px',fontSize:'1.1rem'}}>👤</div>
+          <p style={{fontSize:'1.8rem',fontWeight:'800',color:'var(--success)',lineHeight:'1',margin:'0 0 3px'}}>{loadingB?'—':onlineCount}</p>
+          <p style={{fontSize:'0.72rem',fontWeight:'600',color:'var(--text)',margin:'0 0 2px'}}>On Duty Now</p>
+          <p style={{fontSize:'0.61rem',color:'var(--success)',margin:0,fontWeight:'500'}}>↑{onlineCount} from morning</p>
+        </div>
+
+        {/* Bookings Today */}
+        <div className="card" style={{padding:'14px 16px'}}>
+          <div style={{width:'32px',height:'32px',borderRadius:'9px',background:'var(--gold-glow)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'10px',fontSize:'1.1rem'}}>📋</div>
+          <p style={{fontSize:'1.8rem',fontWeight:'800',color:'var(--gold)',lineHeight:'1',margin:'0 0 3px'}}>{loadingB?'—':todayCount}</p>
+          <p style={{fontSize:'0.72rem',fontWeight:'600',color:'var(--text)',margin:'0 0 2px'}}>Bookings Today</p>
+          <p style={{fontSize:'0.61rem',color:pendingCount>0?'var(--danger)':'var(--success)',margin:0,fontWeight:'500'}}>
+            {pendingCount>0?`${pendingCount} need action`:'All confirmed'}
+          </p>
+        </div>
+
+        {/* No GPS Signal */}
+        <div className="card" style={{padding:'14px 16px'}}>
+          <div style={{width:'32px',height:'32px',borderRadius:'9px',background:'rgba(245,158,11,0.12)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'10px',fontSize:'1.1rem'}}>📍</div>
+          <p style={{fontSize:'1.8rem',fontWeight:'800',color:'#f59e0b',lineHeight:'1',margin:'0 0 3px'}}>{noGPSCount}</p>
+          <p style={{fontSize:'0.72rem',fontWeight:'600',color:'var(--text)',margin:'0 0 2px'}}>No GPS Signal</p>
+          <p style={{fontSize:'0.61rem',color:noGPSCount>0?'#f59e0b':'var(--success)',margin:0,fontWeight:'500'}}>
+            {noGPSCount>0?'Reminder sent':'All tracking'}
+          </p>
+        </div>
+
+        {/* Avg Rating */}
+        <div className="card" style={{padding:'14px 16px'}}>
+          <div style={{width:'32px',height:'32px',borderRadius:'9px',background:'rgba(245,158,11,0.12)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'10px',fontSize:'1.1rem'}}>⭐</div>
+          <p style={{fontSize:'1.8rem',fontWeight:'800',color:'#f59e0b',lineHeight:'1',margin:'0 0 3px'}}>{avgRating}</p>
+          <p style={{fontSize:'0.72rem',fontWeight:'600',color:'var(--text)',margin:'0 0 2px'}}>Avg Rating</p>
+          <p style={{fontSize:'0.61rem',color:'var(--muted)',margin:0,fontWeight:'500'}}>This month</p>
+        </div>
       </div>
 
-      {/* Two columns */}
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'14px'}}>
-
-        {/* Recent bookings */}
+      {/* ── Active Therapists ── */}
+      <div style={{marginBottom:'22px'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'}}>
+          <span style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--text)'}}>Active Therapists</span>
+          <button onClick={()=>onNavigate('tracker')} style={{fontSize:'0.75rem',color:'var(--gold)',background:'none',border:'none',fontWeight:'600',cursor:'pointer',padding:0}}>See all</button>
+        </div>
         <div className="card" style={{overflow:'hidden'}}>
-          <div style={{padding:'12px 16px',borderBottom:'1px solid var(--border)'}}>
-            <span style={{fontWeight:'700',fontSize:'0.85rem'}}>Recent Bookings</span>
-          </div>
+          {activeTherps.length===0
+            ? <p style={{padding:'24px',textAlign:'center',color:'var(--muted)',fontSize:'0.8rem'}}>No therapists on duty right now</p>
+            : activeTherps.map(t=>{
+                const initials=(t.name||'?').split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()||'?';
+                const ls=lastSeen(t);
+                const hasGPS=!!(t.lat||t.latitude||t.lastLocation);
+                return (
+                  <div key={t.id} style={{display:'flex',alignItems:'center',gap:'12px',padding:'13px 14px',borderBottom:'1px solid var(--border)'}}>
+                    {/* Avatar */}
+                    <div style={{position:'relative',flexShrink:0}}>
+                      <div style={{width:'42px',height:'42px',borderRadius:'50%',overflow:'hidden',background:'var(--gold-glow)',border:'1.5px solid var(--border-gold)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--gold)',fontWeight:'700',fontSize:'0.88rem'}}>
+                        {t.imageUrl?<img src={t.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>:initials}
+                      </div>
+                      <div style={{position:'absolute',bottom:0,right:0,width:'11px',height:'11px',borderRadius:'50%',background:'#16a34a',border:'2px solid var(--card)'}}/>
+                    </div>
+                    {/* Info */}
+                    <div style={{flex:1,minWidth:0}}>
+                      <p style={{fontWeight:'600',fontSize:'0.88rem',color:'var(--text)',margin:'0 0 3px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.name||t.therapistId||'—'}</p>
+                      <p style={{fontSize:'0.65rem',color:ls.color||'#2ecc71',margin:0,display:'flex',alignItems:'center',gap:'3px'}}>
+                        {hasGPS?'📍':'⚠'} {ls.text||'Currently online'}
+                      </p>
+                    </div>
+                    {/* Badge */}
+                    <span style={{fontSize:'0.65rem',fontWeight:'700',padding:'4px 10px',borderRadius:'20px',background:hasGPS?'var(--success-bg)':'rgba(245,158,11,0.12)',color:hasGPS?'var(--success)':'#f59e0b',border:`1px solid ${hasGPS?'rgba(22,163,74,0.3)':'rgba(245,158,11,0.3)'}`,flexShrink:0,whiteSpace:'nowrap'}}>
+                      {hasGPS?'On Duty':'No GPS'}
+                    </span>
+                  </div>
+                );
+              })
+          }
+        </div>
+      </div>
+
+      {/* ── Recent Bookings ── */}
+      <div style={{marginBottom:'8px'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'}}>
+          <span style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--text)'}}>Recent Bookings</span>
+          <button onClick={()=>onNavigate('bookings')} style={{fontSize:'0.75rem',color:'var(--gold)',background:'none',border:'none',fontWeight:'600',cursor:'pointer',padding:0}}>See all</button>
+        </div>
+        <div className="card" style={{overflow:'hidden'}}>
           {loadingB
             ? <div style={{padding:'32px',textAlign:'center'}}><span className="spin" style={{color:'var(--gold)'}}>✦</span></div>
             : bookings.length===0
               ? <p style={{padding:'24px',textAlign:'center',color:'var(--muted)',fontSize:'0.8rem'}}>No bookings yet</p>
-              : bookings.slice(0,7).map(b=>{
+              : bookings.slice(0,6).map(b=>{
                   const c=cfg(b.status);
+                  const svc=b.serviceType||b.service||'Massage';
+                  const svcI=svc.split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()||'M';
                   return (
-                    <div key={b.id} style={{padding:'9px 14px',display:'flex',alignItems:'center',gap:'9px',borderBottom:'1px solid var(--border)'}}>
-                      <div style={{width:'7px',height:'7px',borderRadius:'50%',background:c.color,flexShrink:0}}/>
+                    <div key={b.id} style={{display:'flex',alignItems:'center',gap:'12px',padding:'13px 14px',borderBottom:'1px solid var(--border)'}}>
+                      {/* Service icon */}
+                      <div style={{width:'42px',height:'42px',borderRadius:'11px',background:'var(--gold-glow)',border:'1px solid var(--border-gold)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--gold)',fontWeight:'700',fontSize:'0.78rem',flexShrink:0,letterSpacing:'-.5px'}}>{svcI}</div>
+                      {/* Info */}
                       <div style={{flex:1,minWidth:0}}>
-                        <p style={{fontSize:'0.82rem',fontWeight:'600',color:'var(--text)',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{b.clientName||'—'}</p>
-                        <p style={{fontSize:'0.68rem',color:'var(--muted)',margin:'2px 0 0'}}>{timeAgo(b)}</p>
+                        <p style={{fontWeight:'600',fontSize:'0.88rem',color:'var(--text)',margin:'0 0 3px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{svc}</p>
+                        <p style={{fontSize:'0.65rem',color:'var(--muted)',margin:0}}>{timeAgo(b)} · {b.clientName||'—'}</p>
                       </div>
-                      <span style={{fontSize:'0.62rem',fontWeight:'700',padding:'2px 7px',borderRadius:'20px',background:c.bg,color:c.color,border:`1px solid ${c.color}40`,flexShrink:0,whiteSpace:'nowrap'}}>{c.label}</span>
+                      {/* Status */}
+                      <span style={{fontSize:'0.62rem',fontWeight:'700',padding:'3px 8px',borderRadius:'20px',background:c.bg,color:c.color,border:`1px solid ${c.color}40`,flexShrink:0,whiteSpace:'nowrap'}}>{c.label}</span>
                     </div>
                   );
                 })
           }
         </div>
-
-        {/* Therapist status */}
-        <div className="card" style={{overflow:'hidden'}}>
-          <div style={{padding:'12px 16px',borderBottom:'1px solid var(--border)'}}>
-            <span style={{fontWeight:'700',fontSize:'0.85rem'}}>Therapists</span>
-          </div>
-          {therapists.length===0
-            ? <p style={{padding:'24px',textAlign:'center',color:'var(--muted)',fontSize:'0.8rem'}}>No therapists yet</p>
-            : therapists.slice(0,8).map(t=>(
-                <div key={t.id} style={{padding:'9px 14px',display:'flex',alignItems:'center',gap:'9px',borderBottom:'1px solid var(--border)'}}>
-                  <div style={{position:'relative',flexShrink:0}}>
-                    <div style={{width:'30px',height:'30px',borderRadius:'50%',overflow:'hidden',background:'var(--elevated)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--gold)',fontSize:'0.75rem'}}>
-                      {t.imageUrl?<img src={t.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>e.target.style.display='none'}/>:'✦'}
-                    </div>
-                    <div style={{position:'absolute',bottom:'-1px',right:'-1px',width:'9px',height:'9px',borderRadius:'50%',background:t.available?'#2ecc71':'#444',border:'2px solid var(--card)'}}/>
-                  </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <p style={{fontSize:'0.82rem',fontWeight:'600',color:'var(--text)',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.name||t.therapistId||'—'}</p>
-                    <p style={{fontSize:'0.68rem',color:t.available?'#2ecc71':'var(--muted)',margin:'1px 0 0',fontWeight:t.available?'600':'400'}}>{t.available?'● Online':'○ Offline'}</p>
-                    <p style={{fontSize:'0.64rem',color:lastSeen(t).color,margin:'1px 0 0'}}>{lastSeen(t).text}</p>
-                  </div>
-                </div>
-              ))
-          }
-        </div>
       </div>
+
     </div>
   );
 }
