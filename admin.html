@@ -251,6 +251,9 @@
 
       /* ── Booking header compact ── */
       .bk-header-badges { display:none !important; }
+
+      /* ── Sub-page back bar (mobile only) ── */
+      .mobile-back-bar { display:flex !important; }
     }
 
     @media (max-width:1024px) and (min-width:769px) {
@@ -694,6 +697,84 @@ function LiveTracker() {
 }
 
 // ══════════════════════════════════════════════════════
+//  MOBILE MORE MENU
+// ══════════════════════════════════════════════════════
+function MobileMoreMenu({ moreTabs, onNavigate, user, onSignOut, onTheme, dark }) {
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+      {/* Section title */}
+      <div style={{marginBottom:'4px'}}>
+        <h2 style={{fontSize:'1.05rem',fontWeight:'700',color:'var(--text)',margin:'0 0 3px'}}>More</h2>
+        <p style={{fontSize:'0.75rem',color:'var(--muted)',margin:0}}>Additional tools & settings</p>
+      </div>
+
+      {/* Extra pages */}
+      <div className="card" style={{overflow:'hidden'}}>
+        {moreTabs.map((t,i)=>(
+          <button key={t.id} onClick={()=>onNavigate(t.id)}
+            style={{width:'100%',display:'flex',alignItems:'center',gap:'14px',padding:'16px 16px',background:'none',border:'none',borderBottom:i<moreTabs.length-1?'1px solid var(--border)':'none',cursor:'pointer',textAlign:'left',fontFamily:'inherit'}}>
+            <div style={{width:'44px',height:'44px',borderRadius:'12px',background:'var(--gold-glow)',border:'1px solid var(--border-gold)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.3rem',flexShrink:0}}>{t.icon}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <p style={{fontWeight:'600',fontSize:'0.9rem',color:'var(--text)',margin:'0 0 2px'}}>{t.label}</p>
+              <p style={{fontSize:'0.68rem',color:'var(--muted)',margin:0}}>{t.desc}</p>
+            </div>
+            <span style={{color:'var(--muted)',fontSize:'0.9rem',flexShrink:0}}>›</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Account section */}
+      <div className="card" style={{padding:'16px'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'14px'}}>
+          <div style={{width:'44px',height:'44px',borderRadius:'50%',background:'var(--gold-glow)',border:'1px solid var(--border-gold)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem',fontWeight:'700',color:'var(--gold)',flexShrink:0}}>
+            {ADMIN_NAME[0]}
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <p style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--text)',margin:'0 0 2px'}}>{ADMIN_NAME}</p>
+            <p style={{fontSize:'0.68rem',color:'var(--muted)',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user?.email}</p>
+          </div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px'}}>
+          <button onClick={onTheme}
+            style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'6px',padding:'11px',borderRadius:'10px',border:'1px solid var(--border)',background:'var(--elevated)',color:'var(--text)',fontWeight:'600',fontSize:'0.82rem',cursor:'pointer',fontFamily:'inherit'}}>
+            {dark?'☀️ Light':'🌙 Dark'}
+          </button>
+          <button onClick={onSignOut}
+            style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'6px',padding:'11px',borderRadius:'10px',border:'1px solid rgba(220,38,38,0.3)',background:'var(--danger-bg)',color:'var(--danger)',fontWeight:'600',fontSize:'0.82rem',cursor:'pointer',fontFamily:'inherit'}}>
+            Sign Out
+          </button>
+        </div>
+      </div>
+
+      {/* Feel Free Spa branding */}
+      <div style={{textAlign:'center',padding:'8px 0 4px'}}>
+        <p style={{fontSize:'0.65rem',color:'var(--subtle)',margin:0}}>✦ Feel Free Spa · Admin Portal</p>
+        <p style={{fontSize:'0.6rem',color:'var(--subtle)',margin:'3px 0 0'}}>{SPA_SERVICES.join(' · ')}</p>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+//  MOBILE SUB-PAGE WRAPPER (adds back button on mobile)
+// ══════════════════════════════════════════════════════
+function MobileSubPage({ title, onBack, children }) {
+  return (
+    <div>
+      {/* Back button (mobile only) */}
+      <div className="mobile-back-bar" style={{display:'none',alignItems:'center',gap:'10px',marginBottom:'14px'}}>
+        <button onClick={onBack}
+          style={{display:'flex',alignItems:'center',gap:'6px',background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'20px',padding:'7px 14px',color:'var(--text)',fontWeight:'600',fontSize:'0.8rem',cursor:'pointer',fontFamily:'inherit'}}>
+          ‹ Back
+        </button>
+        <span style={{fontWeight:'700',fontSize:'0.95rem',color:'var(--text)'}}>{title}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
 //  DASHBOARD SHELL
 // ══════════════════════════════════════════════════════
 function Dashboard({ user }) {
@@ -709,13 +790,22 @@ function Dashboard({ user }) {
     { id:'attendance', icon:'📅', label:'Attendance' },
     { id:'tracker',    icon:'📍', label:'Live Tracker' },
   ];
-  // Mobile bottom nav — 4 key tabs only
+  // Mobile bottom nav — 4 key + More
   const mobileTabs = [
     { id:'dashboard', icon:'⊞', label:'Home' },
     { id:'tracker',   icon:'📍', label:'Tracker' },
     { id:'accounts',  icon:'👤', label:'Accounts' },
     { id:'bookings',  icon:'📋', label:'Bookings' },
+    { id:'more',      icon:'⋯',  label:'More' },
   ];
+  // Extra tabs accessible via "More"
+  const moreTabs = [
+    { id:'therapists', icon:'🖼️', label:'Therapist Photos',  desc:'Upload & manage therapist profile photos' },
+    { id:'links',      icon:'🔗', label:'Gallery Links',     desc:'Create & share booking gallery links' },
+    { id:'attendance', icon:'📅', label:'Attendance',        desc:'View therapist attendance & duty records' },
+  ];
+  // Is the current tab one of the "more" extras?
+  const isMoreTab = moreTabs.some(t => t.id === tab);
 
   return (
     <div className="admin-layout">
@@ -768,7 +858,7 @@ function Dashboard({ user }) {
         <div className="topbar">
           <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
             <div style={{width:'7px',height:'7px',borderRadius:'50%',background:'var(--gold)',flexShrink:0}}/>
-            <span style={{fontWeight:'700',fontSize:'0.97rem',color:'var(--text)',letterSpacing:'-.2px'}}>{tabs.find(t=>t.id===tab)?.label}</span>
+            <span style={{fontWeight:'700',fontSize:'0.97rem',color:'var(--text)',letterSpacing:'-.2px'}}>{tab==='more'?'More':(tabs.find(t=>t.id===tab)?.label||'')}</span>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
             <span className="topbar-email" style={{fontSize:'0.75rem',color:'var(--muted)',fontWeight:'500'}}>{ADMIN_NAME} · Feel Free Spa</span>
@@ -776,10 +866,12 @@ function Dashboard({ user }) {
           </div>
         </div>
 
-        {/* Bottom nav (mobile only — 4 tabs) */}
+        {/* Bottom nav (mobile only) */}
         <nav className="bottom-nav">
           {mobileTabs.map(t=>(
-            <button key={t.id} className={`bottom-nav-item${tab===t.id?' active':''}`} onClick={()=>setTab(t.id)}>
+            <button key={t.id}
+              className={`bottom-nav-item${(tab===t.id || (t.id==='more' && isMoreTab))?' active':''}`}
+              onClick={()=>setTab(t.id)}>
               <span className="bnav-icon">{t.icon}</span>
               {t.label}
             </button>
@@ -788,12 +880,13 @@ function Dashboard({ user }) {
 
         <div className="content">
           {tab==='dashboard'  && <DashboardTab onNavigate={setTab}/>}
-          {tab==='therapists' && <TherapistManager/>}
-          {tab==='links'      && <LinkCreator/>}
+          {tab==='therapists' && <MobileSubPage title="Therapist Photos" onBack={()=>setTab('more')}><TherapistManager/></MobileSubPage>}
+          {tab==='links'      && <MobileSubPage title="Gallery Links"     onBack={()=>setTab('more')}><LinkCreator/></MobileSubPage>}
           {tab==='accounts'   && <TherapistAccounts/>}
           {tab==='bookings'   && <BookingsPanel/>}
-          {tab==='attendance' && <AttendanceAdmin/>}
+          {tab==='attendance' && <MobileSubPage title="Attendance"        onBack={()=>setTab('more')}><AttendanceAdmin/></MobileSubPage>}
           {tab==='tracker'    && <LiveTracker/>}
+          {tab==='more'       && <MobileMoreMenu moreTabs={moreTabs} onNavigate={setTab} user={user} onSignOut={()=>auth.signOut()} onTheme={toggleTheme} dark={dark}/>}
         </div>
       </div>
     </div>
