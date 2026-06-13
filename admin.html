@@ -352,10 +352,19 @@ function LiveMapAll({ onDutyList }) {
     if (!onDutyList.length) return;
     const avgLat = onDutyList.reduce((s,t)=>s+t.location.lat,0)/onDutyList.length;
     const avgLng = onDutyList.reduce((s,t)=>s+t.location.lng,0)/onDutyList.length;
-    const pins = onDutyList.map(t => {
+    // Offset markers sharing identical coordinates so they're all visible
+    const pins = onDutyList.map((t, i) => {
       const name = (t.name||t.therapistId||'?').replace(/['"<>&]/g,'_');
       const ago  = (t._ago||'').replace(/['"<>&]/g,'_');
-      return `L.marker([${t.location.lat},${t.location.lng}]).addTo(m).bindPopup('<b>${name}</b><br/><small>${ago}</small>');`;
+      const dupIdx = onDutyList.slice(0, i).filter(o =>
+        Math.abs(o.location.lat - t.location.lat) < 0.0001 &&
+        Math.abs(o.location.lng - t.location.lng) < 0.0001
+      ).length;
+      const angle = dupIdx * (2 * Math.PI / 3);
+      const d = dupIdx > 0 ? 0.0005 : 0;
+      const lat = t.location.lat + d * Math.sin(angle);
+      const lng = t.location.lng + d * Math.cos(angle);
+      return `L.marker([${lat},${lng}]).addTo(m).bindPopup('<b>${name}</b><br/><small>${ago}</small>').openPopup();`;
     }).join('\n');
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">

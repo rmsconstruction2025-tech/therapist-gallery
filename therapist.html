@@ -687,7 +687,16 @@ function TherapistPortal({ session, onLogout }) {
         setBio(d.bio || '');
         setPhone(d.phone || '');
         setEmergencyContacts(d.emergencyContacts || []);
-        if(d.onDuty) setOnDuty(true);
+        if(d.onDuty){
+          setOnDuty(true);
+          // Restore elapsed duty time and restart timer
+          const elapsed = d.dutyStartedAt?.toDate
+            ? Math.floor((Date.now() - d.dutyStartedAt.toDate().getTime()) / 1000)
+            : 0;
+          setDutySeconds(Math.max(0, elapsed));
+          if(dutyTimerRef.current) clearInterval(dutyTimerRef.current);
+          dutyTimerRef.current = setInterval(() => setDutySeconds(s => s + 1), 1000);
+        }
         // If already on duty on page load, silently ensure today's attendance record exists
         if (d.available) {
           const today  = new Date().toISOString().split('T')[0];
