@@ -394,11 +394,47 @@ else if(markers.length>1){var g=L.featureGroup(markers);m.fitBounds(g.getBounds(
   return <iframe src={src} style={{width:'100%',height:'100%',border:'none',display:'block'}} title="All Therapists"/>;
 }
 
+const FCM_SERVER_KEY = 'alwo_UykyXjQOLLt7xz55u76ZMaB0tYlRnSaGe7Z40U';
+
+async function sendFCMNotification(tokens, title, body) {
+  if(!tokens.length) return {ok:0, fail:0};
+  const res = await fetch('https://fcm.googleapis.com/fcm/send', {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json', 'Authorization':'key='+FCM_SERVER_KEY },
+    body: JSON.stringify({
+      registration_ids: tokens,
+      notification: { title, body, sound:'default', icon:'/icon-192.png', click_action:'https://feelfreespa.in/therapist' },
+      data: { url:'https://feelfreespa.in/therapist' },
+      android: { priority:'high', notification:{ sound:'default', channel_id:'default' } },
+      apns: { payload:{ aps:{ sound:'default', badge:1 } } },
+    })
+  });
+  const json = await res.json();
+  return { ok: json.success||0, fail: json.failure||0 };
+}
+
 function LiveTracker() {
   const [therapists, setTherapists] = useState([]);
   const [selected,   setSelected]   = useState(null);
   const [view,       setView]       = useState('single');
   const [now,        setNow]        = useState(Date.now());
+  const [notifSending, setNotifSending] = useState(false);
+  const [notifMsg,     setNotifMsg]     = useState('');
+
+  const sendGPSReminder = async () => {
+    const tokens = therapists.map(t=>t.fcmToken).filter(Boolean);
+    if(!tokens.length){ setNotifMsg('⚠️ No therapists have notifications enabled.'); return; }
+    setNotifSending(true); setNotifMsg('');
+    try {
+      const {ok, fail} = await sendFCMNotification(
+        tokens,
+        '📍 Enable GPS — Feel Free Spa',
+        'Please allow location access in your browser so admin can track your live location during duty.'
+      );
+      setNotifMsg(`✓ Sent to ${ok} phone${ok!==1?'s':''}${fail>0?` · ${fail} failed`:''}. `);
+    } catch(e) { setNotifMsg(`⚠️ Error: ${e.message}`); }
+    setNotifSending(false);
+  };
 
   useEffect(()=>{
     const unsub = db.collection('therapists').onSnapshot(snap=>{
@@ -469,7 +505,15 @@ function LiveTracker() {
             {onDutyList.length} on duty
           </span>
           <span style={{fontSize:'0.72rem',color:'var(--muted)',background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'20px',padding:'4px 11px'}}>{therapists.length} total</span>
+          <button
+            onClick={sendGPSReminder}
+            disabled={notifSending}
+            style={{fontSize:'0.72rem',fontWeight:'700',color:'#d4af37',background:'rgba(212,175,55,0.1)',border:'1px solid rgba(212,175,55,0.3)',borderRadius:'20px',padding:'4px 12px',cursor:notifSending?'not-allowed':'pointer',opacity:notifSending?0.7:1,display:'flex',alignItems:'center',gap:'5px'}}
+          >
+            {notifSending ? <><span className="spin">✦</span> Sending…</> : '📍 Send GPS Reminder'}
+          </button>
         </div>
+        {notifMsg && <div style={{fontSize:'0.72rem',color:notifMsg.startsWith('✓')?'#27ae60':'#e74c3c',padding:'0 18px 8px',marginTop:'-4px'}}>{notifMsg}</div>}
       </div>
 
       {onDutyList.length===0 ? (
