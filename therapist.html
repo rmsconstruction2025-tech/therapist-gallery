@@ -6,6 +6,7 @@
   <title>Feel Free Spa</title>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -33,6 +34,7 @@
     .booking-alert { animation: bookingPulse 1.4s ease-in-out infinite; }
     .spin { display: inline-block; animation: spin 0.8s linear infinite; }
     @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+    @keyframes chatMicPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.55;transform:scale(1.15)} }
     .fade-in { animation: fadeIn 0.3s ease forwards; }
     @keyframes ldSpin { to { transform: rotate(360deg); } }
     #app-loader {
@@ -78,6 +80,8 @@ const FIREBASE_CONFIG = {
 };
 if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
+const storage = firebase.storage();
+const FieldValue = firebase.firestore.FieldValue;
 // Auto-detect and fall back to long-polling when QUIC/WebSocket is blocked
 db.settings({ experimentalAutoDetectionLongPolling: true, merge: true });
 // Enable offline persistence so cached data survives connection drops
@@ -476,6 +480,16 @@ function TherapistPortal({ session, onLogout }) {
       if(locHeartbeatRef.current) clearInterval(locHeartbeatRef.current);
     };
   }, []);
+
+  // Chat unread badge
+  useEffect(() => {
+    const unsub = db.collection('chats').doc(session.docId)
+      .onSnapshot(snap => {
+        const d = snap.data();
+        setUnreadChat(d?.unreadTherapist || 0);
+      }, () => {});
+    return () => unsub();
+  }, [session.docId]);
 
   // Check & watch location permission state
   useEffect(() => {
@@ -960,7 +974,8 @@ function TherapistPortal({ session, onLogout }) {
     return Math.round((checks.filter(Boolean).length / checks.length) * 100);
   }, [data]);
 
-  const [activeTab, setActiveTab] = useState('home');
+  const [activeTab,   setActiveTab]   = useState('home');
+  const [unreadChat,  setUnreadChat]  = useState(0);
 
   if (loading) return <Center><span className="spin" style={{fontSize:'2rem',color:'var(--gold)'}}>✦</span></Center>;
 
@@ -971,6 +986,7 @@ function TherapistPortal({ session, onLogout }) {
   const tabs = [
     { id:'home',       icon:'home',       label:'Home',       badge: pendingBookings.length + newScheduledCount },
     { id:'earnings',   icon:'earnings',   label:'Earnings',   badge: 0 },
+    { id:'chat',       icon:'chat',       label:'Chat',       badge: unreadChat },
     { id:'attendance', icon:'attendance', label:'Attend.',    badge: 0 },
     { id:'profile',    icon:'profile',    label:'Profile',    badge: completion<100?1:0 },
   ];
@@ -996,6 +1012,11 @@ function TherapistPortal({ session, onLogout }) {
     profile: (active) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active?'var(--gold)':'var(--muted)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+      </svg>
+    ),
+    chat: (active) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active?'var(--gold)':'var(--muted)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
       </svg>
     ),
   };
@@ -1086,6 +1107,9 @@ function TherapistPortal({ session, onLogout }) {
           locPermission={locPermission}
           onRequestLoc={requestLocPermission}
         />}
+
+        {/* ══ CHAT TAB ══ */}
+        {activeTab==='chat'&&<ChatTab session={session}/>}
 
         {/* ══ EARNINGS TAB ══ */}
         {activeTab==='earnings'&&<div style={{padding:'16px'}}><EarningsTab session={session}/></div>}
@@ -1268,7 +1292,7 @@ function TherapistPortal({ session, onLogout }) {
       {/* ── BOTTOM TAB BAR ── */}
       <nav style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:'600px',background:'var(--surface)',borderTop:'1px solid var(--border)',display:'flex',zIndex:20,paddingBottom:'env(safe-area-inset-bottom,0px)'}}>
         {tabs.map(t=>(
-          <button key={t.id} onClick={()=>{ setActiveTab(t.id); if(t.id==='home') setNewScheduledCount(0); }}
+          <button key={t.id} onClick={()=>{ setActiveTab(t.id); if(t.id==='home') setNewScheduledCount(0); if(t.id==='chat') setUnreadChat(0); }}
             style={{flex:1,padding:'10px 4px 8px',background:'none',border:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:'4px',position:'relative'}}>
             {t.badge>0&&(
               <span style={{position:'absolute',top:'6px',right:'calc(50% - 18px)',background:'var(--danger)',color:'#fff',borderRadius:'8px',padding:'1px 5px',fontSize:'0.6rem',fontWeight:'700',lineHeight:'1.3',minWidth:'16px',textAlign:'center'}}>
@@ -1282,6 +1306,300 @@ function TherapistPortal({ session, onLogout }) {
         ))}
       </nav>
 
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+//  CHAT TAB — therapist ↔ admin messaging
+// ══════════════════════════════════════════════════════
+function ChatTab({ session }) {
+  const [messages,  setMessages]  = useState([]);
+  const [text,      setText]      = useState('');
+  const [sending,   setSending]   = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recSecs,   setRecSecs]   = useState(0);
+  const messagesEndRef   = useRef(null);
+  const imgInputRef      = useRef(null);
+  const videoInputRef    = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef   = useRef([]);
+  const recTimerRef      = useRef(null);
+
+  /* ── Load messages + mark admin msgs as read ── */
+  useEffect(() => {
+    const unsub = db.collection('chats').doc(session.docId)
+      .collection('messages')
+      .orderBy('sentAt', 'asc')
+      .limit(100)
+      .onSnapshot(snap => {
+        setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        const batch = db.batch();
+        let changed = false;
+        snap.docs.forEach(doc => {
+          if (doc.data().sender === 'admin' && !doc.data().readByTherapist) {
+            batch.update(doc.ref, { readByTherapist: true });
+            changed = true;
+          }
+        });
+        if (changed) batch.commit().catch(() => {});
+        db.collection('chats').doc(session.docId)
+          .set({ unreadTherapist: 0 }, { merge: true }).catch(() => {});
+      });
+    return () => unsub();
+  }, [session.docId]);
+
+  /* ── Auto-scroll ── */
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: messages.length > 2 ? 'smooth' : 'auto' });
+  }, [messages]);
+
+  /* ── Send text ── */
+  const sendText = async () => {
+    if (!text.trim() || sending) return;
+    const msg = text.trim();
+    setText('');
+    setSending(true);
+    try {
+      await db.collection('chats').doc(session.docId).collection('messages').add({
+        text: msg, mediaUrl: null, mediaType: null,
+        sender: 'therapist', sentAt: FieldValue.serverTimestamp(),
+        readByTherapist: true, readByAdmin: false,
+      });
+      await db.collection('chats').doc(session.docId).set({
+        lastMessage: msg, lastMessageAt: FieldValue.serverTimestamp(),
+        therapistDocId: session.docId, therapistName: session.name || '',
+        unreadAdmin: FieldValue.increment(1),
+      }, { merge: true });
+    } catch (e) { alert('Send failed: ' + e.message); }
+    setSending(false);
+  };
+
+  /* ── Send media ── */
+  const sendMedia = async (file, mediaType) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const ext = file.name.split('.').pop() || 'bin';
+      const path = `chats/${session.docId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const snap = await storage.ref(path).put(file);
+      const url = await snap.ref.getDownloadURL();
+      const preview = mediaType==='image'?'📷 Photo':mediaType==='audio'?'🎵 Audio':'🎬 Video';
+      await db.collection('chats').doc(session.docId).collection('messages').add({
+        text: '', mediaUrl: url, mediaType, fileName: file.name,
+        sender: 'therapist', sentAt: FieldValue.serverTimestamp(),
+        readByTherapist: true, readByAdmin: false,
+      });
+      await db.collection('chats').doc(session.docId).set({
+        lastMessage: preview, lastMessageAt: FieldValue.serverTimestamp(),
+        therapistDocId: session.docId, therapistName: session.name || '',
+        unreadAdmin: FieldValue.increment(1),
+      }, { merge: true });
+    } catch (e) { alert('Upload failed: ' + e.message); }
+    setUploading(false);
+  };
+
+  /* ── Voice recording ── */
+  const startRecording = async () => {
+    if (recording || uploading || sending) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+      const mr = new MediaRecorder(stream, { mimeType });
+      mr.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        clearInterval(recTimerRef.current);
+        setRecSecs(0);
+        if (audioChunksRef.current.length > 0) {
+          const blob = new Blob(audioChunksRef.current, { type: mimeType });
+          await sendMedia(new File([blob], `voice_${Date.now()}.webm`, { type: mimeType }), 'audio');
+        }
+      };
+      mr.start(250);
+      mediaRecorderRef.current = mr;
+      setRecording(true);
+      setRecSecs(0);
+      recTimerRef.current = setInterval(() => setRecSecs(s => s + 1), 1000);
+    } catch (e) { alert('Microphone access denied.'); }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive')
+      mediaRecorderRef.current.stop();
+    setRecording(false);
+  };
+
+  const cancelRecording = () => {
+    audioChunksRef.current = [];
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.onstop = () => {};
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream?.getTracks().forEach(t => t.stop());
+    }
+    clearInterval(recTimerRef.current);
+    setRecording(false); setRecSecs(0);
+  };
+
+  const fmtRec = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+  const fmtTime = ts => {
+    if (!ts) return '';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    const isToday = d.toDateString() === new Date().toDateString();
+    return isToday
+      ? d.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' })
+      : d.toLocaleDateString('en-IN', { day:'numeric', month:'short' });
+  };
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', height:'calc(100dvh - 132px)' }}>
+      {/* Header */}
+      <div style={{ padding:'14px 16px', borderBottom:'1px solid var(--border)',
+        background:'var(--surface)', flexShrink:0 }}>
+        <p style={{ fontSize:'16px', fontWeight:'800', color:'var(--gold)', margin:'0 0 2px', fontFamily:'Georgia,serif' }}>
+          💬 Messages
+        </p>
+        <p style={{ fontSize:'12px', color:'var(--muted)', margin:0 }}>Chat with Feel Free Spa admin</p>
+      </div>
+
+      {/* Messages */}
+      <div style={{ flex:1, overflowY:'auto', padding:'16px', display:'flex',
+        flexDirection:'column', gap:'10px', background:'var(--bg)' }}>
+        {messages.length === 0
+          ? <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center',
+              justifyContent:'center', gap:'8px', height:'100%', marginTop:'60px' }}>
+              <span style={{ fontSize:'40px' }}>💬</span>
+              <p style={{ fontSize:'15px', fontWeight:'700', color:'var(--text)', margin:0 }}>No messages yet</p>
+              <p style={{ fontSize:'12px', color:'var(--muted)', margin:0 }}>Admin will reach out soon!</p>
+            </div>
+          : messages.map((msg, i) => {
+              const sent = msg.sender === 'therapist';
+              const d = msg.sentAt?.toDate ? msg.sentAt.toDate() : null;
+              const pd = messages[i-1]?.sentAt?.toDate ? messages[i-1].sentAt.toDate() : null;
+              const showDate = d && (!pd || d.toDateString() !== pd.toDateString());
+              return (
+                <React.Fragment key={msg.id}>
+                  {showDate && (
+                    <div style={{ display:'flex', alignItems:'center', gap:'10px', margin:'6px 0' }}>
+                      <div style={{ flex:1, height:'0.5px', background:'var(--border)' }}/>
+                      <span style={{ fontSize:'11px', color:'var(--muted)', fontWeight:'600', flexShrink:0 }}>
+                        {d.toDateString()===new Date().toDateString()?'Today':d.toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}
+                      </span>
+                      <div style={{ flex:1, height:'0.5px', background:'var(--border)' }}/>
+                    </div>
+                  )}
+                  <div style={{ display:'flex', flexDirection:'column',
+                    alignItems: sent ? 'flex-end' : 'flex-start', gap:'3px' }}>
+                    {!sent && (
+                      <span style={{ fontSize:'11px', color:'var(--gold)', fontWeight:'600', paddingLeft:'4px' }}>Admin</span>
+                    )}
+                    <div style={{
+                      maxWidth:'75%', padding: msg.mediaType ? '6px' : '10px 14px', display:'inline-block',
+                      borderRadius: sent ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                      background: sent ? 'var(--gold)' : 'var(--surface)',
+                      border: sent ? 'none' : '1px solid var(--border)',
+                    }}>
+                      {msg.mediaType==='image' && (
+                        <img src={msg.mediaUrl} alt="photo" onClick={() => window.open(msg.mediaUrl,'_blank')}
+                          style={{ maxWidth:'220px', maxHeight:'220px', borderRadius:'12px',
+                            display:'block', cursor:'pointer', objectFit:'contain' }}/>
+                      )}
+                      {msg.mediaType==='audio' && (
+                        <audio controls src={msg.mediaUrl}
+                          style={{ maxWidth:'240px', display:'block', borderRadius:'8px' }}/>
+                      )}
+                      {msg.mediaType==='video' && (
+                        <video controls src={msg.mediaUrl}
+                          style={{ maxWidth:'240px', maxHeight:'200px', borderRadius:'12px', display:'block' }}/>
+                      )}
+                      {msg.text && (
+                        <p style={{ margin:0, fontSize:'14px', lineHeight:'1.5', wordBreak:'break-word',
+                          color: sent ? '#1a1200' : 'var(--text)' }}>
+                          {msg.text}
+                        </p>
+                      )}
+                    </div>
+                    <span style={{ fontSize:'10px', color:'var(--muted)',
+                      paddingLeft: sent?0:'4px', paddingRight: sent?'4px':0,
+                      display:'flex', alignItems:'center', gap:'3px' }}>
+                      {fmtTime(msg.sentAt)}
+                      {sent && (
+                        <span style={{ color: msg.readByAdmin ? '#25d366' : 'var(--muted)', fontSize:'11px' }}>
+                          {msg.readByAdmin ? '✓✓' : '✓'}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </React.Fragment>
+              );
+            })
+        }
+        <div ref={messagesEndRef}/>
+      </div>
+
+      {/* Input bar */}
+      <div style={{ padding:'10px 12px', borderTop:'1px solid var(--border)',
+        background:'var(--surface)', display:'flex', alignItems:'flex-end', gap:'8px', flexShrink:0 }}>
+        <input ref={imgInputRef} type="file" accept="image/*" style={{ display:'none' }}
+          onChange={e => { if(e.target.files[0]) sendMedia(e.target.files[0],'image'); e.target.value=''; }}/>
+        <input ref={videoInputRef} type="file" accept="video/*" style={{ display:'none' }}
+          onChange={e => { if(e.target.files[0]) sendMedia(e.target.files[0],'video'); e.target.value=''; }}/>
+        {/* Attach + mic */}
+        <div style={{ display:'flex', gap:'4px', flexShrink:0, paddingBottom:'2px' }}>
+          <button onClick={() => imgInputRef.current?.click()} disabled={uploading||sending||recording}
+            style={{ width:'36px',height:'36px',borderRadius:'50%',background:'var(--elevated)',
+              border:'1px solid var(--border)',cursor:'pointer',fontSize:'15px',
+              display:'flex',alignItems:'center',justifyContent:'center',
+              opacity:(uploading||sending||recording)?0.4:1 }}>📷</button>
+          <button onClick={() => videoInputRef.current?.click()} disabled={uploading||sending||recording}
+            style={{ width:'36px',height:'36px',borderRadius:'50%',background:'var(--elevated)',
+              border:'1px solid var(--border)',cursor:'pointer',fontSize:'15px',
+              display:'flex',alignItems:'center',justifyContent:'center',
+              opacity:(uploading||sending||recording)?0.4:1 }}>🎬</button>
+          <button onClick={recording ? stopRecording : startRecording} disabled={uploading||sending}
+            style={{ width:'36px',height:'36px',borderRadius:'50%',
+              background:recording?'#e74c3c':'var(--elevated)',
+              border:recording?'none':'1px solid var(--border)',
+              cursor:'pointer',fontSize:'15px',display:'flex',alignItems:'center',justifyContent:'center',
+              transition:'background .2s',
+              animation:recording?'chatMicPulse 1.2s ease-in-out infinite':'none' }}>🎤</button>
+        </div>
+        {/* Input / recording bar */}
+        {recording
+          ? <div style={{ flex:1,background:'rgba(231,76,60,0.1)',border:'1px solid rgba(231,76,60,0.4)',
+              borderRadius:'22px',padding:'9px 14px',display:'flex',alignItems:'center',gap:'8px' }}>
+              <div style={{ width:'8px',height:'8px',borderRadius:'50%',background:'#e74c3c',
+                animation:'chatMicPulse 1.2s ease-in-out infinite',flexShrink:0 }}/>
+              <span style={{ fontSize:'14px',color:'#e74c3c',fontWeight:'600',flex:1 }}>
+                Recording… {fmtRec(recSecs)}
+              </span>
+              <button onClick={cancelRecording}
+                style={{ background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:'16px',padding:'0',lineHeight:1 }}>✕</button>
+            </div>
+          : <div style={{ flex:1,background:'var(--elevated)',border:'1px solid var(--border)',
+              borderRadius:'22px',padding:'9px 14px',display:'flex',alignItems:'center' }}>
+              <textarea value={text} onChange={e=>setText(e.target.value)}
+                onKeyDown={e=>{ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendText();} }}
+                placeholder="Type a message…" rows={1}
+                style={{ flex:1,background:'transparent',border:'none',outline:'none',
+                  color:'var(--text)',fontSize:'14px',fontFamily:'Georgia,serif',
+                  resize:'none',lineHeight:'1.4',maxHeight:'80px',overflowY:'auto' }}/>
+            </div>
+        }
+        {!recording && (
+          <button onClick={sendText} disabled={!text.trim()||sending||uploading}
+            style={{ width:'40px',height:'40px',borderRadius:'50%',
+              background:(text.trim()&&!sending&&!uploading)?'var(--gold)':'var(--elevated)',
+              border:'none',cursor:text.trim()?'pointer':'default',
+              fontSize:'16px',display:'flex',alignItems:'center',justifyContent:'center',
+              flexShrink:0,transition:'background .15s',
+              color:text.trim()?'#1a1200':'var(--muted)' }}>
+            {(sending||uploading)?'…':'➤'}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
