@@ -1446,12 +1446,12 @@ function LinkCreator() {
           {/* ── Book type toggle ── */}
           <div style={{marginBottom:'18px'}}>
             <label className="form-label">Booking Type</label>
-            <div style={{display:'flex',gap:'8px'}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px'}}>
               {[['now','⚡ Book Now'],['later','📅 Book Later']].map(([bt,lbl])=>(
                 <button type="button" key={bt}
                   onClick={()=>setForm(f=>({...f,bookType:bt,scheduledDate:''}))}
                   className="btn btn-md"
-                  style={{flex:1,
+                  style={{width:'100%',
                     background: form.bookType===bt ? 'linear-gradient(135deg,var(--gold-dark),var(--gold))' : 'var(--elevated)',
                     color: form.bookType===bt ? '#0a0a0a' : 'var(--text)',
                     border: form.bookType===bt ? 'none' : '1px solid var(--border)',
@@ -1462,7 +1462,7 @@ function LinkCreator() {
             </div>
           </div>
 
-          <div className="form-grid" style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:'16px',marginBottom:'20px'}}>
+          <div className="form-grid" style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(min(200px,100%),1fr))',gap:'16px',marginBottom:'20px'}}>
 
             {/* Date picker — Book Later only */}
             {form.bookType==='later' && (
@@ -2085,11 +2085,11 @@ function AttendanceAdmin() {
                   <span style={{fontSize:'0.7rem',color:'var(--muted)',flexShrink:0}}>Details →</span>
                 </div>
                 {/* Mini month strip */}
-                <div style={{display:'flex',gap:'3px',flexWrap:'nowrap',overflowX:'auto'}}>
+                <div style={{display:'flex',gap:'3px',flexWrap:'wrap'}}>
                   {Array.from({length:daysInMonth},(_,i)=>{
                     const day=i+1, st=getStatus(t.id,day);
                     return(
-                      <div key={day} title={`${day}: ${S_LABEL[st]||st}`} style={{flexShrink:0,width:'20px',height:'20px',borderRadius:'4px',
+                      <div key={day} title={`${day}: ${S_LABEL[st]||st}`} style={{width:'20px',height:'20px',borderRadius:'4px',
                         background:S_COLOR[st],opacity:(st==='future'||st==='no-data')?0.2:1,
                         border:day===now.getDate()?'1.5px solid var(--gold)':'1.5px solid transparent',
                         display:'flex',alignItems:'center',justifyContent:'center'}}>
