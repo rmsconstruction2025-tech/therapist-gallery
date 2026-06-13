@@ -598,11 +598,15 @@ function TherapistPortal({ session, onLogout }) {
           navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:true, timeout:8000})
         );
         initialLoc = {lat: pos.coords.latitude, lng: pos.coords.longitude};
-      } catch(_) { /* start duty without location — watchPosition will fill in */ }
+      } catch(_) { /* GPS failed — will show warning below */ }
+    }
+    if(!initialLoc){
+      showMsg('⚠️ GPS unavailable. Enable Location & restart duty.', 'error');
+      setDutyLoading(false);
+      return; // Don't start duty without location
     }
     try {
-      const updates = { onDuty:true, available:true, dutyStartedAt:FieldValue.serverTimestamp(), locationUpdatedAt:FieldValue.serverTimestamp() };
-      if(initialLoc) updates.location = initialLoc;
+      const updates = { onDuty:true, available:true, dutyStartedAt:FieldValue.serverTimestamp(), locationUpdatedAt:FieldValue.serverTimestamp(), location:initialLoc };
       await db.collection('therapists').doc(session.docId).update(updates);
       setOnDuty(true);
       setAvailable(true);
@@ -646,7 +650,7 @@ function TherapistPortal({ session, onLogout }) {
     if(dutyTimerRef.current){ clearInterval(dutyTimerRef.current); dutyTimerRef.current = null; }
     if(locHeartbeatRef.current){ clearInterval(locHeartbeatRef.current); locHeartbeatRef.current = null; }
     try {
-      await db.collection('therapists').doc(session.docId).update({ onDuty: false, available: false, locationUpdatedAt: FieldValue.serverTimestamp() });
+      await db.collection('therapists').doc(session.docId).update({ onDuty: false, available: false, location: null, locationUpdatedAt: FieldValue.serverTimestamp() });
       setOnDuty(false);
       setAvailable(false);
       setDutySeconds(0);
@@ -773,9 +777,12 @@ function TherapistPortal({ session, onLogout }) {
           initialLoc = {lat: pos.coords.latitude, lng: pos.coords.longitude};
         } catch(_) {}
       }
+      if(!initialLoc){
+        showMsg('⚠️ GPS unavailable. Enable Location & try again.', 'error');
+        setAvailable(false); setDutyLoading(false); return;
+      }
       try {
-        const updates = { available:true, onDuty:true, dutyStartedAt:FieldValue.serverTimestamp(), locationUpdatedAt:FieldValue.serverTimestamp() };
-        if(initialLoc) updates.location = initialLoc;
+        const updates = { available:true, onDuty:true, dutyStartedAt:FieldValue.serverTimestamp(), locationUpdatedAt:FieldValue.serverTimestamp(), location:initialLoc };
         await db.collection('therapists').doc(session.docId).update(updates);
         setOnDuty(true);
         setDutySeconds(0);
@@ -812,7 +819,7 @@ function TherapistPortal({ session, onLogout }) {
       if(dutyTimerRef.current){ clearInterval(dutyTimerRef.current); dutyTimerRef.current = null; }
       if(locHeartbeatRef.current){ clearInterval(locHeartbeatRef.current); locHeartbeatRef.current = null; }
       try {
-        await db.collection('therapists').doc(session.docId).update({ available:false, onDuty:false, locationUpdatedAt:FieldValue.serverTimestamp() });
+        await db.collection('therapists').doc(session.docId).update({ available:false, onDuty:false, location:null, locationUpdatedAt:FieldValue.serverTimestamp() });
         setOnDuty(false);
         setDutySeconds(0);
       } catch(err) { setAvailable(true); showMsg(`ToggleOff: ${err.message}`, 'error'); setDutyLoading(false); return; }
@@ -1333,6 +1340,8 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
         onStartDuty={onStartDuty}
         onEndDuty={onEndDuty}
         onSOS={onSOS}
+        session={session}
+        showMsg={showMsg}
       />
 
       {/* ⚠️ On-the-way overdue warning (>1 hr) */}
@@ -1733,7 +1742,8 @@ function BookingRequestCard({ booking: b, myGPS, onAccept, onDecline }) {
 // ══════════════════════════════════════════════════════
 //  DUTY CARD (Home tab — live tracking + SOS)
 // ══════════════════════════════════════════════════════
-function DutyCard({ onDuty, dutySeconds, onSOS }) {
+function DutyCard({ onDuty, dutySeconds, onSOS, session, showMsg }) {
+  const [locLoading, setLocLoading] = React.useState(false);
   const fmtTime = s => {
     const h = Math.floor(s / 3600);
     const m = Math.floor((s % 3600) / 60);
@@ -1742,14 +1752,29 @@ function DutyCard({ onDuty, dutySeconds, onSOS }) {
       ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
       : `${m}:${String(sec).padStart(2,'0')}`;
   };
+  const refreshLocation = () => {
+    if(locLoading || !session?.docId) return;
+    setLocLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      p => {
+        db.collection('therapists').doc(session.docId).update({
+          location: {lat: p.coords.latitude, lng: p.coords.longitude},
+          locationUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        }).then(()=>showMsg('📍 Location updated!')).catch(()=>showMsg('Save failed','error'));
+        setLocLoading(false);
+      },
+      () => { showMsg('⚠️ GPS failed. Check Location permission.','error'); setLocLoading(false); },
+      {enableHighAccuracy:true, timeout:10000, maximumAge:0}
+    );
+  };
   return (
     <div style={{margin:'14px 16px 0',borderRadius:'16px',overflow:'hidden',border:`1px solid ${onDuty?'rgba(74,158,255,0.4)':'var(--border)'}`,background:onDuty?'rgba(74,158,255,0.05)':'var(--surface)'}}>
       {onDuty && (
-        <div style={{padding:'13px 16px',display:'flex',alignItems:'center',gap:'10px'}}>
-          <div style={{width:'8px',height:'8px',borderRadius:'50%',flexShrink:0,background:'#4a9eff',boxShadow:'0 0 8px #4a9eff',animation:'pulse 1.5s ease-in-out infinite'}}/>
+        <div onClick={refreshLocation} style={{padding:'13px 16px',display:'flex',alignItems:'center',gap:'10px',cursor:locLoading?'not-allowed':'pointer',opacity:locLoading?0.7:1}}>
+          <div style={{width:'8px',height:'8px',borderRadius:'50%',flexShrink:0,background:locLoading?'#888':'#4a9eff',boxShadow:locLoading?'none':'0 0 8px #4a9eff',animation:locLoading?'none':'pulse 1.5s ease-in-out infinite'}}/>
           <div>
             <p style={{fontWeight:'700',fontSize:'0.85rem',color:'#4a9eff',margin:0}}>✦ On Duty</p>
-            <p style={{fontSize:'0.72rem',color:'var(--muted)',margin:'2px 0 0',fontFamily:'monospace'}}>{fmtTime(dutySeconds)}</p>
+            <p style={{fontSize:'0.72rem',color:'var(--muted)',margin:'2px 0 0',fontFamily:'monospace'}}>{locLoading?'Updating location…':fmtTime(dutySeconds)}</p>
           </div>
         </div>
       )}
