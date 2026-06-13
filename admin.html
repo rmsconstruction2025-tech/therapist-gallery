@@ -11,6 +11,11 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
 
+  <!-- Google Fonts: Plus Jakarta Sans (neat, modern, stylish) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+
   <!-- React 18 + Babel for JSX -->
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
@@ -44,7 +49,7 @@
       --info: #38bdf8;
       --card-shadow: none;
     }
-    html, body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; min-height: 100vh; transition: background 0.2s, color 0.2s; overflow-x: hidden; }
+    html, body { background: var(--bg); color: var(--text); font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; min-height: 100vh; transition: background 0.2s, color 0.2s; overflow-x: hidden; }
     input, textarea, select { user-select: text; -webkit-user-select: text; }
     img { pointer-events: none; -webkit-user-drag: none; }
     button { cursor: pointer; font-family: inherit; }
@@ -212,21 +217,36 @@
       /* ── Concept C stat cards — gold border on mobile ── */
       .mob-stat-card {
         background:var(--card); border:1px solid var(--border-gold);
-        border-radius:12px; padding:12px 14px;
+        border-radius:12px; padding:14px 12px;
+        display:flex; flex-direction:column;
       }
-      .mob-stat-num { font-size:1.7rem; font-weight:800; line-height:1; margin:0 0 2px; }
-      .mob-stat-label { font-size:0.68rem; font-weight:600; color:var(--text); margin:0 0 1px; }
-      .mob-stat-sub { font-size:0.6rem; margin:0; }
+      .mob-stat-icon { width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; margin-bottom:10px; font-size:0.95rem; flex-shrink:0; }
+      .mob-stat-num { font-size:1.75rem; font-weight:800; line-height:1; margin:0 0 4px; }
+      .mob-stat-label { font-size:0.7rem; font-weight:600; color:var(--text); margin:0 0 2px; letter-spacing:0.1px; }
+      .mob-stat-sub { font-size:0.6rem; margin:0; font-weight:500; }
 
       /* ── Quick action tiles ── */
       .mob-quick-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:14px; }
       .mob-quick-tile {
-        display:flex; align-items:center; gap:10px; padding:12px 12px;
+        display:flex; flex-direction:column; align-items:center; justify-content:center;
+        gap:6px; padding:14px 8px; min-height:68px;
         border-radius:12px; border:none; cursor:pointer; font-family:inherit;
-        text-align:left; font-size:0.82rem; font-weight:600; transition:opacity .15s;
+        font-size:0.75rem; font-weight:600; transition:opacity .15s; text-align:center;
       }
-      .mob-quick-tile:active { opacity:0.75; }
-      .mob-quick-icon { font-size:1.2rem; flex-shrink:0; }
+      .mob-quick-tile:active { opacity:0.72; }
+      .mob-quick-icon { font-size:1.5rem; line-height:1; }
+
+      /* ── Collapsible section header ── */
+      .mob-section-hdr {
+        display:flex; align-items:center; justify-content:space-between;
+        padding:12px 14px; cursor:pointer; user-select:none;
+        border-bottom:0.5px solid var(--border);
+      }
+      .mob-section-hdr-left { display:flex; align-items:center; gap:8px; }
+      .mob-section-title { font-weight:700; font-size:0.88rem; color:var(--text); }
+      .mob-section-badge { font-size:0.62rem; font-weight:700; padding:2px 8px; border-radius:20px; background:var(--gold-glow); color:var(--gold); border:1px solid var(--border-gold); }
+      .mob-section-chevron { font-size:0.75rem; color:var(--muted); transition:transform .2s; }
+      .mob-section-chevron.open { transform:rotate(180deg); }
 
       /* ── More menu rows ── */
       .mob-more-row {
@@ -947,6 +967,8 @@ function DashboardTab({ onNavigate = ()=>{} }) {
   const [bookings,   setBookings]   = useState([]);
   const [therapists, setTherapists] = useState([]);
   const [loadingB,   setLoadingB]   = useState(true);
+  const [showTherps,   setShowTherps]   = useState(true);
+  const [showBookings, setShowBookings] = useState(true);
 
   useEffect(()=>{
     const unsub = db.collection('bookings').limit(200).onSnapshot(snap=>{
@@ -1066,17 +1088,15 @@ function DashboardTab({ onNavigate = ()=>{} }) {
       {/* ── 2×2 Stat Grid — Concept C gold-border cards ── */}
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'16px'}}>
 
-        {/* On Duty Now */}
         <div className="mob-stat-card">
-          <div style={{width:'28px',height:'28px',borderRadius:'8px',background:'var(--success-bg)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'8px',fontSize:'0.95rem'}}>👤</div>
+          <div className="mob-stat-icon" style={{background:'var(--success-bg)'}}>👤</div>
           <p className="mob-stat-num" style={{color:'var(--success)'}}>{loadingB?'—':onlineCount}</p>
           <p className="mob-stat-label">On Duty</p>
-          <p className="mob-stat-sub" style={{color:'var(--success)'}}>of {therapists.length} total</p>
+          <p className="mob-stat-sub" style={{color:'var(--muted)'}}>of {therapists.length} total</p>
         </div>
 
-        {/* Bookings Today */}
         <div className="mob-stat-card">
-          <div style={{width:'28px',height:'28px',borderRadius:'8px',background:'var(--gold-glow)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'8px',fontSize:'0.95rem'}}>📋</div>
+          <div className="mob-stat-icon" style={{background:'var(--gold-glow)'}}>📋</div>
           <p className="mob-stat-num" style={{color:'var(--gold)'}}>{loadingB?'—':todayCount}</p>
           <p className="mob-stat-label">Today</p>
           <p className="mob-stat-sub" style={{color:pendingCount>0?'var(--danger)':'var(--success)'}}>
@@ -1084,120 +1104,132 @@ function DashboardTab({ onNavigate = ()=>{} }) {
           </p>
         </div>
 
-        {/* No GPS Signal */}
         <div className="mob-stat-card">
-          <div style={{width:'28px',height:'28px',borderRadius:'8px',background:'rgba(245,158,11,0.12)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'8px',fontSize:'0.95rem'}}>📍</div>
+          <div className="mob-stat-icon" style={{background:'rgba(245,158,11,0.12)'}}>📍</div>
           <p className="mob-stat-num" style={{color:'#f59e0b'}}>{noGPSCount}</p>
           <p className="mob-stat-label">No GPS</p>
           <p className="mob-stat-sub" style={{color:noGPSCount>0?'#f59e0b':'var(--success)'}}>
-            {noGPSCount>0?'Needs attention':'All tracking'}
+            {noGPSCount>0?'Needs fix':'All tracking'}
           </p>
         </div>
 
-        {/* Avg Rating */}
         <div className="mob-stat-card">
-          <div style={{width:'28px',height:'28px',borderRadius:'8px',background:'rgba(245,158,11,0.12)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'8px',fontSize:'0.95rem'}}>⭐</div>
+          <div className="mob-stat-icon" style={{background:'rgba(245,158,11,0.12)'}}>⭐</div>
           <p className="mob-stat-num" style={{color:'#f59e0b'}}>{avgRating}</p>
           <p className="mob-stat-label">Avg Rating</p>
           <p className="mob-stat-sub" style={{color:'var(--muted)'}}>This month</p>
         </div>
+
       </div>
 
-      {/* ── Quick Actions — Concept C tiles ── */}
-      <div className="mob-quick-grid">
-        <button className="mob-quick-tile" onClick={()=>onNavigate('therapists')}
-          style={{background:'var(--gold-glow)',border:'1px solid var(--border-gold)',color:'var(--gold)'}}>
-          <span className="mob-quick-icon">🖼️</span>
-          <span style={{fontSize:'0.78rem',fontWeight:'600'}}>Photos</span>
-        </button>
-        <button className="mob-quick-tile" onClick={()=>onNavigate('links')}
-          style={{background:'rgba(37,99,235,0.08)',border:'1px solid rgba(37,99,235,0.18)',color:'var(--info)'}}>
-          <span className="mob-quick-icon">🔗</span>
-          <span style={{fontSize:'0.78rem',fontWeight:'600'}}>Links</span>
-        </button>
-        <button className="mob-quick-tile" onClick={()=>onNavigate('attendance')}
-          style={{background:'var(--success-bg)',border:'1px solid rgba(22,163,74,0.25)',color:'var(--success)'}}>
-          <span className="mob-quick-icon">📅</span>
-          <span style={{fontSize:'0.78rem',fontWeight:'600'}}>Attendance</span>
-        </button>
-        <button className="mob-quick-tile" onClick={()=>onNavigate('tracker')}
-          style={{background:'rgba(245,158,11,0.09)',border:'1px solid rgba(245,158,11,0.22)',color:'#f59e0b'}}>
-          <span className="mob-quick-icon">📍</span>
-          <span style={{fontSize:'0.78rem',fontWeight:'600'}}>Tracker</span>
-        </button>
-      </div>
-
-      {/* ── Active Therapists ── */}
-      <div style={{marginBottom:'22px'}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'}}>
-          <span style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--text)'}}>Active Therapists</span>
-          <button onClick={()=>onNavigate('tracker')} style={{fontSize:'0.75rem',color:'var(--gold)',background:'none',border:'none',fontWeight:'600',cursor:'pointer',padding:0}}>See all</button>
+      {/* ── Quick Actions — icon above, label below ── */}
+      <div style={{marginBottom:'4px'}}>
+        <p style={{fontSize:'0.65rem',color:'var(--muted)',letterSpacing:'0.8px',textTransform:'uppercase',fontWeight:'600',margin:'0 0 8px'}}>Quick Access</p>
+        <div className="mob-quick-grid">
+          <button className="mob-quick-tile" onClick={()=>onNavigate('therapists')}
+            style={{background:'var(--gold-glow)',border:'1px solid var(--border-gold)',color:'var(--gold)'}}>
+            <span className="mob-quick-icon">🖼️</span>
+            <span>Photos</span>
+          </button>
+          <button className="mob-quick-tile" onClick={()=>onNavigate('links')}
+            style={{background:'rgba(37,99,235,0.08)',border:'1px solid rgba(37,99,235,0.18)',color:'var(--info)'}}>
+            <span className="mob-quick-icon">🔗</span>
+            <span>Links</span>
+          </button>
+          <button className="mob-quick-tile" onClick={()=>onNavigate('attendance')}
+            style={{background:'var(--success-bg)',border:'1px solid rgba(22,163,74,0.25)',color:'var(--success)'}}>
+            <span className="mob-quick-icon">📅</span>
+            <span>Attendance</span>
+          </button>
+          <button className="mob-quick-tile" onClick={()=>onNavigate('tracker')}
+            style={{background:'rgba(245,158,11,0.09)',border:'1px solid rgba(245,158,11,0.22)',color:'#f59e0b'}}>
+            <span className="mob-quick-icon">📍</span>
+            <span>Tracker</span>
+          </button>
         </div>
-        <div className="card" style={{overflow:'hidden'}}>
-          {activeTherps.length===0
-            ? <p style={{padding:'24px',textAlign:'center',color:'var(--muted)',fontSize:'0.8rem'}}>No therapists on duty right now</p>
+      </div>
+
+      {/* ── Active Therapists — collapsible ── */}
+      <div className="card" style={{overflow:'hidden',marginBottom:'12px'}}>
+        <div className="mob-section-hdr" onClick={()=>setShowTherps(v=>!v)}>
+          <div className="mob-section-hdr-left">
+            <span className="mob-section-title">Active Therapists</span>
+            {onlineCount>0 && <span className="mob-section-badge">{onlineCount} online</span>}
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+            <button onClick={e=>{e.stopPropagation();onNavigate('tracker');}}
+              style={{fontSize:'0.68rem',color:'var(--gold)',background:'none',border:'none',fontWeight:'700',cursor:'pointer',padding:0}}>
+              View all ›
+            </button>
+            <span className={`mob-section-chevron${showTherps?' open':''}`}>▾</span>
+          </div>
+        </div>
+        {showTherps && (
+          activeTherps.length===0
+            ? <p style={{padding:'20px',textAlign:'center',color:'var(--muted)',fontSize:'0.8rem',margin:0}}>No therapists on duty right now</p>
             : activeTherps.map(t=>{
                 const initials=(t.name||'?').split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()||'?';
                 const ls=lastSeen(t);
                 const hasGPS=!!(t.lat||t.latitude||t.lastLocation);
                 return (
-                  <div key={t.id} style={{display:'flex',alignItems:'center',gap:'12px',padding:'13px 14px',borderBottom:'1px solid var(--border)'}}>
-                    {/* Avatar */}
+                  <div key={t.id} style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px 14px',borderBottom:'1px solid var(--border)'}}>
                     <div style={{position:'relative',flexShrink:0}}>
-                      <div style={{width:'42px',height:'42px',borderRadius:'50%',overflow:'hidden',background:'var(--gold-glow)',border:'1.5px solid var(--border-gold)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--gold)',fontWeight:'700',fontSize:'0.88rem'}}>
+                      <div style={{width:'40px',height:'40px',borderRadius:'50%',overflow:'hidden',background:'var(--gold-glow)',border:'1.5px solid var(--border-gold)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--gold)',fontWeight:'700',fontSize:'0.85rem'}}>
                         {t.imageUrl?<img src={t.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>:initials}
                       </div>
-                      <div style={{position:'absolute',bottom:0,right:0,width:'11px',height:'11px',borderRadius:'50%',background:'#16a34a',border:'2px solid var(--card)'}}/>
+                      <div style={{position:'absolute',bottom:0,right:0,width:'10px',height:'10px',borderRadius:'50%',background:'#16a34a',border:'2px solid var(--card)'}}/>
                     </div>
-                    {/* Info */}
                     <div style={{flex:1,minWidth:0}}>
-                      <p style={{fontWeight:'600',fontSize:'0.88rem',color:'var(--text)',margin:'0 0 3px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.name||t.therapistId||'—'}</p>
-                      <p style={{fontSize:'0.65rem',color:ls.color||'#2ecc71',margin:0,display:'flex',alignItems:'center',gap:'3px'}}>
-                        {hasGPS?'📍':'⚠'} {ls.text||'Currently online'}
+                      <p style={{fontWeight:'600',fontSize:'0.86rem',color:'var(--text)',margin:'0 0 2px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.name||t.therapistId||'—'}</p>
+                      <p style={{fontSize:'0.63rem',color:ls.color||'#2ecc71',margin:0}}>
+                        {hasGPS?'📍':'⚠️'} {ls.text||'Currently online'}
                       </p>
                     </div>
-                    {/* Badge */}
-                    <span style={{fontSize:'0.65rem',fontWeight:'700',padding:'4px 10px',borderRadius:'20px',background:hasGPS?'var(--success-bg)':'rgba(245,158,11,0.12)',color:hasGPS?'var(--success)':'#f59e0b',border:`1px solid ${hasGPS?'rgba(22,163,74,0.3)':'rgba(245,158,11,0.3)'}`,flexShrink:0,whiteSpace:'nowrap'}}>
+                    <span style={{fontSize:'0.62rem',fontWeight:'700',padding:'3px 9px',borderRadius:'20px',background:hasGPS?'var(--success-bg)':'rgba(245,158,11,0.12)',color:hasGPS?'var(--success)':'#f59e0b',border:`1px solid ${hasGPS?'rgba(22,163,74,0.3)':'rgba(245,158,11,0.3)'}`,flexShrink:0,whiteSpace:'nowrap'}}>
                       {hasGPS?'On Duty':'No GPS'}
                     </span>
                   </div>
                 );
               })
-          }
-        </div>
+        )}
       </div>
 
-      {/* ── Recent Bookings ── */}
-      <div style={{marginBottom:'8px'}}>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'10px'}}>
-          <span style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--text)'}}>Recent Bookings</span>
-          <button onClick={()=>onNavigate('bookings')} style={{fontSize:'0.75rem',color:'var(--gold)',background:'none',border:'none',fontWeight:'600',cursor:'pointer',padding:0}}>See all</button>
+      {/* ── Recent Bookings — collapsible ── */}
+      <div className="card" style={{overflow:'hidden',marginBottom:'8px'}}>
+        <div className="mob-section-hdr" onClick={()=>setShowBookings(v=>!v)}>
+          <div className="mob-section-hdr-left">
+            <span className="mob-section-title">Recent Bookings</span>
+            {pendingCount>0 && <span className="mob-section-badge" style={{background:'var(--danger-bg)',color:'var(--danger)',borderColor:'rgba(220,38,38,0.25)'}}>{pendingCount} pending</span>}
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+            <button onClick={e=>{e.stopPropagation();onNavigate('bookings');}}
+              style={{fontSize:'0.68rem',color:'var(--gold)',background:'none',border:'none',fontWeight:'700',cursor:'pointer',padding:0}}>
+              View all ›
+            </button>
+            <span className={`mob-section-chevron${showBookings?' open':''}`}>▾</span>
+          </div>
         </div>
-        <div className="card" style={{overflow:'hidden'}}>
-          {loadingB
-            ? <div style={{padding:'32px',textAlign:'center'}}><span className="spin" style={{color:'var(--gold)'}}>✦</span></div>
+        {showBookings && (
+          loadingB
+            ? <div style={{padding:'28px',textAlign:'center'}}><span className="spin" style={{color:'var(--gold)'}}>✦</span></div>
             : bookings.length===0
-              ? <p style={{padding:'24px',textAlign:'center',color:'var(--muted)',fontSize:'0.8rem'}}>No bookings yet</p>
+              ? <p style={{padding:'20px',textAlign:'center',color:'var(--muted)',fontSize:'0.8rem',margin:0}}>No bookings yet</p>
               : bookings.slice(0,6).map(b=>{
                   const c=cfg(b.status);
                   const svc=b.serviceType||b.service||'Massage';
                   const svcI=svc.split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()||'M';
                   return (
-                    <div key={b.id} style={{display:'flex',alignItems:'center',gap:'12px',padding:'13px 14px',borderBottom:'1px solid var(--border)'}}>
-                      {/* Service icon */}
-                      <div style={{width:'42px',height:'42px',borderRadius:'11px',background:'var(--gold-glow)',border:'1px solid var(--border-gold)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--gold)',fontWeight:'700',fontSize:'0.78rem',flexShrink:0,letterSpacing:'-.5px'}}>{svcI}</div>
-                      {/* Info */}
+                    <div key={b.id} style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px 14px',borderBottom:'1px solid var(--border)'}}>
+                      <div style={{width:'40px',height:'40px',borderRadius:'10px',background:'var(--gold-glow)',border:'1px solid var(--border-gold)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--gold)',fontWeight:'700',fontSize:'0.75rem',flexShrink:0,letterSpacing:'-.5px'}}>{svcI}</div>
                       <div style={{flex:1,minWidth:0}}>
-                        <p style={{fontWeight:'600',fontSize:'0.88rem',color:'var(--text)',margin:'0 0 3px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{svc}</p>
-                        <p style={{fontSize:'0.65rem',color:'var(--muted)',margin:0}}>{timeAgo(b)} · {b.clientName||'—'}</p>
+                        <p style={{fontWeight:'600',fontSize:'0.86rem',color:'var(--text)',margin:'0 0 2px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{svc}</p>
+                        <p style={{fontSize:'0.63rem',color:'var(--muted)',margin:0}}>{timeAgo(b)} · {b.clientName||'—'}</p>
                       </div>
-                      {/* Status */}
-                      <span style={{fontSize:'0.62rem',fontWeight:'700',padding:'3px 8px',borderRadius:'20px',background:c.bg,color:c.color,border:`1px solid ${c.color}40`,flexShrink:0,whiteSpace:'nowrap'}}>{c.label}</span>
+                      <span style={{fontSize:'0.6rem',fontWeight:'700',padding:'3px 8px',borderRadius:'20px',background:c.bg,color:c.color,border:`1px solid ${c.color}40`,flexShrink:0,whiteSpace:'nowrap'}}>{c.label}</span>
                     </div>
                   );
                 })
-          }
-        </div>
+        )}
       </div>
 
     </div>
