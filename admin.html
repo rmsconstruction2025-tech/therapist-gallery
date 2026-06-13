@@ -417,23 +417,24 @@ function LiveTracker() {
   };
 
   const onDutyList = therapists
-    .filter(t => t.onDuty && t.location?.lat != null)
-    .map(t => ({...t, _ago: timeAgo(t.locationUpdatedAt), _activeAgo: timeAgo(t.lastActiveAt)}));
+    .filter(t => t.onDuty)
+    .map(t => ({...t, _hasGPS: t.location?.lat != null, _ago: timeAgo(t.locationUpdatedAt), _activeAgo: timeAgo(t.lastActiveAt)}));
+  const onDutyWithGPS = onDutyList.filter(t => t._hasGPS);
 
-  const selId = selected && onDutyList.find(t=>t.id===selected) ? selected : (onDutyList[0]?.id || null);
+  const selId = selected && onDutyList.find(t=>t.id===selected) ? selected : (onDutyWithGPS[0]?.id || onDutyList[0]?.id || null);
   const selT  = onDutyList.find(t=>t.id===selId) || null;
 
   // ── Google Maps URL builders ───────────────────────
   const singleMapSrc = t => {
+    if(!t?._hasGPS) return '';
     const ts = Math.floor((t.locationUpdatedAt?.toMillis?.()??0)/30000);
     return `https://maps.google.com/maps?q=${t.location.lat},${t.location.lng}&z=16&output=embed&key=${ts}`;
   };
   const allMapSrc = () => {
-    if(onDutyList.length===0) return '';
-    if(onDutyList.length===1) return singleMapSrc(onDutyList[0]);
-    // Center between all locations
-    const avgLat = onDutyList.reduce((s,t)=>s+t.location.lat,0)/onDutyList.length;
-    const avgLng = onDutyList.reduce((s,t)=>s+t.location.lng,0)/onDutyList.length;
+    if(onDutyWithGPS.length===0) return '';
+    if(onDutyWithGPS.length===1) return singleMapSrc(onDutyWithGPS[0]);
+    const avgLat = onDutyWithGPS.reduce((s,t)=>s+t.location.lat,0)/onDutyWithGPS.length;
+    const avgLng = onDutyWithGPS.reduce((s,t)=>s+t.location.lng,0)/onDutyWithGPS.length;
     const ts = Math.floor(now/30000);
     return `https://maps.google.com/maps?q=${avgLat.toFixed(4)},${avgLng.toFixed(4)}&z=14&output=embed&key=${ts}`;
   };
@@ -498,18 +499,21 @@ function LiveTracker() {
                         <div style={{width:'34px',height:'34px',borderRadius:'50%',background:ac,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.72rem',fontWeight:'800',color:'#fff'}}>
                           {tInitials(t.name||t.therapistId||'?')}
                         </div>
-                        <div style={{position:'absolute',bottom:0,right:0,width:'9px',height:'9px',borderRadius:'50%',background:'#27ae60',border:'2px solid var(--surface)'}}/>
+                        <div style={{position:'absolute',bottom:0,right:0,width:'9px',height:'9px',borderRadius:'50%',background:t._hasGPS?'#27ae60':'#f39c12',border:'2px solid var(--surface)'}}/>
                       </div>
                       <div style={{flex:1,minWidth:0}}>
                         <p style={{fontWeight:'700',fontSize:'0.85rem',color:isSel?'var(--gold)':'var(--text)',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
                           {t.name||t.therapistId||'Therapist'}
                         </p>
-                        <p style={{fontSize:'0.67rem',color:'var(--muted)',margin:'2px 0 0'}}>📍 {t._ago} · 🟢 {t._activeAgo}</p>
+                        {t._hasGPS
+                          ? <p style={{fontSize:'0.67rem',color:'var(--muted)',margin:'2px 0 0'}}>📍 {t._ago} · 🟢 {t._activeAgo}</p>
+                          : <p style={{fontSize:'0.67rem',color:'#f39c12',margin:'2px 0 0'}}>⚠️ No GPS — waiting for phone</p>
+                        }
                       </div>
                       <div style={{width:'9px',height:'9px',borderRadius:'50%',background:ac,flexShrink:0,opacity:0.85}}/>
                     </div>
                     <p style={{fontSize:'0.62rem',color:'var(--muted)',margin:'6px 0 0 44px',fontFamily:'monospace',opacity:0.55}}>
-                      {t.location.lat.toFixed(4)}, {t.location.lng.toFixed(4)}
+                      {t._hasGPS ? `${t.location.lat.toFixed(4)}, ${t.location.lng.toFixed(4)}` : 'Location pending…'}
                     </p>
                   </div>
                 );
@@ -519,15 +523,27 @@ function LiveTracker() {
 
           {/* Map */}
           <div style={{position:'relative',height:'calc(100vh - 120px)',minHeight:'480px'}}>
-            {view==='single' && selT ? (
+            {view==='single' && selT && selT._hasGPS ? (
               <iframe
                 key={`s-${selT.id}-${Math.floor((selT.locationUpdatedAt?.toMillis?.()??0)/30000)}`}
                 src={singleMapSrc(selT)}
                 style={{width:'100%',height:'100%',border:'none',display:'block'}}
                 allowFullScreen loading="lazy" title="Live Location"
               />
-            ) : view==='all' && onDutyList.length>0 ? (
-              <LiveMapAll onDutyList={onDutyList} />
+            ) : view==='single' && selT && !selT._hasGPS ? (
+              <div style={{height:'100%',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:'12px'}}>
+                <div style={{width:'60px',height:'60px',borderRadius:'50%',background:'rgba(243,156,18,0.1)',border:'1px solid rgba(243,156,18,0.3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.6rem'}}>⚠️</div>
+                <p style={{fontWeight:'700',color:'var(--text)',margin:0}}>{selT.name||selT.therapistId} is On Duty</p>
+                <p style={{fontSize:'0.82rem',color:'var(--muted)',margin:0,textAlign:'center'}}>No GPS yet — therapist needs to open<br/>the portal on their phone to share location.</p>
+              </div>
+            ) : view==='all' && onDutyWithGPS.length>0 ? (
+              <LiveMapAll onDutyList={onDutyWithGPS} />
+            ) : view==='all' ? (
+              <div style={{height:'100%',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--muted)',flexDirection:'column',gap:'10px'}}>
+                <span style={{fontSize:'2rem'}}>⚠️</span>
+                <span style={{fontSize:'0.85rem',fontWeight:'700',color:'var(--text)'}}>No GPS data yet</span>
+                <span style={{fontSize:'0.78rem',textAlign:'center'}}>Therapists are on duty but haven't opened<br/>the portal on their phones.</span>
+              </div>
             ) : (
               <div style={{height:'100%',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--muted)',flexDirection:'column',gap:'10px'}}>
                 <span style={{fontSize:'2rem'}}>🗺️</span>
@@ -536,7 +552,7 @@ function LiveTracker() {
             )}
 
             {/* Single overlay */}
-            {view==='single' && selT && (
+            {view==='single' && selT && selT._hasGPS && (
               <div style={{position:'absolute',top:'12px',left:'12px',zIndex:10,background:'rgba(12,12,12,0.86)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'11px',padding:'8px 13px',display:'flex',alignItems:'center',gap:'9px',pointerEvents:'none'}}>
                 <div style={{width:'7px',height:'7px',borderRadius:'50%',background:'#27ae60',animation:'pulse 2s infinite'}}/>
                 <div>
