@@ -432,6 +432,17 @@ function TherapistPortal({ session, onLogout }) {
     };
   }, []);
 
+  // Silent auto-reload when admin triggers force refresh
+  useEffect(()=>{
+    let initialTs = null;
+    const unsub = db.collection('config').doc('appSettings').onSnapshot(snap=>{
+      const ts = snap.data()?.forceRefreshAt?.toMillis?.() ?? null;
+      if(initialTs === null){ initialTs = ts; return; }
+      if(ts && ts !== initialTs){ window.location.reload(); }
+    });
+    return ()=>unsub();
+  },[]);
+
   // Get therapist GPS location for distance calculation
   useEffect(()=>{
     if(!navigator.geolocation) return;

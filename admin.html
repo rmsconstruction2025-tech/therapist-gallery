@@ -923,13 +923,23 @@ function TherapistManager() {
             <span className="badge badge-gray">{therapists.length}</span>
             <span className="badge badge-green">● {therapists.filter(t=>t.available).length}</span>
           </div>
-          <button
-            onClick={()=>{ setShowAddForm(v=>!v); if(showAddForm){clearFile();} }}
-            className={`btn btn-sm ${showAddForm?'btn-ghost':'btn-gold'}`}
-            style={{gap:'5px',display:'flex',alignItems:'center'}}
-          >
-            {showAddForm ? '✕ Cancel' : '+ Add Therapist'}
-          </button>
+          <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+            <button
+              onClick={async()=>{
+                await db.collection('config').doc('appSettings').set({forceRefreshAt:FieldValue.serverTimestamp()},{merge:true});
+              }}
+              className="btn btn-sm btn-ghost"
+              title="Force all therapist phones to reload silently"
+              style={{fontSize:'0.78rem',color:'var(--muted)'}}
+            >🔄 Refresh All</button>
+            <button
+              onClick={()=>{ setShowAddForm(v=>!v); if(showAddForm){clearFile();} }}
+              className={`btn btn-sm ${showAddForm?'btn-ghost':'btn-gold'}`}
+              style={{gap:'5px',display:'flex',alignItems:'center'}}
+            >
+              {showAddForm ? '✕ Cancel' : '+ Add Therapist'}
+            </button>
+          </div>
         </div>
 
         {/* Collapsible add form */}
