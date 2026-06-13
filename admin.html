@@ -182,7 +182,7 @@
     @media (max-width: 768px) {
       :root { --sidebar-w: 0px; }
       .sidebar { display:none !important; }
-      .main { margin-left:0; padding-bottom:72px; overflow-x:hidden; }
+      .main { margin-left:0; padding-bottom:calc(56px + env(safe-area-inset-bottom,0px)); overflow-x:hidden; }
 
       /* ── Bottom nav — Concept C ── */
       .bottom-nav {
@@ -366,7 +366,7 @@
       .item-actions-mobile { gap:8px !important; margin-top:10px !important; }
       .bk-stats-desk { display:none !important; }
       .acc-create-card { padding:20px !important; margin-bottom:24px !important; }
-      .chat-layout { height:calc(100dvh - 120px) !important; }
+      .chat-layout { height:calc(100dvh - 52px - 56px - env(safe-area-inset-bottom,0px)) !important; margin:-14px -12px !important; }
       .chat-list-pane { width:100% !important; border-right:none !important; }
       .chat-hide-mob { display:none !important; }
       .chat-back-btn { display:flex !important; }
@@ -985,35 +985,42 @@ function ChatAdmin() {
       audioChunksRef.current = [];
       const mimeType =
         MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' :
-        MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm';
+        MediaRecorder.isTypeSupported('audio/mp4')              ? 'audio/mp4' :
+        MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')  ? 'audio/ogg;codecs=opus' : 'audio/webm';
       const mr = new MediaRecorder(stream, { mimeType });
-      mr.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mediaRecorderRef.current = mr;
+      mr.ondataavailable = e => { if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mr.onerror = () => { clearInterval(recTimerRef.current); stream.getTracks().forEach(t=>t.stop()); setRecording(false); setRecSecs(0); };
       mr.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         clearInterval(recTimerRef.current);
+        const chunks = [...audioChunksRef.current];
+        audioChunksRef.current = [];
+        setRecording(false);
         setRecSecs(0);
-        if (audioChunksRef.current.length > 0) {
-          const blob = new Blob(audioChunksRef.current, { type: mimeType });
-          const ext  = mimeType.includes('mp4') ? 'mp4' : 'webm';
-          const file = new File([blob], `voice_${Date.now()}.${ext}`, { type: mimeType });
-          await sendMedia(file, 'audio');
+        if (chunks.length > 0) {
+          const blob = new Blob(chunks, { type: mimeType });
+          if (blob.size > 500) {
+            const ext = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('ogg') ? 'ogg' : 'webm';
+            await sendMedia(new File([blob], `voice_${Date.now()}.${ext}`, { type: mimeType }), 'audio');
+          }
         }
       };
-      mr.start(250);
-      mediaRecorderRef.current = mr;
+      mr.start();  // no timeslice — all data collected at stop() for stability
       setRecording(true);
       setRecSecs(0);
       recTimerRef.current = setInterval(() => setRecSecs(s => s + 1), 1000);
     } catch (e) {
-      alert('Microphone access denied. Please allow mic in browser settings.');
+      alert(e.name === 'NotAllowedError' ? 'Microphone permission denied.' : 'Recording error: ' + e.message);
     }
   };
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stop();  // triggers onstop which cleans up state
+    } else {
+      setRecording(false); setRecSecs(0);
     }
-    setRecording(false);
   };
 
   const cancelRecording = () => {
@@ -1021,7 +1028,6 @@ function ChatAdmin() {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.onstop = () => {};
       mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream?.getTracks().forEach(t => t.stop());
     }
     clearInterval(recTimerRef.current);
     setRecording(false);

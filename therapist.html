@@ -1021,7 +1021,7 @@ function TherapistPortal({ session, onLogout }) {
   };
 
   return (
-    <div style={{maxWidth:'600px',margin:'0 auto',display:'flex',flexDirection:'column',minHeight:'100vh',background:'var(--bg)'}}>
+    <div style={{maxWidth:'600px',margin:'0 auto',display:'flex',flexDirection:'column',height:'100dvh',overflow:'hidden',background:'var(--bg)'}}>
 
       {/* Toast */}
       {msg&&(
@@ -1078,8 +1078,13 @@ function TherapistPortal({ session, onLogout }) {
         </div>
       )}
 
-      {/* ── TAB CONTENT ── */}
-      <div style={{flex:1,overflowY:'auto',paddingBottom:'80px'}}>
+      {/* ── TAB CONTENT — chat gets its own wrapper (no scroll padding) ── */}
+      {activeTab==='chat'
+        ? <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minHeight:0,
+            paddingBottom:'calc(57px + env(safe-area-inset-bottom,0px))'}}>
+            <ChatTab session={session}/>
+          </div>
+        : <div style={{flex:1,overflowY:'auto',paddingBottom:'calc(80px + env(safe-area-inset-bottom,0px))'}}>
 
         {/* ══ HOME TAB ══ */}
         {activeTab==='home'&&<HomeTab
@@ -1106,9 +1111,6 @@ function TherapistPortal({ session, onLogout }) {
           locPermission={locPermission}
           onRequestLoc={requestLocPermission}
         />}
-
-        {/* ══ CHAT TAB ══ */}
-        {activeTab==='chat'&&<ChatTab session={session}/>}
 
         {/* ══ EARNINGS TAB ══ */}
         {activeTab==='earnings'&&<div style={{padding:'16px'}}><EarningsTab session={session}/></div>}
@@ -1286,7 +1288,7 @@ function TherapistPortal({ session, onLogout }) {
 
         </div>)}
 
-      </div>
+      </div>}
 
       {/* ── BOTTOM TAB BAR ── */}
       <nav style={{position:'fixed',bottom:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:'600px',background:'var(--surface)',borderTop:'1px solid var(--border)',display:'flex',zIndex:20,paddingBottom:'env(safe-area-inset-bottom,0px)'}}>
@@ -1407,31 +1409,42 @@ function ChatTab({ session }) {
       audioChunksRef.current = [];
       const mimeType =
         MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' :
-        MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm';
+        MediaRecorder.isTypeSupported('audio/mp4')              ? 'audio/mp4' :
+        MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')  ? 'audio/ogg;codecs=opus' : 'audio/webm';
       const mr = new MediaRecorder(stream, { mimeType });
-      mr.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mediaRecorderRef.current = mr;
+      mr.ondataavailable = e => { if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mr.onerror = () => { clearInterval(recTimerRef.current); stream.getTracks().forEach(t=>t.stop()); setRecording(false); setRecSecs(0); };
       mr.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         clearInterval(recTimerRef.current);
+        const chunks = [...audioChunksRef.current];
+        audioChunksRef.current = [];
+        setRecording(false);
         setRecSecs(0);
-        if (audioChunksRef.current.length > 0) {
-          const blob = new Blob(audioChunksRef.current, { type: mimeType });
-          const ext  = mimeType.includes('mp4') ? 'mp4' : 'webm';
-          await sendMedia(new File([blob], `voice_${Date.now()}.${ext}`, { type: mimeType }), 'audio');
+        if (chunks.length > 0) {
+          const blob = new Blob(chunks, { type: mimeType });
+          if (blob.size > 500) {
+            const ext = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('ogg') ? 'ogg' : 'webm';
+            await sendMedia(new File([blob], `voice_${Date.now()}.${ext}`, { type: mimeType }), 'audio');
+          }
         }
       };
-      mr.start(250);
-      mediaRecorderRef.current = mr;
+      mr.start();  // no timeslice — all data at stop() for max stability
       setRecording(true);
       setRecSecs(0);
       recTimerRef.current = setInterval(() => setRecSecs(s => s + 1), 1000);
-    } catch (e) { alert('Microphone access denied.'); }
+    } catch (e) {
+      alert(e.name === 'NotAllowedError' ? 'Microphone permission denied.' : 'Recording error: ' + e.message);
+    }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive')
-      mediaRecorderRef.current.stop();
-    setRecording(false);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();  // onstop handles cleanup
+    } else {
+      setRecording(false); setRecSecs(0);
+    }
   };
 
   const cancelRecording = () => {
@@ -1439,7 +1452,6 @@ function ChatTab({ session }) {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.onstop = () => {};
       mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream?.getTracks().forEach(t => t.stop());
     }
     clearInterval(recTimerRef.current);
     setRecording(false); setRecSecs(0);
@@ -1576,7 +1588,7 @@ function ChatTab({ session }) {
   };
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'calc(100dvh - 132px)' }}>
+    <div style={{ display:'flex', flexDirection:'column', flex:1, minHeight:0, height:'100%' }}>
       {/* Header */}
       <div style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)',
         background:'var(--surface)', flexShrink:0,
