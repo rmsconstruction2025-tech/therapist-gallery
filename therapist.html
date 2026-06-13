@@ -437,11 +437,14 @@ function TherapistPortal({ session, onLogout }) {
   // Silent auto-reload when admin triggers force refresh
   useEffect(()=>{
     let initialTs = null;
-    const unsub = db.collection('config').doc('appSettings').onSnapshot(snap=>{
-      const ts = snap.data()?.forceRefreshAt?.toMillis?.() ?? null;
-      if(initialTs === null){ initialTs = ts; return; }
-      if(ts && ts !== initialTs){ window.location.reload(); }
-    });
+    const unsub = db.collection('config').doc('appSettings').onSnapshot(
+      snap=>{
+        const ts = snap.data()?.forceRefreshAt?.toMillis?.() ?? null;
+        if(initialTs === null){ initialTs = ts; return; }
+        if(ts && ts !== initialTs){ window.location.reload(); }
+      },
+      ()=>{} // silently ignore — config rule may not be deployed yet
+    );
     return ()=>unsub();
   },[]);
 
