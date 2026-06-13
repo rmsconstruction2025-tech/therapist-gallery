@@ -18,21 +18,39 @@
 
 <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── LIGHT MODE (Design 2 — warm parchment) ── */
     :root {
-      --bg: #080808; --surface: #111111; --elevated: #1a1a1a; --card: #161616;
-      --gold: #d4af37; --gold-light: #f0c040; --gold-dark: #a07820; --gold-glow: rgba(212,175,55,0.15);
-      --text: #f0f0f0; --muted: #666666; --subtle: #444444; --border: #222222;
-      --border-gold: rgba(212,175,55,0.25);
-      --danger: #e74c3c; --danger-bg: rgba(231,76,60,0.08);
-      --success: #2ecc71; --success-bg: rgba(46,204,113,0.08);
-      --info: #3498db;
+      --bg: #f5f4f0; --surface: #ffffff; --elevated: #eeecea; --card: #ffffff;
+      --gold: #9a6f00; --gold-light: #c49a00; --gold-dark: #7a5800; --gold-glow: rgba(154,111,0,0.09);
+      --text: #1a1a2e; --muted: #6b7280; --subtle: #9ca3af; --border: rgba(0,0,0,0.08);
+      --border-gold: rgba(154,111,0,0.22);
+      --danger: #dc2626; --danger-bg: rgba(220,38,38,0.07);
+      --success: #16a34a; --success-bg: rgba(22,163,74,0.08);
+      --info: #2563eb;
       --sidebar-w: 220px;
+      /* card shadow for light mode */
+      --card-shadow: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
     }
-    html, body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; }
+
+    /* ── DARK MODE ── */
+    html.dark {
+      --bg: #080b12; --surface: #0f1420; --elevated: #1c2235; --card: #141928;
+      --gold: #e4b84a; --gold-light: #f0c84a; --gold-dark: #c9982a; --gold-glow: rgba(228,184,74,0.12);
+      --text: #e8eaf0; --muted: #8b92a8; --subtle: #4a5270; --border: rgba(255,255,255,0.07);
+      --border-gold: rgba(228,184,74,0.28);
+      --danger: #f05252; --danger-bg: rgba(240,82,82,0.1);
+      --success: #22d07a; --success-bg: rgba(34,208,122,0.1);
+      --info: #38bdf8;
+      --card-shadow: none;
+    }
+    html, body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; min-height: 100vh; transition: background 0.2s, color 0.2s; }
     input, textarea, select { user-select: text; -webkit-user-select: text; }
     img { pointer-events: none; -webkit-user-drag: none; }
     button { cursor: pointer; font-family: inherit; }
-    ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+    ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 4px; }
+    html.dark ::-webkit-scrollbar-thumb { background: #333; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .spin { display: inline-block; animation: spin 0.7s linear infinite; }
     @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
@@ -43,11 +61,11 @@
     /* Layout */
     .admin-layout { display:flex; min-height:100vh; }
     .sidebar {
-      width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border);
+      width: var(--sidebar-w); background: var(--surface); border-right: 0.5px solid var(--border);
       display: flex; flex-direction: column; position: fixed; top:0; left:0; height:100vh; z-index:100;
-      overflow-y: auto;
+      overflow-y: auto; box-shadow: 1px 0 8px rgba(0,0,0,0.04);
     }
-    .sidebar-brand { padding: 24px 20px 20px; border-bottom: 1px solid var(--border); }
+    .sidebar-brand { padding: 22px 20px 18px; border-bottom: 0.5px solid var(--border); }
     .sidebar-nav { padding: 12px 10px; flex:1; display:flex; flex-direction:column; gap:2px; }
     .nav-item {
       display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:10px;
@@ -55,20 +73,28 @@
       background:transparent; border:none; text-align:left; width:100%; transition:all .15s;
     }
     .nav-item:hover { background:var(--elevated); color:var(--text); }
-    .nav-item.active { background:var(--gold-glow); color:var(--gold); border:1px solid var(--border-gold); }
+    .nav-item.active { background:var(--gold-glow); color:var(--gold); border:1px solid var(--border-gold); font-weight:600; }
     .nav-icon { font-size:1rem; width:20px; text-align:center; flex-shrink:0; }
-    .sidebar-footer { padding:16px; border-top:1px solid var(--border); }
+    .sidebar-footer { padding:16px; border-top:0.5px solid var(--border); }
     .main { margin-left:var(--sidebar-w); flex:1; min-height:100vh; }
     .topbar {
-      background:var(--surface); border-bottom:1px solid var(--border);
-      padding:14px 28px; display:flex; align-items:center; justify-content:space-between;
-      position:sticky; top:0; z-index:50;
+      background:var(--surface); border-bottom:0.5px solid var(--border);
+      padding:12px 24px; display:flex; align-items:center; justify-content:space-between;
+      position:sticky; top:0; z-index:50; box-shadow:0 1px 4px rgba(0,0,0,0.04);
     }
-    .content { padding:28px; }
+    .content { padding:24px; }
+
+    /* Theme toggle button */
+    .theme-toggle {
+      width:34px; height:34px; border-radius:50%; border:0.5px solid var(--border);
+      background:var(--elevated); display:flex; align-items:center; justify-content:center;
+      cursor:pointer; font-size:1rem; transition:all .2s; flex-shrink:0;
+    }
+    .theme-toggle:hover { border-color:var(--border-gold); background:var(--gold-glow); }
 
     /* Cards */
-    .card { background:var(--card); border:1px solid var(--border); border-radius:14px; }
-    .card-gold { background:var(--card); border:1px solid var(--border-gold); border-radius:14px; }
+    .card { background:var(--card); border:0.5px solid var(--border); border-radius:14px; box-shadow:var(--card-shadow); }
+    .card-gold { background:var(--card); border:1px solid var(--border-gold); border-radius:14px; box-shadow:var(--card-shadow); }
     .stat-card { padding:20px 24px; }
 
     /* Table */
@@ -99,9 +125,9 @@
     .btn-lg { padding:12px 28px; font-size:0.9rem; }
 
     /* Form */
-    .form-label { display:block; font-size:0.72rem; color:var(--muted); letter-spacing:1px; text-transform:uppercase; font-weight:600; margin-bottom:6px; }
-    .form-input { width:100%; background:var(--elevated); border:1px solid var(--border); border-radius:9px; padding:10px 14px; color:var(--text); font-size:0.92rem; outline:none; transition:border .15s; font-family:inherit; }
-    .form-input:focus { border-color:var(--border-gold); }
+    .form-label { display:block; font-size:0.72rem; color:var(--muted); letter-spacing:0.8px; text-transform:uppercase; font-weight:600; margin-bottom:6px; }
+    .form-input { width:100%; background:var(--elevated); border:0.5px solid var(--border); border-radius:9px; padding:10px 14px; color:var(--text); font-size:0.92rem; outline:none; transition:border .15s, box-shadow .15s; font-family:inherit; }
+    .form-input:focus { border-color:var(--border-gold); box-shadow:0 0 0 3px var(--gold-glow); }
     .form-input::placeholder { color:var(--subtle); }
 
     /* Divider */
@@ -147,18 +173,24 @@
       /* Bottom nav */
       .bottom-nav {
         display:flex !important; position:fixed; bottom:0; left:0; right:0; z-index:200;
-        background:var(--surface); border-top:1px solid var(--border);
-        safe-area-inset-bottom: env(safe-area-inset-bottom);
+        background:var(--surface); border-top:0.5px solid var(--border);
+        box-shadow:0 -2px 12px rgba(0,0,0,0.06);
         padding-bottom: env(safe-area-inset-bottom);
       }
       .bottom-nav-item {
         flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
         gap:3px; background:transparent; border:none; color:var(--muted);
-        font-size:0.6rem; font-weight:700; cursor:pointer; font-family:inherit;
-        padding:10px 4px; letter-spacing:0.5px; text-transform:uppercase; min-height:56px;
+        font-size:0.58rem; font-weight:600; cursor:pointer; font-family:inherit;
+        padding:8px 4px 10px; letter-spacing:0.3px; text-transform:uppercase; min-height:56px;
+        position:relative;
       }
-      .bottom-nav-item .bnav-icon { font-size:1.4rem; line-height:1; }
+      .bottom-nav-item .bnav-icon { font-size:1.35rem; line-height:1; transition:transform .15s; }
       .bottom-nav-item.active { color:var(--gold); }
+      .bottom-nav-item.active .bnav-icon { transform:scale(1.08); }
+      .bottom-nav-item.active::before {
+        content:''; position:absolute; top:0; left:25%; right:25%; height:2.5px;
+        background:var(--gold); border-radius:0 0 3px 3px;
+      }
 
       /* Topbar */
       .topbar { padding:11px 14px; }
@@ -206,6 +238,21 @@
 
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
+
+// ── Theme toggle ───────────────────────────────────────
+const ADMIN_NAME = 'Shiva';
+const SPA_SERVICES = ['Wet Massage', 'Oil Massage', 'Dry Massage'];
+
+function useTheme() {
+  const [dark, setDark] = useState(() => {
+    try { return localStorage.getItem('ffs_theme') === 'dark'; } catch { return false; }
+  });
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark);
+    try { localStorage.setItem('ffs_theme', dark ? 'dark' : 'light'); } catch {}
+  }, [dark]);
+  return [dark, () => setDark(d => !d)];
+}
 
 // ════════════════════════════════════════════════════════
 // ⚙️  CONFIGURATION — Fill in your Firebase values below
@@ -295,26 +342,31 @@ function AdminLogin() {
   return (
     <div style={{minHeight:'100vh',display:'flex',background:'var(--bg)'}} className="login-split">
       {/* Left decorative panel */}
-      <div style={{flex:1,background:'linear-gradient(160deg,#0f0a00,#1a1200)',borderRight:'1px solid var(--border-gold)',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:'16px',padding:'40px'}} className="login-deco">
-        <div style={{fontSize:'4rem',color:'var(--gold)',textShadow:'0 0 40px rgba(212,175,55,.4)'}}>✦</div>
-        <h2 style={{color:'var(--gold)',fontSize:'1.6rem',fontWeight:'700',letterSpacing:'4px',textAlign:'center'}}>Feel Free Spa</h2>
-        <p style={{color:'var(--muted)',fontSize:'0.85rem',textAlign:'center',lineHeight:'1.6',maxWidth:'260px'}}>Secure admin portal for managing therapist profiles and client gallery access.</p>
-        <div style={{marginTop:'32px',display:'flex',flexDirection:'column',gap:'12px',width:'100%',maxWidth:'280px'}}>
-          {[['🖼️','Manage therapist photos'],['🔗','Create gallery links'],['👤','Manage therapist accounts']].map(([ic,txt])=>(
-            <div key={txt} style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px 14px',background:'rgba(212,175,55,0.06)',border:'1px solid var(--border-gold)',borderRadius:'10px'}}>
-              <span style={{fontSize:'1.1rem'}}>{ic}</span>
-              <span style={{color:'var(--text)',fontSize:'0.82rem'}}>{txt}</span>
+      <div style={{flex:1,background:'linear-gradient(160deg,#1a1a2e,#0f1420)',borderRight:'1px solid rgba(228,184,74,0.2)',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:'16px',padding:'40px'}} className="login-deco">
+        <div style={{width:'64px',height:'64px',borderRadius:'18px',background:'rgba(228,184,74,0.12)',border:'1px solid rgba(228,184,74,0.3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'2rem'}}>✦</div>
+        <h2 style={{color:'#e8eaf0',fontSize:'1.5rem',fontWeight:'700',letterSpacing:'1px',textAlign:'center'}}>Feel Free Spa</h2>
+        <p style={{color:'rgba(255,255,255,0.4)',fontSize:'0.82rem',textAlign:'center',lineHeight:'1.6',maxWidth:'240px'}}>Admin portal for {ADMIN_NAME} — manage therapists, bookings & live tracking.</p>
+        <div style={{display:'flex',gap:'6px',flexWrap:'wrap',justifyContent:'center',margin:'4px 0 12px'}}>
+          {SPA_SERVICES.map(s=>(
+            <span key={s} style={{fontSize:'0.72rem',padding:'4px 12px',borderRadius:'20px',background:'rgba(228,184,74,0.1)',color:'#e4b84a',border:'0.5px solid rgba(228,184,74,0.3)',fontWeight:'600'}}>{s}</span>
+          ))}
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:'10px',width:'100%',maxWidth:'260px'}}>
+          {[['🖼️','Manage therapist photos'],['🔗','Create gallery links'],['📍','Live GPS tracking']].map(([ic,txt])=>(
+            <div key={txt} style={{display:'flex',alignItems:'center',gap:'10px',padding:'9px 13px',background:'rgba(255,255,255,0.04)',border:'0.5px solid rgba(255,255,255,0.08)',borderRadius:'10px'}}>
+              <span style={{fontSize:'1rem'}}>{ic}</span>
+              <span style={{color:'rgba(255,255,255,0.7)',fontSize:'0.8rem'}}>{txt}</span>
             </div>
           ))}
         </div>
       </div>
       {/* Login form */}
-      <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} className="login-form-panel">
+      <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px',background:'var(--bg)'}} className="login-form-panel">
         <div className="fade-in" style={{width:'100%',maxWidth:'380px'}}>
-          <div style={{textAlign:'center',marginBottom:'36px'}}>
-            <div style={{fontSize:'2rem',color:'var(--gold)',marginBottom:'10px'}}>✦</div>
-            <h1 style={{fontSize:'1.5rem',fontWeight:'700',color:'var(--text)',marginBottom:'6px'}}>Welcome back</h1>
-            <p style={{color:'var(--muted)',fontSize:'0.85rem'}}>Sign in to Admin Dashboard</p>
+          <div style={{textAlign:'center',marginBottom:'32px'}}>
+            <div style={{width:'52px',height:'52px',borderRadius:'14px',background:'var(--gold-glow)',border:'1px solid var(--border-gold)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.5rem',margin:'0 auto 16px'}}>✦</div>
+            <h1 style={{fontSize:'1.4rem',fontWeight:'700',color:'var(--text)',marginBottom:'5px',letterSpacing:'-.3px'}}>Welcome back, {ADMIN_NAME}</h1>
+            <p style={{color:'var(--muted)',fontSize:'0.83rem'}}>Sign in to Feel Free Spa admin</p>
           </div>
           <form onSubmit={handle} style={{display:'flex',flexDirection:'column',gap:'18px'}}>
             <div>
@@ -615,11 +667,12 @@ function LiveTracker() {
 }
 
 // ══════════════════════════════════════════════════════
-//  DASHBOARD
+//  DASHBOARD SHELL
 // ══════════════════════════════════════════════════════
 function Dashboard({ user }) {
-  const [tab,      setTab]      = useState('dashboard');
-  const [newBooks, setNewBooks] = useState(0); // unread booking count
+  const [tab, setTab] = useState('dashboard');
+  const [dark, toggleTheme] = useTheme();
+
   const tabs = [
     { id:'dashboard',  icon:'📊', label:'Dashboard' },
     { id:'therapists', icon:'🖼️', label:'Therapist Photos' },
@@ -629,21 +682,29 @@ function Dashboard({ user }) {
     { id:'attendance', icon:'📅', label:'Attendance' },
     { id:'tracker',    icon:'📍', label:'Live Tracker' },
   ];
+
   return (
     <div className="admin-layout">
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-brand">
           <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-            <span style={{fontSize:'1.5rem',color:'var(--gold)'}}>✦</span>
+            <div style={{width:'36px',height:'36px',borderRadius:'10px',background:'var(--gold-glow)',border:'1px solid var(--border-gold)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem',flexShrink:0}}>✦</div>
             <div>
-              <div style={{fontWeight:'700',fontSize:'0.95rem',color:'var(--text)'}}>Feel Free Spa</div>
-              <div style={{fontSize:'0.68rem',color:'var(--muted)'}}>Admin Portal</div>
+              <div style={{fontWeight:'700',fontSize:'0.92rem',color:'var(--text)',letterSpacing:'-.2px'}}>Feel Free Spa</div>
+              <div style={{fontSize:'0.64rem',color:'var(--gold)',fontWeight:'600',marginTop:'1px'}}>Admin · {ADMIN_NAME}</div>
             </div>
           </div>
+          {/* Services tags */}
+          <div style={{display:'flex',gap:'4px',flexWrap:'wrap',marginTop:'10px'}}>
+            {SPA_SERVICES.map(s=>(
+              <span key={s} style={{fontSize:'0.58rem',padding:'2px 7px',borderRadius:'20px',background:'var(--gold-glow)',color:'var(--gold)',border:'0.5px solid var(--border-gold)',fontWeight:'600',letterSpacing:'.2px'}}>{s}</span>
+            ))}
+          </div>
         </div>
+
         <nav className="sidebar-nav">
-          <div style={{fontSize:'0.65rem',color:'var(--muted)',letterSpacing:'2px',padding:'8px 14px 4px',textTransform:'uppercase'}}>Management</div>
+          <div style={{fontSize:'0.6rem',color:'var(--muted)',letterSpacing:'1.5px',padding:'8px 14px 4px',textTransform:'uppercase'}}>Management</div>
           {tabs.map(t=>(
             <button key={t.id} className={`nav-item${tab===t.id?' active':''}`} onClick={()=>setTab(t.id)}>
               <span className="nav-icon">{t.icon}</span>
@@ -651,9 +712,19 @@ function Dashboard({ user }) {
             </button>
           ))}
         </nav>
+
         <div className="sidebar-footer">
-          <div style={{fontSize:'0.73rem',color:'var(--muted)',marginBottom:'10px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{user.email}</div>
-          <button onClick={()=>auth.signOut()} className="btn btn-ghost btn-sm" style={{width:'100%'}}>Sign Out</button>
+          <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'10px'}}>
+            <div style={{width:'28px',height:'28px',borderRadius:'50%',background:'var(--gold-glow)',border:'1px solid var(--border-gold)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.75rem',flexShrink:0,fontWeight:'700',color:'var(--gold)'}}>{ADMIN_NAME[0]}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:'0.78rem',fontWeight:'600',color:'var(--text)'}}>{ADMIN_NAME}</div>
+              <div style={{fontSize:'0.64rem',color:'var(--muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user.email}</div>
+            </div>
+          </div>
+          <div style={{display:'flex',gap:'6px'}}>
+            <button onClick={()=>auth.signOut()} className="btn btn-ghost btn-sm" style={{flex:1}}>Sign Out</button>
+            <button onClick={toggleTheme} className="theme-toggle" title={dark?'Switch to light mode':'Switch to dark mode'}>{dark?'☀️':'🌙'}</button>
+          </div>
         </div>
       </aside>
 
@@ -662,12 +733,12 @@ function Dashboard({ user }) {
         {/* Topbar */}
         <div className="topbar">
           <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-            <span style={{fontSize:'1.2rem',color:'var(--gold)'}}>✦</span>
-            <span style={{fontWeight:'700',fontSize:'1rem',color:'var(--text)'}}>{tabs.find(t=>t.id===tab)?.label}</span>
+            <div style={{width:'7px',height:'7px',borderRadius:'50%',background:'var(--gold)',flexShrink:0}}/>
+            <span style={{fontWeight:'700',fontSize:'0.97rem',color:'var(--text)',letterSpacing:'-.2px'}}>{tabs.find(t=>t.id===tab)?.label}</span>
           </div>
-          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-            <span className="topbar-email" style={{fontSize:'0.78rem',color:'var(--muted)'}}>{user.email}</span>
-            <button onClick={()=>auth.signOut()} className="btn btn-ghost btn-sm" style={{display:'none'}} id="mobile-signout">Sign Out</button>
+          <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+            <span className="topbar-email" style={{fontSize:'0.75rem',color:'var(--muted)',fontWeight:'500'}}>{ADMIN_NAME} · Feel Free Spa</span>
+            <button onClick={toggleTheme} className="theme-toggle" title={dark?'Light mode':'Dark mode'}>{dark?'☀️':'🌙'}</button>
           </div>
         </div>
 
@@ -676,7 +747,7 @@ function Dashboard({ user }) {
           {tabs.map(t=>(
             <button key={t.id} className={`bottom-nav-item${tab===t.id?' active':''}`} onClick={()=>setTab(t.id)}>
               <span className="bnav-icon">{t.icon}</span>
-              {t.label}
+              {t.label.split(' ')[0]}
             </button>
           ))}
         </nav>
@@ -1101,7 +1172,7 @@ function TherapistManager() {
 //  LINK CREATOR
 // ══════════════════════════════════════════════════════
 function LinkCreator() {
-  const [form, setForm] = useState({bookType:'now',scheduledDate:'',clientName:'',clientPhone:'',expiryMinutes:60,maxViewsPerImage:2,viewDurationSeconds:3});
+  const [form, setForm] = useState({bookType:'now',scheduledDate:'',clientName:'',clientPhone:'',serviceType:'',expiryMinutes:60,maxViewsPerImage:2,viewDurationSeconds:3});
   const [links,    setLinks]    = useState([]);
   const [creating, setCreating] = useState(false);
   const [newLink,  setNewLink]  = useState('');
@@ -1137,6 +1208,7 @@ function LinkCreator() {
         maxViewsPerImage: Number(form.maxViewsPerImage),
         viewDurationSeconds: Number(form.viewDurationSeconds),
         clientName: form.clientName.trim(), clientPhone: form.clientPhone.trim(),
+        serviceType: form.serviceType || '',
         bookType: form.bookType,
         used: false, createdAt: FieldValue.serverTimestamp(),
       };
@@ -1239,6 +1311,15 @@ function LinkCreator() {
               <input type="tel" value={form.clientPhone}
                 onChange={e=>setForm(p=>({...p,clientPhone:e.target.value}))}
                 className="form-input" placeholder="10-digit number" required/>
+            </div>
+
+            {/* Service type */}
+            <div>
+              <label className="form-label">Massage Service</label>
+              <select value={form.serviceType} onChange={e=>setForm(p=>({...p,serviceType:e.target.value}))} className="form-input">
+                <option value=''>— Select Service —</option>
+                {SPA_SERVICES.map(s=><option key={s} value={s}>{s}</option>)}
+              </select>
             </div>
 
             {/* Link settings */}
@@ -1377,7 +1458,7 @@ function AdminBookingForm({ therapistList, onClose }) {
   const [type,        setType]        = useState('now'); // 'now'|'later'
   const [clientName,  setClientName]  = useState('');
   const [clientPhone, setClientPhone] = useState('');
-  const [serviceType, setServiceType] = useState('Massage');
+  const [serviceType, setServiceType] = useState(SPA_SERVICES[0]);
   const [duration,    setDuration]    = useState('60 min');
   const [therapistId, setTherapistId] = useState('');
   const [notes,       setNotes]       = useState('');
@@ -1506,7 +1587,7 @@ function AdminBookingForm({ therapistList, onClose }) {
           <div>
             <label style={LBL}>Service</label>
             <select value={serviceType} onChange={e=>setServiceType(e.target.value)} style={INP}>
-              {['Massage','Facial','Body Wrap','Head Massage','Other'].map(s=><option key={s}>{s}</option>)}
+              {SPA_SERVICES.map(s=><option key={s}>{s}</option>)}
             </select>
           </div>
           <div>
@@ -2394,6 +2475,11 @@ function BookingsPanel() {
                         <span style={{display:'inline-flex',padding:'2px 8px',borderRadius:'20px',fontSize:'0.66rem',fontWeight:'700',background:c.bg,color:c.color,border:`1px solid ${c.border}`}}>
                           {c.label||b.status}
                         </span>
+                        {b.serviceType&&(
+                          <span style={{display:'inline-flex',padding:'2px 8px',borderRadius:'20px',fontSize:'0.62rem',fontWeight:'700',background:'var(--gold-glow)',color:'var(--gold)',border:'0.5px solid var(--border-gold)'}}>
+                            {b.serviceType}
+                          </span>
+                        )}
                         <span style={{fontSize:'0.7rem',color:'var(--muted)'}}>
                           {b.bookingType==='now'?'⚡ Now':`📅 ${b.scheduledDate||''} ${b.scheduledTime||''}`}
                         </span>
