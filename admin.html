@@ -179,33 +179,69 @@
       .sidebar { display:none !important; }
       .main { margin-left:0; padding-bottom:72px; overflow-x:hidden; }
 
-      /* Bottom nav */
+      /* ── Bottom nav — Concept C ── */
       .bottom-nav {
         display:flex !important; position:fixed; bottom:0; left:0; right:0; z-index:200;
         background:var(--surface); border-top:0.5px solid var(--border);
-        box-shadow:0 -2px 12px rgba(0,0,0,0.06);
         padding-bottom: env(safe-area-inset-bottom);
       }
       .bottom-nav-item {
         flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
-        gap:4px; background:transparent; border:none; color:var(--muted);
-        font-size:0.6rem; font-weight:600; cursor:pointer; font-family:inherit;
-        padding:8px 4px 10px; letter-spacing:0.2px; min-height:58px;
-        position:relative;
+        gap:3px; background:transparent; border:none; color:var(--muted);
+        font-size:0.58rem; font-weight:600; cursor:pointer; font-family:inherit;
+        padding:8px 2px 10px; letter-spacing:0.3px; min-height:56px;
+        position:relative; transition:color .15s;
       }
-      .bottom-nav-item .bnav-icon { font-size:1.45rem; line-height:1; transition:transform .15s; }
+      .bottom-nav-item .bnav-icon { font-size:1.35rem; line-height:1; transition:transform .15s; }
       .bottom-nav-item.active { color:var(--gold); }
-      .bottom-nav-item.active .bnav-icon { transform:scale(1.08); }
-      .bottom-nav-item.active::before {
-        content:''; position:absolute; top:0; left:25%; right:25%; height:2.5px;
-        background:var(--gold); border-radius:0 0 3px 3px;
+      .bottom-nav-item.active .bnav-icon { transform:scale(1.1); }
+      .bottom-nav-item.active::after {
+        content:''; position:absolute; bottom:0; left:20%; right:20%; height:2px;
+        background:var(--gold); border-radius:2px 2px 0 0;
       }
 
-      /* Topbar */
-      .topbar { padding:10px 14px; min-height:52px; }
+      /* ── Topbar — compact command style ── */
+      .topbar {
+        padding:10px 16px; min-height:52px;
+        background:var(--surface); border-bottom:0.5px solid var(--border);
+      }
       .topbar-email { display:none !important; }
       .topbar-title { font-size:1rem !important; }
       .content { padding:14px 12px; gap:16px !important; }
+
+      /* ── Concept C stat cards — gold border on mobile ── */
+      .mob-stat-card {
+        background:var(--card); border:1px solid var(--border-gold);
+        border-radius:12px; padding:12px 14px;
+      }
+      .mob-stat-num { font-size:1.7rem; font-weight:800; line-height:1; margin:0 0 2px; }
+      .mob-stat-label { font-size:0.68rem; font-weight:600; color:var(--text); margin:0 0 1px; }
+      .mob-stat-sub { font-size:0.6rem; margin:0; }
+
+      /* ── Quick action tiles ── */
+      .mob-quick-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:14px; }
+      .mob-quick-tile {
+        display:flex; align-items:center; gap:10px; padding:12px 12px;
+        border-radius:12px; border:none; cursor:pointer; font-family:inherit;
+        text-align:left; font-size:0.82rem; font-weight:600; transition:opacity .15s;
+      }
+      .mob-quick-tile:active { opacity:0.75; }
+      .mob-quick-icon { font-size:1.2rem; flex-shrink:0; }
+
+      /* ── More menu rows ── */
+      .mob-more-row {
+        display:flex; align-items:center; gap:14px; padding:14px 16px;
+        background:none; border:none; border-bottom:0.5px solid var(--border);
+        cursor:pointer; text-align:left; font-family:inherit; width:100%;
+        transition:background .1s;
+      }
+      .mob-more-row:last-child { border-bottom:none; }
+      .mob-more-row:active { background:var(--elevated); }
+      .mob-more-icon-wrap {
+        width:38px; height:38px; border-radius:10px;
+        display:flex; align-items:center; justify-content:center;
+        font-size:1.15rem; flex-shrink:0;
+      }
 
       /* Cards */
       .card-gold { padding:16px !important; }
@@ -700,56 +736,58 @@ function LiveTracker() {
 //  MOBILE MORE MENU
 // ══════════════════════════════════════════════════════
 function MobileMoreMenu({ moreTabs, onNavigate, user, onSignOut, onTheme, dark }) {
+  const ICON_STYLES = [
+    { bg:'var(--gold-glow)', border:'1px solid var(--border-gold)' },
+    { bg:'rgba(37,99,235,0.10)', border:'1px solid rgba(37,99,235,0.2)' },
+    { bg:'rgba(22,163,74,0.10)', border:'1px solid rgba(22,163,74,0.2)' },
+  ];
   return (
     <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
-      {/* Section title */}
-      <div style={{marginBottom:'4px'}}>
-        <h2 style={{fontSize:'1.05rem',fontWeight:'700',color:'var(--text)',margin:'0 0 3px'}}>More</h2>
-        <p style={{fontSize:'0.75rem',color:'var(--muted)',margin:0}}>Additional tools & settings</p>
-      </div>
 
-      {/* Extra pages */}
-      <div className="card" style={{overflow:'hidden'}}>
-        {moreTabs.map((t,i)=>(
-          <button key={t.id} onClick={()=>onNavigate(t.id)}
-            style={{width:'100%',display:'flex',alignItems:'center',gap:'14px',padding:'16px 16px',background:'none',border:'none',borderBottom:i<moreTabs.length-1?'1px solid var(--border)':'none',cursor:'pointer',textAlign:'left',fontFamily:'inherit'}}>
-            <div style={{width:'44px',height:'44px',borderRadius:'12px',background:'var(--gold-glow)',border:'1px solid var(--border-gold)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.3rem',flexShrink:0}}>{t.icon}</div>
-            <div style={{flex:1,minWidth:0}}>
-              <p style={{fontWeight:'600',fontSize:'0.9rem',color:'var(--text)',margin:'0 0 2px'}}>{t.label}</p>
-              <p style={{fontSize:'0.68rem',color:'var(--muted)',margin:0}}>{t.desc}</p>
-            </div>
-            <span style={{color:'var(--muted)',fontSize:'0.9rem',flexShrink:0}}>›</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Account section */}
+      {/* Profile card */}
       <div className="card" style={{padding:'16px'}}>
         <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'14px'}}>
-          <div style={{width:'44px',height:'44px',borderRadius:'50%',background:'var(--gold-glow)',border:'1px solid var(--border-gold)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem',fontWeight:'700',color:'var(--gold)',flexShrink:0}}>
+          <div style={{width:'46px',height:'46px',borderRadius:'50%',background:'var(--gold-glow)',border:'1.5px solid var(--border-gold)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.15rem',fontWeight:'800',color:'var(--gold)',flexShrink:0}}>
             {ADMIN_NAME[0]}
           </div>
           <div style={{flex:1,minWidth:0}}>
-            <p style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--text)',margin:'0 0 2px'}}>{ADMIN_NAME}</p>
-            <p style={{fontSize:'0.68rem',color:'var(--muted)',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user?.email}</p>
+            <p style={{fontWeight:'700',fontSize:'0.95rem',color:'var(--text)',margin:'0 0 2px'}}>{ADMIN_NAME}</p>
+            <p style={{fontSize:'0.65rem',color:'var(--muted)',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>Admin · Feel Free Spa</p>
           </div>
         </div>
+        {/* Theme + Sign Out */}
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px'}}>
           <button onClick={onTheme}
-            style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'6px',padding:'11px',borderRadius:'10px',border:'1px solid var(--border)',background:'var(--elevated)',color:'var(--text)',fontWeight:'600',fontSize:'0.82rem',cursor:'pointer',fontFamily:'inherit'}}>
-            {dark?'☀️ Light':'🌙 Dark'}
+            style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',padding:'11px',borderRadius:'10px',border:'1px solid var(--border)',background:'var(--elevated)',color:'var(--text)',fontWeight:'600',fontSize:'0.8rem',cursor:'pointer',fontFamily:'inherit'}}>
+            {dark?'☀️ Light mode':'🌙 Dark mode'}
           </button>
           <button onClick={onSignOut}
-            style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'6px',padding:'11px',borderRadius:'10px',border:'1px solid rgba(220,38,38,0.3)',background:'var(--danger-bg)',color:'var(--danger)',fontWeight:'600',fontSize:'0.82rem',cursor:'pointer',fontFamily:'inherit'}}>
+            style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',padding:'11px',borderRadius:'10px',border:'1px solid rgba(220,38,38,0.3)',background:'var(--danger-bg)',color:'var(--danger)',fontWeight:'600',fontSize:'0.8rem',cursor:'pointer',fontFamily:'inherit'}}>
             Sign Out
           </button>
         </div>
       </div>
 
-      {/* Feel Free Spa branding */}
-      <div style={{textAlign:'center',padding:'8px 0 4px'}}>
-        <p style={{fontSize:'0.65rem',color:'var(--subtle)',margin:0}}>✦ Feel Free Spa · Admin Portal</p>
-        <p style={{fontSize:'0.6rem',color:'var(--subtle)',margin:'3px 0 0'}}>{SPA_SERVICES.join(' · ')}</p>
+      {/* Navigation tiles */}
+      <div className="card" style={{overflow:'hidden'}}>
+        {moreTabs.map((t,i)=>(
+          <button key={t.id} onClick={()=>onNavigate(t.id)} className="mob-more-row">
+            <div className="mob-more-icon-wrap" style={ICON_STYLES[i%ICON_STYLES.length]}>
+              <span style={{fontSize:'1.15rem'}}>{t.icon}</span>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <p style={{fontWeight:'600',fontSize:'0.88rem',color:'var(--text)',margin:'0 0 2px'}}>{t.label}</p>
+              <p style={{fontSize:'0.66rem',color:'var(--muted)',margin:0}}>{t.desc}</p>
+            </div>
+            <span style={{color:'var(--muted)',fontSize:'1rem',flexShrink:0}}>›</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Branding footer */}
+      <div style={{textAlign:'center',padding:'6px 0 4px'}}>
+        <p style={{fontSize:'0.62rem',color:'var(--subtle)',margin:0,letterSpacing:'0.3px'}}>✦ Feel Free Spa · Admin Portal</p>
+        <p style={{fontSize:'0.58rem',color:'var(--subtle)',margin:'3px 0 0'}}>{SPA_SERVICES.join(' · ')}</p>
       </div>
     </div>
   );
@@ -790,12 +828,12 @@ function Dashboard({ user }) {
     { id:'attendance', icon:'📅', label:'Attendance' },
     { id:'tracker',    icon:'📍', label:'Live Tracker' },
   ];
-  // Mobile bottom nav — 4 key + More
+  // Mobile bottom nav — 4 key + More (Concept C)
   const mobileTabs = [
     { id:'dashboard', icon:'⊞', label:'Home' },
-    { id:'tracker',   icon:'📍', label:'Tracker' },
-    { id:'accounts',  icon:'👤', label:'Accounts' },
     { id:'bookings',  icon:'📋', label:'Bookings' },
+    { id:'accounts',  icon:'👤', label:'Accounts' },
+    { id:'tracker',   icon:'📍', label:'Tracker' },
     { id:'more',      icon:'⋯',  label:'More' },
   ];
   // Extra tabs accessible via "More"
@@ -857,8 +895,17 @@ function Dashboard({ user }) {
         {/* Topbar */}
         <div className="topbar">
           <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+            {/* Desktop: gold dot + tab label */}
             <div style={{width:'7px',height:'7px',borderRadius:'50%',background:'var(--gold)',flexShrink:0}}/>
-            <span style={{fontWeight:'700',fontSize:'0.97rem',color:'var(--text)',letterSpacing:'-.2px'}}>{tab==='more'?'More':(tabs.find(t=>t.id===tab)?.label||'')}</span>
+            <div>
+              <span style={{fontWeight:'700',fontSize:'0.97rem',color:'var(--text)',letterSpacing:'-.2px'}}>
+                {tab==='dashboard'?'Feel Free Spa':tab==='more'?'More':(tabs.find(t=>t.id===tab)?.label||'')}
+              </span>
+              {/* Mobile subtitle: Admin · Shiva */}
+              <div style={{fontSize:'0.6rem',color:'var(--muted)',marginTop:'1px',lineHeight:1}} className="topbar-email" >
+                Admin · {ADMIN_NAME}
+              </div>
+            </div>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
             <span className="topbar-email" style={{fontSize:'0.75rem',color:'var(--muted)',fontWeight:'500'}}>{ADMIN_NAME} · Feel Free Spa</span>
@@ -999,54 +1046,85 @@ function DashboardTab({ onNavigate = ()=>{} }) {
   return (
     <div style={{display:'flex',flexDirection:'column'}}>
 
-      {/* ── Greeting ── */}
+      {/* ── Greeting — Concept C command header ── */}
       <div style={{marginBottom:'16px'}}>
-        <p style={{fontSize:'0.72rem',color:'var(--muted)',marginBottom:'2px'}}>
+        <p style={{fontSize:'0.7rem',color:'var(--muted)',marginBottom:'3px',letterSpacing:'0.2px'}}>
           {new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
         </p>
-        <h1 style={{fontSize:'1.08rem',fontWeight:'700',color:'var(--text)',letterSpacing:'-.3px'}}>
-          Good {greeting}, {ADMIN_NAME} 👋
-        </h1>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'8px'}}>
+          <h1 style={{fontSize:'1.05rem',fontWeight:'700',color:'var(--text)',letterSpacing:'-.3px',margin:0}}>
+            Good {greeting}, {ADMIN_NAME} 👋
+          </h1>
+          {/* Mobile inline dot indicator */}
+          <div style={{display:'flex',alignItems:'center',gap:'5px',flexShrink:0}}>
+            <div style={{width:'7px',height:'7px',borderRadius:'50%',background:'var(--success)'}}/>
+            <span style={{fontSize:'0.65rem',color:'var(--success)',fontWeight:'600'}}>{onlineCount} online</span>
+          </div>
+        </div>
       </div>
 
-      {/* ── 2×2 Stat Grid ── */}
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'22px'}}>
+      {/* ── 2×2 Stat Grid — Concept C gold-border cards ── */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'16px'}}>
 
         {/* On Duty Now */}
-        <div className="card" style={{padding:'14px 16px'}}>
-          <div style={{width:'32px',height:'32px',borderRadius:'9px',background:'var(--success-bg)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'10px',fontSize:'1.1rem'}}>👤</div>
-          <p style={{fontSize:'1.8rem',fontWeight:'800',color:'var(--success)',lineHeight:'1',margin:'0 0 3px'}}>{loadingB?'—':onlineCount}</p>
-          <p style={{fontSize:'0.72rem',fontWeight:'600',color:'var(--text)',margin:'0 0 2px'}}>On Duty Now</p>
-          <p style={{fontSize:'0.61rem',color:'var(--success)',margin:0,fontWeight:'500'}}>↑{onlineCount} from morning</p>
+        <div className="mob-stat-card">
+          <div style={{width:'28px',height:'28px',borderRadius:'8px',background:'var(--success-bg)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'8px',fontSize:'0.95rem'}}>👤</div>
+          <p className="mob-stat-num" style={{color:'var(--success)'}}>{loadingB?'—':onlineCount}</p>
+          <p className="mob-stat-label">On Duty</p>
+          <p className="mob-stat-sub" style={{color:'var(--success)'}}>of {therapists.length} total</p>
         </div>
 
         {/* Bookings Today */}
-        <div className="card" style={{padding:'14px 16px'}}>
-          <div style={{width:'32px',height:'32px',borderRadius:'9px',background:'var(--gold-glow)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'10px',fontSize:'1.1rem'}}>📋</div>
-          <p style={{fontSize:'1.8rem',fontWeight:'800',color:'var(--gold)',lineHeight:'1',margin:'0 0 3px'}}>{loadingB?'—':todayCount}</p>
-          <p style={{fontSize:'0.72rem',fontWeight:'600',color:'var(--text)',margin:'0 0 2px'}}>Bookings Today</p>
-          <p style={{fontSize:'0.61rem',color:pendingCount>0?'var(--danger)':'var(--success)',margin:0,fontWeight:'500'}}>
-            {pendingCount>0?`${pendingCount} need action`:'All confirmed'}
+        <div className="mob-stat-card">
+          <div style={{width:'28px',height:'28px',borderRadius:'8px',background:'var(--gold-glow)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'8px',fontSize:'0.95rem'}}>📋</div>
+          <p className="mob-stat-num" style={{color:'var(--gold)'}}>{loadingB?'—':todayCount}</p>
+          <p className="mob-stat-label">Today</p>
+          <p className="mob-stat-sub" style={{color:pendingCount>0?'var(--danger)':'var(--success)'}}>
+            {pendingCount>0?`${pendingCount} pending`:'All clear'}
           </p>
         </div>
 
         {/* No GPS Signal */}
-        <div className="card" style={{padding:'14px 16px'}}>
-          <div style={{width:'32px',height:'32px',borderRadius:'9px',background:'rgba(245,158,11,0.12)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'10px',fontSize:'1.1rem'}}>📍</div>
-          <p style={{fontSize:'1.8rem',fontWeight:'800',color:'#f59e0b',lineHeight:'1',margin:'0 0 3px'}}>{noGPSCount}</p>
-          <p style={{fontSize:'0.72rem',fontWeight:'600',color:'var(--text)',margin:'0 0 2px'}}>No GPS Signal</p>
-          <p style={{fontSize:'0.61rem',color:noGPSCount>0?'#f59e0b':'var(--success)',margin:0,fontWeight:'500'}}>
-            {noGPSCount>0?'Reminder sent':'All tracking'}
+        <div className="mob-stat-card">
+          <div style={{width:'28px',height:'28px',borderRadius:'8px',background:'rgba(245,158,11,0.12)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'8px',fontSize:'0.95rem'}}>📍</div>
+          <p className="mob-stat-num" style={{color:'#f59e0b'}}>{noGPSCount}</p>
+          <p className="mob-stat-label">No GPS</p>
+          <p className="mob-stat-sub" style={{color:noGPSCount>0?'#f59e0b':'var(--success)'}}>
+            {noGPSCount>0?'Needs attention':'All tracking'}
           </p>
         </div>
 
         {/* Avg Rating */}
-        <div className="card" style={{padding:'14px 16px'}}>
-          <div style={{width:'32px',height:'32px',borderRadius:'9px',background:'rgba(245,158,11,0.12)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'10px',fontSize:'1.1rem'}}>⭐</div>
-          <p style={{fontSize:'1.8rem',fontWeight:'800',color:'#f59e0b',lineHeight:'1',margin:'0 0 3px'}}>{avgRating}</p>
-          <p style={{fontSize:'0.72rem',fontWeight:'600',color:'var(--text)',margin:'0 0 2px'}}>Avg Rating</p>
-          <p style={{fontSize:'0.61rem',color:'var(--muted)',margin:0,fontWeight:'500'}}>This month</p>
+        <div className="mob-stat-card">
+          <div style={{width:'28px',height:'28px',borderRadius:'8px',background:'rgba(245,158,11,0.12)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:'8px',fontSize:'0.95rem'}}>⭐</div>
+          <p className="mob-stat-num" style={{color:'#f59e0b'}}>{avgRating}</p>
+          <p className="mob-stat-label">Avg Rating</p>
+          <p className="mob-stat-sub" style={{color:'var(--muted)'}}>This month</p>
         </div>
+      </div>
+
+      {/* ── Quick Actions — Concept C tiles ── */}
+      <div className="mob-quick-grid">
+        <button className="mob-quick-tile" onClick={()=>onNavigate('therapists')}
+          style={{background:'var(--gold-glow)',border:'1px solid var(--border-gold)',color:'var(--gold)'}}>
+          <span className="mob-quick-icon">🖼️</span>
+          <span style={{fontSize:'0.78rem',fontWeight:'600'}}>Photos</span>
+        </button>
+        <button className="mob-quick-tile" onClick={()=>onNavigate('links')}
+          style={{background:'rgba(37,99,235,0.08)',border:'1px solid rgba(37,99,235,0.18)',color:'var(--info)'}}>
+          <span className="mob-quick-icon">🔗</span>
+          <span style={{fontSize:'0.78rem',fontWeight:'600'}}>Links</span>
+        </button>
+        <button className="mob-quick-tile" onClick={()=>onNavigate('attendance')}
+          style={{background:'var(--success-bg)',border:'1px solid rgba(22,163,74,0.25)',color:'var(--success)'}}>
+          <span className="mob-quick-icon">📅</span>
+          <span style={{fontSize:'0.78rem',fontWeight:'600'}}>Attendance</span>
+        </button>
+        <button className="mob-quick-tile" onClick={()=>onNavigate('tracker')}
+          style={{background:'rgba(245,158,11,0.09)',border:'1px solid rgba(245,158,11,0.22)',color:'#f59e0b'}}>
+          <span className="mob-quick-icon">📍</span>
+          <span style={{fontSize:'0.78rem',fontWeight:'600'}}>Tracker</span>
+        </button>
       </div>
 
       {/* ── Active Therapists ── */}
