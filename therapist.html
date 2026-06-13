@@ -411,6 +411,8 @@ function TherapistPortal({ session, onLogout }) {
   // Emergency contacts
   const [emergencyContacts, setEmergencyContacts] = useState([]);
 
+  const [locPermission,  setLocPermission]  = useState('unknown'); // 'granted'|'denied'|'prompt'|'unknown'
+
   const fileRef          = useRef(null);
   const seenInitRef      = useRef(false);
   const alertIntervalRef = useRef(null);
@@ -437,6 +439,23 @@ function TherapistPortal({ session, onLogout }) {
       if(locHeartbeatRef.current) clearInterval(locHeartbeatRef.current);
     };
   }, []);
+
+  // Check & watch location permission state
+  useEffect(() => {
+    if(!navigator.permissions) return;
+    navigator.permissions.query({name:'geolocation'}).then(status => {
+      setLocPermission(status.state);
+      status.onchange = () => setLocPermission(status.state);
+    }).catch(()=>{});
+  }, []);
+
+  const requestLocPermission = () => {
+    navigator.geolocation.getCurrentPosition(
+      () => setLocPermission('granted'),
+      err => setLocPermission(err.code===1?'denied':'prompt'),
+      {enableHighAccuracy:false, timeout:8000, maximumAge:0}
+    );
+  };
 
   // Silent auto-reload when admin triggers force refresh
   useEffect(()=>{
@@ -1020,6 +1039,8 @@ function TherapistPortal({ session, onLogout }) {
           onEndDuty={handleEndDuty}
           onSOS={handleSOS}
           showMsg={showMsg}
+          locPermission={locPermission}
+          onRequestLoc={requestLocPermission}
         />}
 
         {/* ══ EARNINGS TAB ══ */}
@@ -1224,7 +1245,7 @@ function TherapistPortal({ session, onLogout }) {
 // ══════════════════════════════════════════════════════
 //  HOME TAB
 // ══════════════════════════════════════════════════════
-function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allBookings, myGPS, onAccept, onDecline, onMarkComplete, onUpdateStatus, onViewEarnings, onLogout, onDuty, dutySeconds, dutyLoading, onStartDuty, onEndDuty, onSOS, showMsg }) {
+function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allBookings, myGPS, onAccept, onDecline, onMarkComplete, onUpdateStatus, onViewEarnings, onLogout, onDuty, dutySeconds, dutyLoading, onStartDuty, onEndDuty, onSOS, showMsg, locPermission, onRequestLoc }) {
   const [earnings,      setEarnings]      = useState([]);
   const [earningsLoaded,setEarningsLoaded]= useState(false);
   const [markingId,     setMarkingId]     = useState(null);
@@ -1332,6 +1353,29 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
           <div style={{width:'38px',height:'38px',borderRadius:'50%',background:'var(--elevated)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.05rem',cursor:'default',flexShrink:0}}>🔔</div>
         </div>
       </div>
+
+      {/* ── Location Permission Banner ── */}
+      {locPermission === 'denied' && (
+        <div style={{margin:'10px 16px 0',padding:'11px 14px',borderRadius:'12px',background:'rgba(231,76,60,0.1)',border:'1px solid rgba(231,76,60,0.35)',display:'flex',alignItems:'flex-start',gap:'10px'}}>
+          <span style={{fontSize:'1rem',flexShrink:0}}>📍</span>
+          <div style={{flex:1}}>
+            <p style={{fontWeight:'700',fontSize:'0.82rem',color:'#e74c3c',margin:'0 0 2px'}}>Location blocked by browser</p>
+            <p style={{fontSize:'0.75rem',color:'var(--muted)',margin:'0 0 8px'}}>Tap the 🔒 lock icon in your browser address bar → <b>Site settings</b> → <b>Location</b> → <b>Allow</b>, then reload.</p>
+          </div>
+        </div>
+      )}
+      {(locPermission === 'prompt' || locPermission === 'unknown') && !onDuty && (
+        <div style={{margin:'10px 16px 0',padding:'11px 14px',borderRadius:'12px',background:'rgba(243,156,18,0.08)',border:'1px solid rgba(243,156,18,0.3)',display:'flex',alignItems:'center',gap:'10px'}}>
+          <span style={{fontSize:'1rem',flexShrink:0}}>📍</span>
+          <div style={{flex:1}}>
+            <p style={{fontWeight:'700',fontSize:'0.82rem',color:'#f39c12',margin:'0 0 2px'}}>Allow Location for live tracking</p>
+            <p style={{fontSize:'0.75rem',color:'var(--muted)',margin:'0 0 8px'}}>Required to share your location with admin during duty.</p>
+            <button onClick={onRequestLoc} style={{padding:'6px 14px',borderRadius:'8px',background:'rgba(243,156,18,0.15)',border:'1px solid rgba(243,156,18,0.4)',color:'#f39c12',fontSize:'0.78rem',fontWeight:'700',cursor:'pointer',fontFamily:'inherit'}}>
+              Tap to Allow Location
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Duty / SOS Card ── */}
       <DutyCard
