@@ -312,6 +312,60 @@
       .mobile-back-bar { display:flex !important; }
     }
 
+    /* ── Mobile utility: show/hide ── */
+    .mob-only  { display:none; }
+    @media (max-width:768px) {
+      .mob-only  { display:flex; }
+      .desk-only { display:none !important; }
+
+      /* ── Mobile page header (Bookings / Accounts) ── */
+      .mob-page-hdr { flex-direction:column; gap:10px; margin-bottom:2px; }
+      .mob-page-hdr-top { display:flex; align-items:center; justify-content:space-between; }
+      .mob-page-title { font-size:1rem; font-weight:700; color:var(--text); margin:0; letter-spacing:-.3px; }
+      .mob-page-sub { font-size:0.65rem; color:var(--muted); margin:0 0 2px; }
+
+      /* ── Alert banner ── */
+      .mob-alert-red {
+        align-items:center; gap:10px; padding:10px 13px; border-radius:10px;
+        background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.2);
+        cursor:pointer;
+      }
+      .mob-alert-amber {
+        align-items:center; gap:10px; padding:10px 13px; border-radius:10px;
+        background:rgba(243,156,18,0.08); border:1px solid rgba(243,156,18,0.22);
+        cursor:pointer;
+      }
+      .mob-alert-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+      .mob-alert-body { flex:1; min-width:0; }
+      .mob-alert-body p:first-child { font-size:0.78rem; font-weight:700; margin:0 0 1px; }
+      .mob-alert-body p:last-child  { font-size:0.63rem; color:var(--muted); margin:0; }
+      .mob-alert-arr { font-size:1rem; color:var(--muted); flex-shrink:0; }
+
+      /* ── Horizontal pill strip ── */
+      .mob-pill-strip {
+        display:flex; gap:7px; overflow-x:auto; padding-bottom:3px;
+        scrollbar-width:none; -webkit-overflow-scrolling:touch;
+      }
+      .mob-pill-strip::-webkit-scrollbar { display:none; }
+      .mob-pill {
+        flex-shrink:0; display:flex; align-items:center; gap:6px;
+        padding:7px 12px; border-radius:20px;
+        background:var(--surface); border:1px solid var(--border);
+        cursor:pointer; font-family:inherit; font-size:inherit;
+        transition:all .15s;
+      }
+      .mob-pill.pill-active { border-color:var(--gold); background:var(--gold-glow); }
+      .mob-pill-dot  { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+      .mob-pill-val  { font-size:0.85rem; font-weight:700; color:var(--text); }
+      .mob-pill-lbl  { font-size:0.68rem; color:var(--muted); font-weight:500; }
+
+      /* ── Hide desktop stats grid in BookingsPanel ── */
+      .bk-stats-desk { display:none !important; }
+
+      /* ── Accounts create form: compact on mobile ── */
+      .acc-create-card { padding:14px !important; }
+    }
+
     @media (max-width:1024px) and (min-width:769px) {
       :root { --sidebar-w: 180px; }
       .content { padding:20px; }
@@ -2322,11 +2376,55 @@ function TherapistAccounts() {
     setTogglingDuty(null);
   };
 
+  const onDutyCount   = accounts.filter(a=>a.onDuty).length;
+  const availableCount = accounts.filter(a=>a.available).length;
+
   return (
     <div style={{display:'flex',flexDirection:'column',gap:'24px'}}>
 
+      {/* ── Mobile Page Header ── */}
+      <div className="mob-only mob-page-hdr">
+        <div className="mob-page-hdr-top">
+          <div>
+            <p className="mob-page-sub">{accounts.length} registered accounts</p>
+            <h2 className="mob-page-title">Accounts</h2>
+          </div>
+        </div>
+        {accounts.filter(a=>!a.onDuty&&a.available).length>0 && (
+          <div className="mob-alert-amber" style={{display:'flex'}}>
+            <div className="mob-alert-dot" style={{background:'#f59e0b'}}/>
+            <div className="mob-alert-body">
+              <p style={{color:'#f59e0b'}}>{accounts.filter(a=>!a.onDuty&&a.available).length} therapist(s) available but not on duty</p>
+              <p>Check duty status below</p>
+            </div>
+          </div>
+        )}
+        <div className="mob-pill-strip">
+          <div className="mob-pill" style={{borderColor:'rgba(212,175,55,0.35)',background:'var(--gold-glow)'}}>
+            <div className="mob-pill-dot" style={{background:'var(--gold)'}}/>
+            <span className="mob-pill-val" style={{color:'var(--gold)'}}>{accounts.length}</span>
+            <span className="mob-pill-lbl">Total</span>
+          </div>
+          <div className="mob-pill">
+            <div className="mob-pill-dot" style={{background:'#2ecc71'}}/>
+            <span className="mob-pill-val" style={{color:'#2ecc71'}}>{onDutyCount}</span>
+            <span className="mob-pill-lbl">On Duty</span>
+          </div>
+          <div className="mob-pill">
+            <div className="mob-pill-dot" style={{background:'var(--muted)'}}/>
+            <span className="mob-pill-val">{accounts.length-onDutyCount}</span>
+            <span className="mob-pill-lbl">Off Duty</span>
+          </div>
+          <div className="mob-pill">
+            <div className="mob-pill-dot" style={{background:'#3498db'}}/>
+            <span className="mob-pill-val" style={{color:'#3498db'}}>{availableCount}</span>
+            <span className="mob-pill-lbl">Available</span>
+          </div>
+        </div>
+      </div>
+
       {/* Create account card */}
-      <div className="card-gold" style={{padding:'24px'}}>
+      <div className="card-gold acc-create-card" style={{padding:'24px'}}>
         <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'20px'}}>
           <span style={{fontSize:'1.1rem'}}>➕</span>
           <h2 style={{fontSize:'0.95rem',fontWeight:'700',color:'var(--text)'}}>Create Therapist Account</h2>
@@ -2651,8 +2749,42 @@ function BookingsPanel() {
         </div>
       )}
 
+      {/* ── Mobile Page Header ── */}
+      <div className="mob-only mob-page-hdr">
+        <div className="mob-page-hdr-top">
+          <div>
+            <p className="mob-page-sub">{bookings.length} total bookings</p>
+            <h2 className="mob-page-title">Bookings</h2>
+          </div>
+          <button onClick={()=>setShowBookForm(v=>!v)}
+            className={`btn btn-sm ${showBookForm?'btn-ghost':'btn-gold'}`}
+            style={{display:'inline-flex',alignItems:'center',gap:'5px'}}>
+            {showBookForm?'✕':'+ New'}
+          </button>
+        </div>
+        {((counts.admin_pending||0)+(counts.pending||0))>0 && (
+          <div className="mob-alert-amber" style={{display:'flex'}} onClick={()=>setFilter('admin_pending')}>
+            <div className="mob-alert-dot" style={{background:'#f39c12'}}/>
+            <div className="mob-alert-body">
+              <p style={{color:'#f39c12'}}>{(counts.admin_pending||0)+(counts.pending||0)} bookings need attention</p>
+              <p>Tap to view pending approvals</p>
+            </div>
+            <span className="mob-alert-arr">›</span>
+          </div>
+        )}
+        <div className="mob-pill-strip">
+          {TABS.map(t=>(
+            <button key={t.id} className={`mob-pill${filter===t.id?' pill-active':''}`} onClick={()=>setFilter(t.id)}>
+              <span className="mob-pill-dot" style={{background:t.color}}/>
+              <span className="mob-pill-val" style={{color:filter===t.id?t.color:undefined}}>{counts[t.id]||0}</span>
+              <span className="mob-pill-lbl">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* New Booking button + form */}
-      <div>
+      <div className="desk-only">
         <button onClick={()=>setShowBookForm(v=>!v)} className={`btn btn-sm ${showBookForm?'btn-ghost':'btn-gold'}`}
           style={{gap:'6px',display:'inline-flex',alignItems:'center',marginBottom:showBookForm?'10px':'0'}}>
           {showBookForm?'✕ Cancel':'📅 New Booking'}
@@ -2665,8 +2797,15 @@ function BookingsPanel() {
         )}
       </div>
 
-      {/* Stats grid — click to filter */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(90px,1fr))',gap:'8px'}}>
+      {/* Mobile new booking form (shown when toggled via mobile header button) */}
+      {showBookForm&&(
+        <div className="mob-only" style={{flexDirection:'column'}}>
+          <AdminBookingForm therapistList={therapistList} onClose={()=>setShowBookForm(false)}/>
+        </div>
+      )}
+
+      {/* Stats grid — click to filter (desktop only, hidden mobile via .bk-stats-desk) */}
+      <div className="bk-stats-desk" style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(90px,1fr))',gap:'8px'}}>
         {TABS.filter(t=>t.id!=='all').map(t=>(
           <div key={t.id} onClick={()=>setFilter(f=>f===t.id?'all':t.id)}
             style={{background:'var(--surface)',border:`1px solid ${filter===t.id?t.color:'var(--border)'}`,borderRadius:'12px',padding:'10px 12px',cursor:'pointer',textAlign:'center',transition:'all .15s',boxShadow:filter===t.id?`0 0 0 1px ${t.color}20`:undefined,position:'relative'}}>
