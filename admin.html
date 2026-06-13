@@ -401,11 +401,13 @@
     .chat-bubble-sent {
       background:var(--gold); color:#1a1200;
       border-radius:18px 18px 4px 18px;
+      -webkit-user-select:none; user-select:none;
     }
     .chat-bubble-recv {
       background:var(--card); color:var(--text);
       border:0.5px solid var(--border);
       border-radius:18px 18px 18px 4px;
+      -webkit-user-select:none; user-select:none;
     }
     .chat-back-btn { display:none; }
     @keyframes chatMicPulse {
@@ -981,8 +983,9 @@ function ChatAdmin() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus' : 'audio/webm';
+      const mimeType =
+        MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' :
+        MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm';
       const mr = new MediaRecorder(stream, { mimeType });
       mr.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       mr.onstop = async () => {
@@ -991,7 +994,8 @@ function ChatAdmin() {
         setRecSecs(0);
         if (audioChunksRef.current.length > 0) {
           const blob = new Blob(audioChunksRef.current, { type: mimeType });
-          const file = new File([blob], `voice_${Date.now()}.webm`, { type: mimeType });
+          const ext  = mimeType.includes('mp4') ? 'mp4' : 'webm';
+          const file = new File([blob], `voice_${Date.now()}.${ext}`, { type: mimeType });
           await sendMedia(file, 'audio');
         }
       };
@@ -1060,53 +1064,95 @@ function ChatAdmin() {
   /* ── Message bubble ── */
   const Bubble = ({ msg }) => {
     const sent = msg.sender === 'admin';
-    const [hovered, setHovered] = useState(false);
+    const [showDel, setShowDel] = useState(false);
+    const touchTimer = useRef(null);
+    const autoHide  = useRef(null);
+
+    const showDelBtn = () => {
+      setShowDel(true);
+      clearTimeout(autoHide.current);
+      autoHide.current = setTimeout(() => setShowDel(false), 3000);
+    };
+
+    const onTouchStart = () => { touchTimer.current = setTimeout(showDelBtn, 500); };
+    const onTouchEnd   = () => clearTimeout(touchTimer.current);
 
     const deleteMsg = async () => {
+      setShowDel(false);
       if (!window.confirm('Delete this message?')) return;
       try {
         await db.collection('chats').doc(activeId).collection('messages').doc(msg.id).delete();
-      } catch(e){ alert('Could not delete: '+e.message); }
+      } catch(e) { alert('Could not delete: ' + e.message); }
     };
 
+    const isAudio = msg.mediaType === 'audio';
+
     return (
-      <div style={{ display:'flex', flexDirection:'column', alignItems: sent ? 'flex-end' : 'flex-start', gap:'3px' }}
-        onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)}>
-        <div style={{ display:'flex', alignItems:'center', gap:'6px', flexDirection: sent ? 'row-reverse' : 'row' }}>
-          <div className={sent ? 'chat-bubble-sent' : 'chat-bubble-recv'}
-            style={{ maxWidth:'72%', padding: msg.mediaType ? '6px' : '10px 14px', display:'inline-block' }}>
-            {msg.mediaType === 'image' && (
-              <img src={msg.mediaUrl} alt="photo"
-                onClick={() => window.open(msg.mediaUrl, '_blank')}
-                style={{ maxWidth:'220px', maxHeight:'220px', borderRadius:'12px', display:'block',
-                  cursor:'pointer', objectFit:'contain' }} />
-            )}
-            {msg.mediaType === 'audio' && (
-              <audio controls src={msg.mediaUrl}
-                style={{ maxWidth:'240px', display:'block', borderRadius:'8px' }} />
-            )}
-            {msg.mediaType === 'video' && (
-              <video controls src={msg.mediaUrl}
-                style={{ maxWidth:'240px', maxHeight:'200px', borderRadius:'12px', display:'block' }} />
-            )}
-            {msg.text && (
-              <p style={{ margin:0, fontSize:'14px', lineHeight:'1.5', wordBreak:'break-word',
-                color: sent ? '#1a1200' : 'var(--text)' }}>
-                {msg.text}
-              </p>
-            )}
-          </div>
-          {/* Delete button — shows on hover */}
+      <div
+        style={{ display:'flex', flexDirection:'column', alignItems: sent ? 'flex-end' : 'flex-start', gap:'3px' }}
+        onMouseEnter={() => setShowDel(true)}
+        onMouseLeave={() => setShowDel(false)}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      >
+        <div style={{ display:'flex', alignItems:'center', gap:'6px', flexDirection: sent ? 'row-reverse' : 'row',
+          maxWidth: isAudio ? 'min(300px,80vw)' : '75%' }}>
+
+          {isAudio ? (
+            /* ── Voice message card (NO bubble bg — native player fights colored bg) ── */
+            <div style={{
+              background: sent ? 'rgba(212,175,55,0.15)' : 'var(--card)',
+              border: `1.5px solid ${sent ? 'rgba(212,175,55,0.45)' : 'var(--border)'}`,
+              borderRadius:'14px', padding:'10px 12px',
+              minWidth:'200px', maxWidth:'100%',
+            }}>
+              <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'8px' }}>
+                <div style={{ width:'30px', height:'30px', borderRadius:'50%', flexShrink:0,
+                  background: sent ? 'var(--gold)' : 'var(--elevated)',
+                  display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px' }}>
+                  🎤
+                </div>
+                <span style={{ fontSize:'12px', fontWeight:'600', color:'var(--muted)' }}>Voice message</span>
+              </div>
+              <audio controls src={msg.mediaUrl} preload="none"
+                style={{ width:'100%', height:'36px', borderRadius:'8px',
+                  display:'block', accentColor:'var(--gold)' }}/>
+            </div>
+          ) : (
+            /* ── Text / image / video bubble ── */
+            <div className={sent ? 'chat-bubble-sent' : 'chat-bubble-recv'}
+              style={{ padding: msg.mediaType ? '6px' : '10px 14px', display:'inline-block', maxWidth:'100%', minWidth:0 }}>
+              {msg.mediaType === 'image' && (
+                <img src={msg.mediaUrl} alt="photo"
+                  onClick={() => window.open(msg.mediaUrl, '_blank')}
+                  style={{ maxWidth:'min(220px,60vw)', maxHeight:'220px', borderRadius:'12px', display:'block',
+                    cursor:'pointer', objectFit:'contain' }} />
+              )}
+              {msg.mediaType === 'video' && (
+                <video controls src={msg.mediaUrl}
+                  style={{ maxWidth:'min(240px,60vw)', maxHeight:'200px', borderRadius:'12px', display:'block' }} />
+              )}
+              {msg.text && (
+                <p style={{ margin:0, fontSize:'15px', lineHeight:'1.55', wordBreak:'break-word',
+                  color: sent ? '#1a1200' : 'var(--text)' }}>
+                  {msg.text}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Delete button — hover on desktop, long-press on mobile */}
           <button onClick={deleteMsg}
-            title="Delete message"
-            style={{ background:'rgba(220,38,38,0.12)', border:'1px solid rgba(220,38,38,0.3)',
-              borderRadius:'50%', width:'24px', height:'24px', color:'#dc2626',
-              fontSize:'11px', cursor:'pointer', display:'flex', alignItems:'center',
-              justifyContent:'center', flexShrink:0, lineHeight:1,
-              opacity: hovered ? 1 : 0, transition:'opacity .15s', padding:0 }}>
+            style={{ background:'rgba(220,38,38,0.15)', border:'1px solid rgba(220,38,38,0.3)',
+              borderRadius:'50%', width:'28px', height:'28px', minWidth:'28px', color:'#dc2626',
+              fontSize:'13px', cursor:'pointer', padding:0, lineHeight:1,
+              display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
+              opacity: showDel ? 1 : 0, pointerEvents: showDel ? 'auto' : 'none',
+              transition:'opacity .15s' }}>
             ✕
           </button>
         </div>
+
         <span style={{ fontSize:'10px', color:'var(--muted)',
           paddingLeft: sent ? 0 : '4px', paddingRight: sent ? '4px' : 0,
           display:'flex', alignItems:'center', gap:'3px' }}>

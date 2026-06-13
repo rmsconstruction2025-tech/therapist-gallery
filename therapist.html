@@ -1405,7 +1405,9 @@ function ChatTab({ session }) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+      const mimeType =
+        MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' :
+        MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm';
       const mr = new MediaRecorder(stream, { mimeType });
       mr.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       mr.onstop = async () => {
@@ -1414,7 +1416,8 @@ function ChatTab({ session }) {
         setRecSecs(0);
         if (audioChunksRef.current.length > 0) {
           const blob = new Blob(audioChunksRef.current, { type: mimeType });
-          await sendMedia(new File([blob], `voice_${Date.now()}.webm`, { type: mimeType }), 'audio');
+          const ext  = mimeType.includes('mp4') ? 'mp4' : 'webm';
+          await sendMedia(new File([blob], `voice_${Date.now()}.${ext}`, { type: mimeType }), 'audio');
         }
       };
       mr.start(250);
@@ -1452,20 +1455,151 @@ function ChatTab({ session }) {
       : d.toLocaleDateString('en-IN', { day:'numeric', month:'short' });
   };
 
+  /* ── Chat bubble (with delete on long-press/hover) ── */
+  const ChatBubble = ({ msg }) => {
+    const sent = msg.sender === 'therapist';
+    const [showDel, setShowDel] = React.useState(false);
+    const touchTimer = React.useRef(null);
+    const autoHide   = React.useRef(null);
+
+    const revealDel = () => {
+      setShowDel(true);
+      clearTimeout(autoHide.current);
+      autoHide.current = setTimeout(() => setShowDel(false), 3000);
+    };
+    const onTouchStart = () => { touchTimer.current = setTimeout(revealDel, 500); };
+    const onTouchEnd   = () => clearTimeout(touchTimer.current);
+
+    const deleteMsg = async () => {
+      setShowDel(false);
+      if (!window.confirm('Delete this message?')) return;
+      try {
+        await db.collection('chats').doc(session.docId).collection('messages').doc(msg.id).delete();
+      } catch(e) { alert('Could not delete: ' + e.message); }
+    };
+
+    const isAudio = msg.mediaType === 'audio';
+
+    return (
+      <div style={{ display:'flex', flexDirection:'column', alignItems: sent ? 'flex-end' : 'flex-start', gap:'3px' }}
+        onMouseEnter={() => setShowDel(true)}
+        onMouseLeave={() => setShowDel(false)}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}>
+
+        {!sent && <span style={{ fontSize:'11px', color:'var(--gold)', fontWeight:'600', paddingLeft:'4px' }}>Admin</span>}
+
+        <div style={{ display:'flex', alignItems:'center', gap:'6px',
+          flexDirection: sent ? 'row-reverse' : 'row',
+          maxWidth: isAudio ? 'min(300px,80vw)' : '75%' }}>
+
+          {isAudio ? (
+            /* ── Voice message — neutral card, no colored bubble ── */
+            <div style={{
+              background: sent ? 'rgba(212,175,55,0.15)' : 'var(--surface)',
+              border: `1.5px solid ${sent ? 'rgba(212,175,55,0.4)' : 'var(--border)'}`,
+              borderRadius:'14px', padding:'10px 12px',
+              minWidth:'200px', maxWidth:'100%',
+            }}>
+              <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'7px' }}>
+                <div style={{ width:'30px', height:'30px', borderRadius:'50%', flexShrink:0,
+                  background: sent ? 'var(--gold)' : 'var(--elevated)',
+                  display:'flex', alignItems:'center', justifyContent:'center', fontSize:'13px' }}>
+                  🎤
+                </div>
+                <span style={{ fontSize:'12px', fontWeight:'600', color:'var(--muted)' }}>Voice message</span>
+              </div>
+              <audio controls src={msg.mediaUrl} preload="none"
+                style={{ width:'100%', height:'36px', borderRadius:'8px', display:'block',
+                  accentColor: sent ? '#d4af37' : 'var(--text)' }}/>
+            </div>
+          ) : (
+            /* ── Text / image / video bubble ── */
+            <div style={{
+              padding: msg.mediaType ? '6px' : '10px 14px',
+              display:'inline-block', maxWidth:'100%', minWidth:0,
+              borderRadius: sent ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+              background: sent ? 'var(--gold)' : 'var(--surface)',
+              border: sent ? 'none' : '1px solid var(--border)',
+            }}>
+              {msg.mediaType === 'image' && (
+                <img src={msg.mediaUrl} alt="photo" onClick={() => window.open(msg.mediaUrl,'_blank')}
+                  style={{ maxWidth:'min(220px,60vw)', maxHeight:'220px', borderRadius:'12px',
+                    display:'block', cursor:'pointer', objectFit:'contain' }}/>
+              )}
+              {msg.mediaType === 'video' && (
+                <video controls src={msg.mediaUrl}
+                  style={{ maxWidth:'min(240px,60vw)', maxHeight:'200px', borderRadius:'12px', display:'block' }}/>
+              )}
+              {msg.text && (
+                <p style={{ margin:0, fontSize:'15px', lineHeight:'1.55', wordBreak:'break-word',
+                  color: sent ? '#1a1200' : 'var(--text)' }}>
+                  {msg.text}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Delete — hover desktop / long-press mobile */}
+          <button onClick={deleteMsg}
+            style={{ background:'rgba(220,38,38,0.15)', border:'1px solid rgba(220,38,38,0.3)',
+              borderRadius:'50%', width:'28px', height:'28px', minWidth:'28px', color:'#dc2626',
+              fontSize:'13px', cursor:'pointer', padding:0, lineHeight:1, flexShrink:0,
+              display:'flex', alignItems:'center', justifyContent:'center',
+              opacity: showDel ? 1 : 0, pointerEvents: showDel ? 'auto' : 'none',
+              transition:'opacity .15s' }}>
+            ✕
+          </button>
+        </div>
+
+        <span style={{ fontSize:'10px', color:'var(--muted)',
+          paddingLeft: sent ? 0 : '4px', paddingRight: sent ? '4px' : 0,
+          display:'flex', alignItems:'center', gap:'3px' }}>
+          {fmtTime(msg.sentAt)}
+          {sent && <span style={{ color: msg.readByAdmin ? '#25d366' : 'var(--muted)', fontSize:'11px' }}>
+            {msg.readByAdmin ? '✓✓' : '✓'}
+          </span>}
+        </span>
+      </div>
+    );
+  };
+
+  const clearChat = async () => {
+    if (!window.confirm('Clear all messages?')) return;
+    try {
+      const snap = await db.collection('chats').doc(session.docId).collection('messages').get();
+      const batch = db.batch();
+      snap.docs.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      await db.collection('chats').doc(session.docId).update({ unreadAdmin:0, unreadTherapist:0 });
+    } catch(e) { alert('Clear failed: ' + e.message); }
+  };
+
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'calc(100dvh - 132px)' }}>
       {/* Header */}
-      <div style={{ padding:'14px 16px', borderBottom:'1px solid var(--border)',
-        background:'var(--surface)', flexShrink:0 }}>
-        <p style={{ fontSize:'16px', fontWeight:'800', color:'var(--gold)', margin:'0 0 2px', fontFamily:'Georgia,serif' }}>
-          💬 Messages
-        </p>
-        <p style={{ fontSize:'12px', color:'var(--muted)', margin:0 }}>Chat with Feel Free Spa admin</p>
+      <div style={{ padding:'12px 16px', borderBottom:'1px solid var(--border)',
+        background:'var(--surface)', flexShrink:0,
+        display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <div>
+          <p style={{ fontSize:'16px', fontWeight:'800', color:'var(--gold)', margin:'0 0 1px', fontFamily:'Georgia,serif' }}>
+            💬 Messages
+          </p>
+          <p style={{ fontSize:'12px', color:'var(--muted)', margin:0 }}>Chat with Feel Free Spa admin</p>
+        </div>
+        <button onClick={clearChat} title="Clear chat history"
+          style={{ background:'none', border:'none', cursor:'pointer',
+            color:'var(--muted)', fontSize:'20px', padding:'6px', borderRadius:'8px',
+            lineHeight:1, transition:'color .15s', WebkitTapHighlightColor:'transparent' }}
+          onMouseEnter={e=>e.target.style.color='#dc2626'}
+          onMouseLeave={e=>e.target.style.color='var(--muted)'}>
+          🗑️
+        </button>
       </div>
 
       {/* Messages */}
       <div style={{ flex:1, overflowY:'auto', padding:'16px', display:'flex',
-        flexDirection:'column', gap:'10px', background:'var(--bg)' }}>
+        flexDirection:'column', gap:'8px', background:'var(--bg)' }}>
         {messages.length === 0
           ? <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center',
               justifyContent:'center', gap:'8px', height:'100%', marginTop:'60px' }}>
@@ -1474,8 +1608,7 @@ function ChatTab({ session }) {
               <p style={{ fontSize:'12px', color:'var(--muted)', margin:0 }}>Admin will reach out soon!</p>
             </div>
           : messages.map((msg, i) => {
-              const sent = msg.sender === 'therapist';
-              const d = msg.sentAt?.toDate ? msg.sentAt.toDate() : null;
+              const d  = msg.sentAt?.toDate ? msg.sentAt.toDate() : null;
               const pd = messages[i-1]?.sentAt?.toDate ? messages[i-1].sentAt.toDate() : null;
               const showDate = d && (!pd || d.toDateString() !== pd.toDateString());
               return (
@@ -1484,53 +1617,14 @@ function ChatTab({ session }) {
                     <div style={{ display:'flex', alignItems:'center', gap:'10px', margin:'6px 0' }}>
                       <div style={{ flex:1, height:'0.5px', background:'var(--border)' }}/>
                       <span style={{ fontSize:'11px', color:'var(--muted)', fontWeight:'600', flexShrink:0 }}>
-                        {d.toDateString()===new Date().toDateString()?'Today':d.toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}
+                        {d.toDateString()===new Date().toDateString()
+                          ?'Today'
+                          :d.toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}
                       </span>
                       <div style={{ flex:1, height:'0.5px', background:'var(--border)' }}/>
                     </div>
                   )}
-                  <div style={{ display:'flex', flexDirection:'column',
-                    alignItems: sent ? 'flex-end' : 'flex-start', gap:'3px' }}>
-                    {!sent && (
-                      <span style={{ fontSize:'11px', color:'var(--gold)', fontWeight:'600', paddingLeft:'4px' }}>Admin</span>
-                    )}
-                    <div style={{
-                      maxWidth:'75%', padding: msg.mediaType ? '6px' : '10px 14px', display:'inline-block',
-                      borderRadius: sent ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                      background: sent ? 'var(--gold)' : 'var(--surface)',
-                      border: sent ? 'none' : '1px solid var(--border)',
-                    }}>
-                      {msg.mediaType==='image' && (
-                        <img src={msg.mediaUrl} alt="photo" onClick={() => window.open(msg.mediaUrl,'_blank')}
-                          style={{ maxWidth:'220px', maxHeight:'220px', borderRadius:'12px',
-                            display:'block', cursor:'pointer', objectFit:'contain' }}/>
-                      )}
-                      {msg.mediaType==='audio' && (
-                        <audio controls src={msg.mediaUrl}
-                          style={{ maxWidth:'240px', display:'block', borderRadius:'8px' }}/>
-                      )}
-                      {msg.mediaType==='video' && (
-                        <video controls src={msg.mediaUrl}
-                          style={{ maxWidth:'240px', maxHeight:'200px', borderRadius:'12px', display:'block' }}/>
-                      )}
-                      {msg.text && (
-                        <p style={{ margin:0, fontSize:'14px', lineHeight:'1.5', wordBreak:'break-word',
-                          color: sent ? '#1a1200' : 'var(--text)' }}>
-                          {msg.text}
-                        </p>
-                      )}
-                    </div>
-                    <span style={{ fontSize:'10px', color:'var(--muted)',
-                      paddingLeft: sent?0:'4px', paddingRight: sent?'4px':0,
-                      display:'flex', alignItems:'center', gap:'3px' }}>
-                      {fmtTime(msg.sentAt)}
-                      {sent && (
-                        <span style={{ color: msg.readByAdmin ? '#25d366' : 'var(--muted)', fontSize:'11px' }}>
-                          {msg.readByAdmin ? '✓✓' : '✓'}
-                        </span>
-                      )}
-                    </span>
-                  </div>
+                  <ChatBubble msg={msg}/>
                 </React.Fragment>
               );
             })
