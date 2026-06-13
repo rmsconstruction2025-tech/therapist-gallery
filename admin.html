@@ -994,19 +994,20 @@ function ChatAdmin() {
       mr.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         clearInterval(recTimerRef.current);
+        // Wait one tick so any final ondataavailable fires before we read chunks
+        await new Promise(r => setTimeout(r, 80));
         const chunks = [...audioChunksRef.current];
         audioChunksRef.current = [];
         setRecording(false);
         setRecSecs(0);
-        if (chunks.length > 0) {
-          const blob = new Blob(chunks, { type: mimeType });
-          if (blob.size > 500) {
-            const ext = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('ogg') ? 'ogg' : 'webm';
-            await sendMedia(new File([blob], `voice_${Date.now()}.${ext}`, { type: mimeType }), 'audio');
-          }
-        }
+        if (chunks.length === 0) return;
+        const actualMime = mr.mimeType || mimeType;
+        const blob = new Blob(chunks, { type: actualMime });
+        if (blob.size < 100) return;
+        const ext = actualMime.includes('mp4') ? 'm4a' : actualMime.includes('ogg') ? 'ogg' : 'webm';
+        await sendMedia(new File([blob], `voice_${Date.now()}.${ext}`, { type: actualMime }), 'audio');
       };
-      mr.start();  // no timeslice — all data collected at stop() for stability
+      mr.start(200);  // 200ms timeslice — guarantees ondataavailable fires BEFORE onstop
       setRecording(true);
       setRecSecs(0);
       recTimerRef.current = setInterval(() => setRecSecs(s => s + 1), 1000);
@@ -1016,8 +1017,12 @@ function ChatAdmin() {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();  // triggers onstop which cleans up state
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state === 'recording') {
+      try { mr.requestData(); } catch(e) {}  // flush any buffered chunks before stop
+      mr.stop();
+    } else if (mr && mr.state === 'paused') {
+      mr.stop();
     } else {
       setRecording(false); setRecSecs(0);
     }
