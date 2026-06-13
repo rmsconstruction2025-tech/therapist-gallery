@@ -543,7 +543,7 @@ function TherapistPortal({ session, onLogout }) {
         await db.collection('therapists').doc(session.docId).update({ sessionActive: true });
         showMsg('Admin notified — Session started! ✦');
       }
-    } catch(err) { showMsg(`Error: ${err.message}`, 'error'); }
+    } catch(err) { showMsg(`SessionStatus: ${err.message}`, 'error'); }
   };
 
   const markComplete = async (booking, amount) => {
@@ -575,7 +575,7 @@ function TherapistPortal({ session, onLogout }) {
         earnings:       FieldValue.increment(amount),
       }, { merge: true });
       showMsg(`Session complete! ₹${amount.toLocaleString('en-IN')} added to earnings.`);
-    } catch(err) { showMsg(`Error: ${err.message}`, 'error'); }
+    } catch(err) { showMsg(`MarkComplete: ${err.message}`, 'error'); }
   };
 
   // ── Duty / live tracking ────────────────────────────────────────────────────
@@ -631,7 +631,7 @@ function TherapistPortal({ session, onLogout }) {
         }, ()=>{}, {enableHighAccuracy:false, maximumAge:60000, timeout:8000});
       }, 5 * 60 * 1000);
     } catch(err) {
-      showMsg(`Error: ${err.message}`, 'error');
+      showMsg(`StartDuty: ${err.message}`, 'error');
     }
     setDutyLoading(false);
   };
@@ -648,7 +648,7 @@ function TherapistPortal({ session, onLogout }) {
       setAvailable(false);
       setDutySeconds(0);
       showMsg('Duty ended');
-    } catch(err) { showMsg(`Error: ${err.message}`, 'error'); }
+    } catch(err) { showMsg(`EndDuty: ${err.message}`, 'error'); }
     setDutyLoading(false);
   };
 
@@ -802,7 +802,7 @@ function TherapistPortal({ session, onLogout }) {
             }).catch(()=>{});
           }, ()=>{}, {enableHighAccuracy:false, maximumAge:60000, timeout:8000});
         }, 5 * 60 * 1000);
-      } catch(err) { setAvailable(false); setOnDuty(false); showMsg(`Error: ${err.message}`, 'error'); setDutyLoading(false); return; }
+      } catch(err) { setAvailable(false); setOnDuty(false); showMsg(`ToggleOn: ${err.message}`, 'error'); setDutyLoading(false); return; }
     } else {
       // ── GO OFFLINE = END DUTY ───────────────────────────────
       if(watchRef.current !== null){ navigator.geolocation.clearWatch(watchRef.current); watchRef.current = null; }
@@ -812,7 +812,7 @@ function TherapistPortal({ session, onLogout }) {
         await db.collection('therapists').doc(session.docId).update({ available:false, onDuty:false, locationUpdatedAt:FieldValue.serverTimestamp() });
         setOnDuty(false);
         setDutySeconds(0);
-      } catch(err) { setAvailable(true); showMsg(`Error: ${err.message}`, 'error'); setDutyLoading(false); return; }
+      } catch(err) { setAvailable(true); showMsg(`ToggleOff: ${err.message}`, 'error'); setDutyLoading(false); return; }
     }
 
     // ── Attendance tracking (silent) ────────────────────────
