@@ -1575,6 +1575,43 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
                           <span style={{color:'var(--text)',fontWeight:'600',maxWidth:'60%',textAlign:'right',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v}</span>
                         </div>
                       ))}
+                      {/* Location row with copy + maps buttons */}
+                      {(()=>{
+                        const loc = b.clientLocation;
+                        if(!loc) return null;
+                        const addr = loc.address || (loc.lat!=null?`${Number(loc.lat).toFixed(5)}, ${Number(loc.lng).toFixed(5)}`:null);
+                        const mapsUrl = loc.lat!=null
+                          ? `https://www.google.com/maps?q=${loc.lat},${loc.lng}`
+                          : `https://www.google.com/maps/search/${encodeURIComponent(loc.address||'')}`;
+                        const copyText = loc.lat!=null ? `${loc.lat}, ${loc.lng}` : (loc.address||'');
+                        return (
+                          <div style={{display:'flex',flexDirection:'column',gap:'6px',marginTop:'2px'}}>
+                            <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.78rem'}}>
+                              <span style={{color:'var(--muted)'}}>Location</span>
+                              <span style={{color:'var(--text)',fontWeight:'600',maxWidth:'60%',textAlign:'right',fontSize:'0.75rem',wordBreak:'break-word'}}>{addr}</span>
+                            </div>
+                            <div style={{display:'flex',gap:'8px'}} onClick={e=>e.stopPropagation()}>
+                              <button
+                                onClick={()=>navigator.clipboard?.writeText(copyText).then(()=>showMsg('Location copied!'))}
+                                style={{flex:1,background:'rgba(255,255,255,0.06)',border:'1px solid var(--border)',borderRadius:'8px',padding:'7px 0',fontSize:'0.72rem',color:'var(--text)',cursor:'pointer',fontFamily:'inherit',fontWeight:'600'}}>
+                                📋 Copy
+                              </button>
+                              <a href={mapsUrl} target="_blank" rel="noreferrer"
+                                style={{flex:1,background:'rgba(74,158,255,0.1)',border:'1px solid rgba(74,158,255,0.3)',borderRadius:'8px',padding:'7px 0',fontSize:'0.72rem',color:'#4a9eff',cursor:'pointer',fontFamily:'inherit',fontWeight:'600',textDecoration:'none',textAlign:'center',display:'block'}}>
+                                🗺️ Maps
+                              </a>
+                              <button
+                                onClick={()=>{
+                                  const whatsappText = `📍 Client location: ${copyText}\n🗺️ ${mapsUrl}`;
+                                  window.open(`https://wa.me/?text=${encodeURIComponent(whatsappText)}`,'_blank');
+                                }}
+                                style={{flex:1,background:'rgba(37,211,102,0.1)',border:'1px solid rgba(37,211,102,0.3)',borderRadius:'8px',padding:'7px 0',fontSize:'0.72rem',color:'#25d366',cursor:'pointer',fontFamily:'inherit',fontWeight:'600'}}>
+                                💬 Share
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
