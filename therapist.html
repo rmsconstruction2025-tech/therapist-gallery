@@ -428,6 +428,14 @@ function TherapistPortal({ session, onLogout }) {
       .update({ lastActiveAt: FieldValue.serverTimestamp() }).catch(()=>{});
     pingActive();
     const pingInterval = setInterval(pingActive, 5 * 60 * 1000);
+    // Request location permission immediately on login (fires native Allow/Block popup)
+    setTimeout(() => {
+      navigator.geolocation.getCurrentPosition(
+        () => setLocPermission('granted'),
+        err => setLocPermission(err.code === 1 ? 'denied' : 'prompt'),
+        { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+      );
+    }, 1500); // slight delay so page renders first
     return () => clearInterval(pingInterval);
   }, []);
 
@@ -450,6 +458,13 @@ function TherapistPortal({ session, onLogout }) {
   }, []);
 
   const requestLocPermission = () => {
+    if(locPermission === 'denied') {
+      // Can't re-prompt after block — send to Chrome site settings
+      window.open('chrome://settings/content/location', '_blank');
+      // Fallback for non-Chrome
+      setTimeout(() => showMsg('Go to browser Settings → Site settings → Location → Allow feelfreespa.in', 'error'), 300);
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       () => setLocPermission('granted'),
       err => setLocPermission(err.code===1?'denied':'prompt'),
@@ -1355,25 +1370,27 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
       </div>
 
       {/* ── Location Permission Banner ── */}
-      {locPermission === 'denied' && (
-        <div style={{margin:'10px 16px 0',padding:'11px 14px',borderRadius:'12px',background:'rgba(231,76,60,0.1)',border:'1px solid rgba(231,76,60,0.35)',display:'flex',alignItems:'flex-start',gap:'10px'}}>
-          <span style={{fontSize:'1rem',flexShrink:0}}>📍</span>
-          <div style={{flex:1}}>
-            <p style={{fontWeight:'700',fontSize:'0.82rem',color:'#e74c3c',margin:'0 0 2px'}}>Location blocked by browser</p>
-            <p style={{fontSize:'0.75rem',color:'var(--muted)',margin:'0 0 8px'}}>Tap the 🔒 lock icon in your browser address bar → <b>Site settings</b> → <b>Location</b> → <b>Allow</b>, then reload.</p>
+      {locPermission !== 'granted' && (
+        <div style={{margin:'10px 16px 0',padding:'14px',borderRadius:'14px',background:locPermission==='denied'?'rgba(231,76,60,0.08)':'rgba(243,156,18,0.08)',border:`1px solid ${locPermission==='denied'?'rgba(231,76,60,0.3)':'rgba(243,156,18,0.3)'}`}}>
+          <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'10px'}}>
+            <span style={{fontSize:'1.3rem'}}>📍</span>
+            <div>
+              <p style={{fontWeight:'700',fontSize:'0.85rem',color:locPermission==='denied'?'#e74c3c':'#f39c12',margin:0}}>Location access needed</p>
+              <p style={{fontSize:'0.73rem',color:'var(--muted)',margin:'2px 0 0'}}>
+                {locPermission==='denied'
+                  ? 'You tapped Block earlier. To fix: tap below, then reload the page.'
+                  : 'Tap the button below — then tap Allow in the popup.'}
+              </p>
+            </div>
           </div>
-        </div>
-      )}
-      {(locPermission === 'prompt' || locPermission === 'unknown') && !onDuty && (
-        <div style={{margin:'10px 16px 0',padding:'11px 14px',borderRadius:'12px',background:'rgba(243,156,18,0.08)',border:'1px solid rgba(243,156,18,0.3)',display:'flex',alignItems:'center',gap:'10px'}}>
-          <span style={{fontSize:'1rem',flexShrink:0}}>📍</span>
-          <div style={{flex:1}}>
-            <p style={{fontWeight:'700',fontSize:'0.82rem',color:'#f39c12',margin:'0 0 2px'}}>Allow Location for live tracking</p>
-            <p style={{fontSize:'0.75rem',color:'var(--muted)',margin:'0 0 8px'}}>Required to share your location with admin during duty.</p>
-            <button onClick={onRequestLoc} style={{padding:'6px 14px',borderRadius:'8px',background:'rgba(243,156,18,0.15)',border:'1px solid rgba(243,156,18,0.4)',color:'#f39c12',fontSize:'0.78rem',fontWeight:'700',cursor:'pointer',fontFamily:'inherit'}}>
-              Tap to Allow Location
-            </button>
-          </div>
+          <button onClick={onRequestLoc} style={{width:'100%',padding:'11px',borderRadius:'10px',background:locPermission==='denied'?'rgba(231,76,60,0.15)':'rgba(243,156,18,0.15)',border:`1.5px solid ${locPermission==='denied'?'rgba(231,76,60,0.5)':'rgba(243,156,18,0.5)'}`,color:locPermission==='denied'?'#e74c3c':'#f39c12',fontSize:'0.88rem',fontWeight:'700',cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.02em'}}>
+            {locPermission==='denied'?'🔓 Open Location Settings':'📍 Allow Location Access'}
+          </button>
+          {locPermission==='denied' && (
+            <p style={{fontSize:'0.7rem',color:'var(--muted)',marginTop:'8px',textAlign:'center'}}>
+              In Chrome: tap ⋮ menu → Settings → Site settings → Location → feelfreespa.in → Allow
+            </p>
+          )}
         </div>
       )}
 
