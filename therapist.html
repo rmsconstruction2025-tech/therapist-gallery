@@ -413,6 +413,7 @@ function TherapistPortal({ session, onLogout }) {
   const watchRef         = useRef(null);
   const dutyTimerRef     = useRef(null);
   const lastLocUpdateRef = useRef(0);
+  const locHeartbeatRef  = useRef(null); // 5-min forced location update when stationary
 
   useEffect(() => {
     fetchProfile();
@@ -424,11 +425,12 @@ function TherapistPortal({ session, onLogout }) {
     return () => clearInterval(pingInterval);
   }, []);
 
-  // Cleanup duty watch + timer on unmount
+  // Cleanup duty watch + timer + location heartbeat on unmount
   useEffect(() => {
     return () => {
       if(watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
       if(dutyTimerRef.current) clearInterval(dutyTimerRef.current);
+      if(locHeartbeatRef.current) clearInterval(locHeartbeatRef.current);
     };
   }, []);
 
@@ -617,6 +619,17 @@ function TherapistPortal({ session, onLogout }) {
         ()=>{},
         {enableHighAccuracy:true, maximumAge:10000}
       );
+      // Heartbeat: force location update every 5 min even when stationary
+      if(locHeartbeatRef.current) clearInterval(locHeartbeatRef.current);
+      locHeartbeatRef.current = setInterval(() => {
+        navigator.geolocation.getCurrentPosition(p => {
+          lastLocUpdateRef.current = Date.now();
+          db.collection('therapists').doc(session.docId).update({
+            location: {lat: p.coords.latitude, lng: p.coords.longitude},
+            locationUpdatedAt: FieldValue.serverTimestamp(),
+          }).catch(()=>{});
+        }, ()=>{}, {enableHighAccuracy:false, maximumAge:60000, timeout:8000});
+      }, 5 * 60 * 1000);
     } catch(err) {
       showMsg(`Error: ${err.message}`, 'error');
     }
@@ -628,6 +641,7 @@ function TherapistPortal({ session, onLogout }) {
     setDutyLoading(true);
     if(watchRef.current !== null){ navigator.geolocation.clearWatch(watchRef.current); watchRef.current = null; }
     if(dutyTimerRef.current){ clearInterval(dutyTimerRef.current); dutyTimerRef.current = null; }
+    if(locHeartbeatRef.current){ clearInterval(locHeartbeatRef.current); locHeartbeatRef.current = null; }
     try {
       await db.collection('therapists').doc(session.docId).update({ onDuty: false, available: false, locationUpdatedAt: FieldValue.serverTimestamp() });
       setOnDuty(false);
@@ -777,11 +791,23 @@ function TherapistPortal({ session, onLogout }) {
           ()=>{},
           {enableHighAccuracy:true, maximumAge:10000}
         );
+        // Heartbeat: force location update every 5 min even when stationary
+        if(locHeartbeatRef.current) clearInterval(locHeartbeatRef.current);
+        locHeartbeatRef.current = setInterval(() => {
+          navigator.geolocation.getCurrentPosition(p => {
+            lastLocUpdateRef.current = Date.now();
+            db.collection('therapists').doc(session.docId).update({
+              location: {lat: p.coords.latitude, lng: p.coords.longitude},
+              locationUpdatedAt: FieldValue.serverTimestamp(),
+            }).catch(()=>{});
+          }, ()=>{}, {enableHighAccuracy:false, maximumAge:60000, timeout:8000});
+        }, 5 * 60 * 1000);
       } catch(err) { setAvailable(false); setOnDuty(false); showMsg(`Error: ${err.message}`, 'error'); setDutyLoading(false); return; }
     } else {
       // ── GO OFFLINE = END DUTY ───────────────────────────────
       if(watchRef.current !== null){ navigator.geolocation.clearWatch(watchRef.current); watchRef.current = null; }
       if(dutyTimerRef.current){ clearInterval(dutyTimerRef.current); dutyTimerRef.current = null; }
+      if(locHeartbeatRef.current){ clearInterval(locHeartbeatRef.current); locHeartbeatRef.current = null; }
       try {
         await db.collection('therapists').doc(session.docId).update({ available:false, onDuty:false, locationUpdatedAt:FieldValue.serverTimestamp() });
         setOnDuty(false);

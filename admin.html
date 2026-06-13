@@ -415,7 +415,7 @@ function LiveTracker() {
 
   const onDutyList = therapists
     .filter(t => t.onDuty && t.location?.lat != null)
-    .map(t => ({...t, _ago: timeAgo(t.locationUpdatedAt)}));
+    .map(t => ({...t, _ago: timeAgo(t.locationUpdatedAt), _activeAgo: timeAgo(t.lastActiveAt)}));
 
   const selId = selected && onDutyList.find(t=>t.id===selected) ? selected : (onDutyList[0]?.id || null);
   const selT  = onDutyList.find(t=>t.id===selId) || null;
@@ -501,7 +501,7 @@ function LiveTracker() {
                         <p style={{fontWeight:'700',fontSize:'0.85rem',color:isSel?'var(--gold)':'var(--text)',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
                           {t.name||t.therapistId||'Therapist'}
                         </p>
-                        <p style={{fontSize:'0.67rem',color:'var(--muted)',margin:'2px 0 0'}}>{t._ago}</p>
+                        <p style={{fontSize:'0.67rem',color:'var(--muted)',margin:'2px 0 0'}}>📍 {t._ago} · 🟢 {t._activeAgo}</p>
                       </div>
                       <div style={{width:'9px',height:'9px',borderRadius:'50%',background:ac,flexShrink:0,opacity:0.85}}/>
                     </div>
@@ -538,7 +538,7 @@ function LiveTracker() {
                 <div style={{width:'7px',height:'7px',borderRadius:'50%',background:'#27ae60',animation:'pulse 2s infinite'}}/>
                 <div>
                   <p style={{margin:0,fontWeight:'700',fontSize:'0.8rem',color:'#fff'}}>{selT.name||selT.therapistId||'Therapist'}</p>
-                  <p style={{margin:0,fontSize:'0.63rem',color:'rgba(255,255,255,0.5)'}}>Updated {selT._ago}</p>
+                  <p style={{margin:0,fontSize:'0.63rem',color:'rgba(255,255,255,0.5)'}}>📍 Location {selT._ago} · 🟢 Active {selT._activeAgo}</p>
                 </div>
               </div>
             )}
