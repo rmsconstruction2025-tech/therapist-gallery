@@ -318,52 +318,145 @@
       .mob-only  { display:flex; }
       .desk-only { display:none !important; }
 
-      /* ── Mobile page header (Bookings / Accounts) ── */
-      .mob-page-hdr { flex-direction:column; gap:10px; margin-bottom:2px; }
-      .mob-page-hdr-top { display:flex; align-items:center; justify-content:space-between; }
-      .mob-page-title { font-size:1rem; font-weight:700; color:var(--text); margin:0; letter-spacing:-.3px; }
-      .mob-page-sub { font-size:0.65rem; color:var(--muted); margin:0 0 2px; }
+      /* ── Concept A: Clean minimal mobile design system ── */
 
-      /* ── Alert banner ── */
-      .mob-alert-red {
-        align-items:center; gap:10px; padding:10px 13px; border-radius:10px;
-        background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.2);
-        cursor:pointer;
-      }
-      .mob-alert-amber {
-        align-items:center; gap:10px; padding:10px 13px; border-radius:10px;
-        background:rgba(243,156,18,0.08); border:1px solid rgba(243,156,18,0.22);
-        cursor:pointer;
-      }
-      .mob-alert-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-      .mob-alert-body { flex:1; min-width:0; }
-      .mob-alert-body p:first-child { font-size:0.78rem; font-weight:700; margin:0 0 1px; }
-      .mob-alert-body p:last-child  { font-size:0.63rem; color:var(--muted); margin:0; }
-      .mob-alert-arr { font-size:1rem; color:var(--muted); flex-shrink:0; }
+      /* Content area: more breathing room */
+      .content { padding:20px 16px !important; gap:0 !important; }
 
-      /* ── Horizontal pill strip ── */
-      .mob-pill-strip {
-        display:flex; gap:7px; overflow-x:auto; padding-bottom:3px;
+      /* Section label */
+      .ma-sec-lbl {
+        font-size:11px; font-weight:700; letter-spacing:1px;
+        text-transform:uppercase; color:var(--muted);
+        margin:0 0 10px;
+      }
+
+      /* Section wrapper */
+      .ma-section { margin-bottom:28px; }
+
+      /* Clean card */
+      .ma-card {
+        background:var(--card); border:0.5px solid var(--border);
+        border-radius:14px; overflow:hidden;
+      }
+
+      /* Row inside a card — single-line, 56px min height */
+      .ma-row {
+        display:flex; align-items:center; gap:12px;
+        padding:14px 16px; min-height:56px;
+        border-bottom:0.5px solid var(--border);
+      }
+      .ma-row:last-child { border-bottom:none; }
+
+      /* Square avatar (for service initials) */
+      .ma-av-sq {
+        width:40px; height:40px; border-radius:10px;
+        display:flex; align-items:center; justify-content:center;
+        font-size:12px; font-weight:700; flex-shrink:0; letter-spacing:-.5px;
+      }
+      /* Circle avatar (for people) */
+      .ma-av-ci {
+        width:40px; height:40px; border-radius:50%;
+        display:flex; align-items:center; justify-content:center;
+        font-size:13px; font-weight:700; flex-shrink:0;
+        overflow:hidden; position:relative;
+      }
+      /* Online dot on avatar */
+      .ma-av-dot {
+        position:absolute; bottom:0; right:0;
+        width:10px; height:10px; border-radius:50%;
+        background:#16a34a; border:2px solid var(--card);
+      }
+
+      /* Row text body */
+      .ma-row-body { flex:1; min-width:0; }
+      .ma-row-title {
+        font-size:14px; font-weight:600; color:var(--text);
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        margin:0 0 3px; line-height:1.3;
+      }
+      .ma-row-sub {
+        font-size:12px; color:var(--muted);
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        margin:0; line-height:1.3;
+      }
+
+      /* Status badge */
+      .ma-badge {
+        font-size:11px; font-weight:700;
+        padding:4px 10px; border-radius:20px;
+        flex-shrink:0; white-space:nowrap;
+      }
+
+      /* Stat chips — horizontal scroll row */
+      .ma-chips {
+        display:flex; gap:8px; overflow-x:auto;
         scrollbar-width:none; -webkit-overflow-scrolling:touch;
+        margin-bottom:28px;
       }
-      .mob-pill-strip::-webkit-scrollbar { display:none; }
-      .mob-pill {
-        flex-shrink:0; display:flex; align-items:center; gap:6px;
-        padding:7px 12px; border-radius:20px;
-        background:var(--surface); border:1px solid var(--border);
-        cursor:pointer; font-family:inherit; font-size:inherit;
-        transition:all .15s;
+      .ma-chips::-webkit-scrollbar { display:none; }
+      .ma-chip {
+        flex-shrink:0; display:flex; flex-direction:column;
+        align-items:center; gap:3px; padding:12px 18px;
+        background:var(--card); border:0.5px solid var(--border);
+        border-radius:14px; min-width:72px; text-align:center;
+        cursor:pointer; font-family:inherit;
       }
-      .mob-pill.pill-active { border-color:var(--gold); background:var(--gold-glow); }
-      .mob-pill-dot  { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
-      .mob-pill-val  { font-size:0.85rem; font-weight:700; color:var(--text); }
-      .mob-pill-lbl  { font-size:0.68rem; color:var(--muted); font-weight:500; }
+      .ma-chip.active { border-color:var(--gold); background:var(--gold-glow); }
+      .ma-chip-val { font-size:22px; font-weight:800; line-height:1; }
+      .ma-chip-lbl { font-size:11px; color:var(--muted); font-weight:500; white-space:nowrap; }
 
-      /* ── Hide desktop stats grid in BookingsPanel ── */
+      /* Quick access 2x2 grid */
+      .ma-quick-grid {
+        display:grid; grid-template-columns:1fr 1fr; gap:10px;
+      }
+      .ma-quick-btn {
+        display:flex; flex-direction:column; align-items:center;
+        justify-content:center; gap:8px; padding:20px 8px;
+        min-height:82px; border-radius:14px;
+        border:0.5px solid var(--border); background:var(--card);
+        cursor:pointer; font-family:inherit; transition:opacity .15s;
+      }
+      .ma-quick-btn:active { opacity:.7; }
+      .ma-quick-ico { font-size:24px; line-height:1; }
+      .ma-quick-lbl { font-size:13px; font-weight:600; color:var(--text); }
+
+      /* Page header (Bookings / Accounts) */
+      .ma-page-hdr { flex-direction:column; gap:16px; margin-bottom:24px; }
+      .ma-page-hdr-top {
+        display:flex; align-items:center; justify-content:space-between;
+      }
+      .ma-page-title { font-size:20px; font-weight:700; color:var(--text); margin:0; letter-spacing:-.4px; }
+      .ma-page-sub { font-size:12px; color:var(--muted); margin:0 0 3px; }
+
+      /* Alert banner */
+      .ma-alert {
+        align-items:center; gap:12px; padding:13px 16px; border-radius:12px;
+        cursor:pointer;
+      }
+      .ma-alert-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+      .ma-alert-body { flex:1; min-width:0; }
+      .ma-alert-title { font-size:13px; font-weight:700; margin:0 0 2px; }
+      .ma-alert-sub { font-size:12px; color:var(--muted); margin:0; }
+      .ma-alert-arr { font-size:16px; color:var(--muted); flex-shrink:0; }
+
+      /* Section header with "View all" link */
+      .ma-sec-hdr {
+        display:flex; align-items:center; justify-content:space-between;
+        margin-bottom:10px;
+      }
+
+      /* Item cards on accounts — proper sizing */
+      .item-card { padding:14px 16px !important; gap:12px !important; min-height:64px; }
+      .item-info .name { font-size:14px !important; font-weight:600; }
+      .item-info .sub  { font-size:12px !important; }
+      .item-info .meta { margin-top:6px !important; }
+      .item-actions-mobile { gap:8px !important; margin-top:10px !important; }
+
+      /* Hide desktop stats grid in BookingsPanel */
       .bk-stats-desk { display:none !important; }
 
-      /* ── Accounts create form: compact on mobile ── */
-      .acc-create-card { padding:14px !important; }
+      /* Account create form */
+      .acc-create-card { padding:20px !important; margin-bottom:24px !important; }
     }
 
     @media (max-width:1024px) and (min-width:769px) {
@@ -1122,168 +1215,144 @@ function DashboardTab({ onNavigate = ()=>{} }) {
   return (
     <div style={{display:'flex',flexDirection:'column'}}>
 
-      {/* ── Greeting — Concept C command header ── */}
-      <div style={{marginBottom:'16px'}}>
-        <p style={{fontSize:'0.7rem',color:'var(--muted)',marginBottom:'3px',letterSpacing:'0.2px'}}>
-          {new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
-        </p>
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'8px'}}>
-          <h1 style={{fontSize:'1.05rem',fontWeight:'700',color:'var(--text)',letterSpacing:'-.3px',margin:0}}>
+      {/* ── Header ── */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'24px'}}>
+        <div>
+          <p style={{fontSize:'12px',color:'var(--muted)',margin:'0 0 4px'}}>
+            {new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}
+          </p>
+          <h1 style={{fontSize:'20px',fontWeight:'700',color:'var(--text)',margin:0,letterSpacing:'-.4px'}}>
             Good {greeting}, {ADMIN_NAME} 👋
           </h1>
-          {/* Mobile inline dot indicator */}
-          <div style={{display:'flex',alignItems:'center',gap:'5px',flexShrink:0}}>
-            <div style={{width:'7px',height:'7px',borderRadius:'50%',background:'var(--success)'}}/>
-            <span style={{fontSize:'0.65rem',color:'var(--success)',fontWeight:'600'}}>{onlineCount} online</span>
-          </div>
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:'6px',background:'var(--success-bg)',borderRadius:'20px',padding:'6px 12px',flexShrink:0}}>
+          <div style={{width:'7px',height:'7px',borderRadius:'50%',background:'var(--success)'}}/>
+          <span style={{fontSize:'12px',color:'var(--success)',fontWeight:'600',whiteSpace:'nowrap'}}>{onlineCount} online</span>
         </div>
       </div>
 
-      {/* ── 2×2 Stat Grid — Concept C gold-border cards ── */}
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'16px'}}>
-
-        <div className="mob-stat-card">
-          <div className="mob-stat-icon" style={{background:'var(--success-bg)'}}>👤</div>
-          <p className="mob-stat-num" style={{color:'var(--success)'}}>{loadingB?'—':onlineCount}</p>
-          <p className="mob-stat-label">On Duty</p>
-          <p className="mob-stat-sub" style={{color:'var(--muted)'}}>of {therapists.length} total</p>
+      {/* ── Stat chips — horizontal scroll ── */}
+      <div className="ma-chips">
+        <div className="ma-chip">
+          <span className="ma-chip-val" style={{color:'var(--gold)'}}>{loadingB?'—':todayCount}</span>
+          <span className="ma-chip-lbl">Today</span>
         </div>
-
-        <div className="mob-stat-card">
-          <div className="mob-stat-icon" style={{background:'var(--gold-glow)'}}>📋</div>
-          <p className="mob-stat-num" style={{color:'var(--gold)'}}>{loadingB?'—':todayCount}</p>
-          <p className="mob-stat-label">Today</p>
-          <p className="mob-stat-sub" style={{color:pendingCount>0?'var(--danger)':'var(--success)'}}>
-            {pendingCount>0?`${pendingCount} pending`:'All clear'}
-          </p>
+        <div className="ma-chip">
+          <span className="ma-chip-val" style={{color:'#16a34a'}}>{onlineCount}</span>
+          <span className="ma-chip-lbl">Online</span>
         </div>
-
-        <div className="mob-stat-card">
-          <div className="mob-stat-icon" style={{background:'rgba(245,158,11,0.12)'}}>📍</div>
-          <p className="mob-stat-num" style={{color:'#f59e0b'}}>{noGPSCount}</p>
-          <p className="mob-stat-label">No GPS</p>
-          <p className="mob-stat-sub" style={{color:noGPSCount>0?'#f59e0b':'var(--success)'}}>
-            {noGPSCount>0?'Needs fix':'All tracking'}
-          </p>
+        <div className="ma-chip" style={pendingCount>0?{borderColor:'rgba(220,38,38,0.35)',background:'rgba(220,38,38,0.05)'}:{}}>
+          <span className="ma-chip-val" style={{color:pendingCount>0?'#dc2626':'var(--muted)'}}>{pendingCount}</span>
+          <span className="ma-chip-lbl">Pending</span>
         </div>
-
-        <div className="mob-stat-card">
-          <div className="mob-stat-icon" style={{background:'rgba(245,158,11,0.12)'}}>⭐</div>
-          <p className="mob-stat-num" style={{color:'#f59e0b'}}>{avgRating}</p>
-          <p className="mob-stat-label">Avg Rating</p>
-          <p className="mob-stat-sub" style={{color:'var(--muted)'}}>This month</p>
+        <div className="ma-chip">
+          <span className="ma-chip-val" style={{color:'#2563eb'}}>{confirmedCount}</span>
+          <span className="ma-chip-lbl">Confirmed</span>
         </div>
-
+        <div className="ma-chip">
+          <span className="ma-chip-val" style={{color:noGPSCount>0?'#f59e0b':'var(--muted)'}}>{noGPSCount}</span>
+          <span className="ma-chip-lbl">No GPS</span>
+        </div>
       </div>
 
-      {/* ── Quick Actions — icon above, label below ── */}
-      <div style={{marginBottom:'4px'}}>
-        <p style={{fontSize:'0.65rem',color:'var(--muted)',letterSpacing:'0.8px',textTransform:'uppercase',fontWeight:'600',margin:'0 0 8px'}}>Quick Access</p>
-        <div className="mob-quick-grid">
-          <button className="mob-quick-tile" onClick={()=>onNavigate('therapists')}
-            style={{background:'var(--gold-glow)',border:'1px solid var(--border-gold)',color:'var(--gold)'}}>
-            <span className="mob-quick-icon">🖼️</span>
-            <span>Photos</span>
+      {/* ── Quick Access ── */}
+      <div className="ma-section">
+        <p className="ma-sec-lbl">Quick Access</p>
+        <div className="ma-quick-grid">
+          <button className="ma-quick-btn" onClick={()=>onNavigate('therapists')}>
+            <span className="ma-quick-ico">🖼️</span>
+            <span className="ma-quick-lbl">Photos</span>
           </button>
-          <button className="mob-quick-tile" onClick={()=>onNavigate('links')}
-            style={{background:'rgba(37,99,235,0.08)',border:'1px solid rgba(37,99,235,0.18)',color:'var(--info)'}}>
-            <span className="mob-quick-icon">🔗</span>
-            <span>Links</span>
+          <button className="ma-quick-btn" onClick={()=>onNavigate('links')}>
+            <span className="ma-quick-ico">🔗</span>
+            <span className="ma-quick-lbl">Links</span>
           </button>
-          <button className="mob-quick-tile" onClick={()=>onNavigate('attendance')}
-            style={{background:'var(--success-bg)',border:'1px solid rgba(22,163,74,0.25)',color:'var(--success)'}}>
-            <span className="mob-quick-icon">📅</span>
-            <span>Attendance</span>
+          <button className="ma-quick-btn" onClick={()=>onNavigate('attendance')}>
+            <span className="ma-quick-ico">📅</span>
+            <span className="ma-quick-lbl">Attendance</span>
           </button>
-          <button className="mob-quick-tile" onClick={()=>onNavigate('tracker')}
-            style={{background:'rgba(245,158,11,0.09)',border:'1px solid rgba(245,158,11,0.22)',color:'#f59e0b'}}>
-            <span className="mob-quick-icon">📍</span>
-            <span>Tracker</span>
+          <button className="ma-quick-btn" onClick={()=>onNavigate('tracker')}>
+            <span className="ma-quick-ico">📍</span>
+            <span className="ma-quick-lbl">Tracker</span>
           </button>
         </div>
       </div>
 
-      {/* ── Active Therapists — collapsible ── */}
-      <div className="card" style={{overflow:'hidden',marginBottom:'12px'}}>
-        <div className="mob-section-hdr" onClick={()=>setShowTherps(v=>!v)}>
-          <div className="mob-section-hdr-left">
-            <span className="mob-section-title">Active Therapists</span>
-            {onlineCount>0 && <span className="mob-section-badge">{onlineCount} online</span>}
-          </div>
-          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-            <button onClick={e=>{e.stopPropagation();onNavigate('tracker');}}
-              style={{fontSize:'0.68rem',color:'var(--gold)',background:'none',border:'none',fontWeight:'700',cursor:'pointer',padding:0}}>
-              View all ›
-            </button>
-            <span className={`mob-section-chevron${showTherps?' open':''}`}>▾</span>
-          </div>
+      {/* ── Active Therapists ── */}
+      <div className="ma-section">
+        <div className="ma-sec-hdr">
+          <p className="ma-sec-lbl" style={{margin:0}}>Active Therapists</p>
+          <button onClick={()=>onNavigate('tracker')}
+            style={{fontSize:'13px',color:'var(--gold)',background:'none',border:'none',fontWeight:'600',cursor:'pointer',padding:0}}>
+            View all ›
+          </button>
         </div>
-        {showTherps && (
-          activeTherps.length===0
-            ? <p style={{padding:'20px',textAlign:'center',color:'var(--muted)',fontSize:'0.8rem',margin:0}}>No therapists on duty right now</p>
+        <div className="ma-card">
+          {activeTherps.length===0
+            ? <p style={{padding:'24px',textAlign:'center',color:'var(--muted)',fontSize:'14px',margin:0}}>No therapists on duty right now</p>
             : activeTherps.map(t=>{
                 const initials=(t.name||'?').split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()||'?';
                 const ls=lastSeen(t);
                 const hasGPS=!!(t.lat||t.latitude||t.lastLocation);
                 return (
-                  <div key={t.id} style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px 14px',borderBottom:'1px solid var(--border)'}}>
+                  <div key={t.id} className="ma-row">
                     <div style={{position:'relative',flexShrink:0}}>
-                      <div style={{width:'40px',height:'40px',borderRadius:'50%',overflow:'hidden',background:'var(--gold-glow)',border:'1.5px solid var(--border-gold)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--gold)',fontWeight:'700',fontSize:'0.85rem'}}>
-                        {t.imageUrl?<img src={t.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>:initials}
+                      <div className="ma-av-ci" style={{background:'rgba(212,175,55,0.1)',border:'1.5px solid rgba(212,175,55,0.3)',color:'var(--gold)'}}>
+                        {t.imageUrl
+                          ? <img src={t.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>
+                          : initials}
+                        <div className="ma-av-dot"/>
                       </div>
-                      <div style={{position:'absolute',bottom:0,right:0,width:'10px',height:'10px',borderRadius:'50%',background:'#16a34a',border:'2px solid var(--card)'}}/>
                     </div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <p style={{fontWeight:'600',fontSize:'0.86rem',color:'var(--text)',margin:'0 0 2px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.name||t.therapistId||'—'}</p>
-                      <p style={{fontSize:'0.63rem',color:ls.color||'#2ecc71',margin:0}}>
-                        {hasGPS?'📍':'⚠️'} {ls.text||'Currently online'}
-                      </p>
+                    <div className="ma-row-body">
+                      <p className="ma-row-title">{t.name||t.therapistId||'—'}</p>
+                      <p className="ma-row-sub" style={{color:ls.color||'var(--muted)'}}>{hasGPS?'📍':'⚠️'} {ls.text||'Currently online'}</p>
                     </div>
-                    <span style={{fontSize:'0.62rem',fontWeight:'700',padding:'3px 9px',borderRadius:'20px',background:hasGPS?'var(--success-bg)':'rgba(245,158,11,0.12)',color:hasGPS?'var(--success)':'#f59e0b',border:`1px solid ${hasGPS?'rgba(22,163,74,0.3)':'rgba(245,158,11,0.3)'}`,flexShrink:0,whiteSpace:'nowrap'}}>
+                    <span className="ma-badge" style={{background:hasGPS?'rgba(22,163,74,0.1)':'rgba(245,158,11,0.1)',color:hasGPS?'#16a34a':'#f59e0b',border:`1px solid ${hasGPS?'rgba(22,163,74,0.25)':'rgba(245,158,11,0.25)'}`}}>
                       {hasGPS?'On Duty':'No GPS'}
                     </span>
                   </div>
                 );
               })
-        )}
+          }
+        </div>
       </div>
 
-      {/* ── Recent Bookings — collapsible ── */}
-      <div className="card" style={{overflow:'hidden',marginBottom:'8px'}}>
-        <div className="mob-section-hdr" onClick={()=>setShowBookings(v=>!v)}>
-          <div className="mob-section-hdr-left">
-            <span className="mob-section-title">Recent Bookings</span>
-            {pendingCount>0 && <span className="mob-section-badge" style={{background:'var(--danger-bg)',color:'var(--danger)',borderColor:'rgba(220,38,38,0.25)'}}>{pendingCount} pending</span>}
-          </div>
-          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-            <button onClick={e=>{e.stopPropagation();onNavigate('bookings');}}
-              style={{fontSize:'0.68rem',color:'var(--gold)',background:'none',border:'none',fontWeight:'700',cursor:'pointer',padding:0}}>
-              View all ›
-            </button>
-            <span className={`mob-section-chevron${showBookings?' open':''}`}>▾</span>
-          </div>
+      {/* ── Recent Bookings ── */}
+      <div className="ma-section">
+        <div className="ma-sec-hdr">
+          <p className="ma-sec-lbl" style={{margin:0}}>Recent Bookings</p>
+          <button onClick={()=>onNavigate('bookings')}
+            style={{fontSize:'13px',color:'var(--gold)',background:'none',border:'none',fontWeight:'600',cursor:'pointer',padding:0}}>
+            View all ›
+          </button>
         </div>
-        {showBookings && (
-          loadingB
-            ? <div style={{padding:'28px',textAlign:'center'}}><span className="spin" style={{color:'var(--gold)'}}>✦</span></div>
+        <div className="ma-card">
+          {loadingB
+            ? <div style={{padding:'32px',textAlign:'center'}}><span className="spin" style={{color:'var(--gold)'}}>✦</span></div>
             : bookings.length===0
-              ? <p style={{padding:'20px',textAlign:'center',color:'var(--muted)',fontSize:'0.8rem',margin:0}}>No bookings yet</p>
+              ? <p style={{padding:'24px',textAlign:'center',color:'var(--muted)',fontSize:'14px',margin:0}}>No bookings yet</p>
               : bookings.slice(0,6).map(b=>{
                   const c=cfg(b.status);
                   const svc=b.serviceType||b.service||'Massage';
                   const svcI=svc.split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()||'M';
                   return (
-                    <div key={b.id} style={{display:'flex',alignItems:'center',gap:'12px',padding:'12px 14px',borderBottom:'1px solid var(--border)'}}>
-                      <div style={{width:'40px',height:'40px',borderRadius:'10px',background:'var(--gold-glow)',border:'1px solid var(--border-gold)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--gold)',fontWeight:'700',fontSize:'0.75rem',flexShrink:0,letterSpacing:'-.5px'}}>{svcI}</div>
-                      <div style={{flex:1,minWidth:0}}>
-                        <p style={{fontWeight:'600',fontSize:'0.86rem',color:'var(--text)',margin:'0 0 2px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{svc}</p>
-                        <p style={{fontSize:'0.63rem',color:'var(--muted)',margin:0}}>{timeAgo(b)} · {b.clientName||'—'}</p>
+                    <div key={b.id} className="ma-row">
+                      <div className="ma-av-sq" style={{background:'rgba(212,175,55,0.08)',border:'0.5px solid rgba(212,175,55,0.2)',color:'var(--gold)'}}>
+                        {svcI}
                       </div>
-                      <span style={{fontSize:'0.6rem',fontWeight:'700',padding:'3px 8px',borderRadius:'20px',background:c.bg,color:c.color,border:`1px solid ${c.color}40`,flexShrink:0,whiteSpace:'nowrap'}}>{c.label}</span>
+                      <div className="ma-row-body">
+                        <p className="ma-row-title">{svc}</p>
+                        <p className="ma-row-sub">{timeAgo(b)} · {b.clientName||'—'}</p>
+                      </div>
+                      <span className="ma-badge" style={{background:c.bg,color:c.color,border:`1px solid ${c.color}30`}}>
+                        {c.label}
+                      </span>
                     </div>
                   );
                 })
-        )}
+          }
+        </div>
       </div>
 
     </div>
@@ -2383,42 +2452,29 @@ function TherapistAccounts() {
     <div style={{display:'flex',flexDirection:'column',gap:'24px'}}>
 
       {/* ── Mobile Page Header ── */}
-      <div className="mob-only mob-page-hdr">
-        <div className="mob-page-hdr-top">
+      <div className="mob-only ma-page-hdr">
+        <div className="ma-page-hdr-top">
           <div>
-            <p className="mob-page-sub">{accounts.length} registered accounts</p>
-            <h2 className="mob-page-title">Accounts</h2>
+            <p className="ma-page-sub">{accounts.length} registered accounts</p>
+            <h2 className="ma-page-title">Accounts</h2>
           </div>
         </div>
-        {accounts.filter(a=>!a.onDuty&&a.available).length>0 && (
-          <div className="mob-alert-amber" style={{display:'flex'}}>
-            <div className="mob-alert-dot" style={{background:'#f59e0b'}}/>
-            <div className="mob-alert-body">
-              <p style={{color:'#f59e0b'}}>{accounts.filter(a=>!a.onDuty&&a.available).length} therapist(s) available but not on duty</p>
-              <p>Check duty status below</p>
-            </div>
+        <div className="ma-chips" style={{marginBottom:0}}>
+          <div className="ma-chip" style={{borderColor:'rgba(212,175,55,0.35)',background:'var(--gold-glow)'}}>
+            <span className="ma-chip-val" style={{color:'var(--gold)'}}>{accounts.length}</span>
+            <span className="ma-chip-lbl">Total</span>
           </div>
-        )}
-        <div className="mob-pill-strip">
-          <div className="mob-pill" style={{borderColor:'rgba(212,175,55,0.35)',background:'var(--gold-glow)'}}>
-            <div className="mob-pill-dot" style={{background:'var(--gold)'}}/>
-            <span className="mob-pill-val" style={{color:'var(--gold)'}}>{accounts.length}</span>
-            <span className="mob-pill-lbl">Total</span>
+          <div className="ma-chip">
+            <span className="ma-chip-val" style={{color:'#16a34a'}}>{onDutyCount}</span>
+            <span className="ma-chip-lbl">On Duty</span>
           </div>
-          <div className="mob-pill">
-            <div className="mob-pill-dot" style={{background:'#2ecc71'}}/>
-            <span className="mob-pill-val" style={{color:'#2ecc71'}}>{onDutyCount}</span>
-            <span className="mob-pill-lbl">On Duty</span>
+          <div className="ma-chip">
+            <span className="ma-chip-val" style={{color:'var(--muted)'}}>{accounts.length-onDutyCount}</span>
+            <span className="ma-chip-lbl">Off Duty</span>
           </div>
-          <div className="mob-pill">
-            <div className="mob-pill-dot" style={{background:'var(--muted)'}}/>
-            <span className="mob-pill-val">{accounts.length-onDutyCount}</span>
-            <span className="mob-pill-lbl">Off Duty</span>
-          </div>
-          <div className="mob-pill">
-            <div className="mob-pill-dot" style={{background:'#3498db'}}/>
-            <span className="mob-pill-val" style={{color:'#3498db'}}>{availableCount}</span>
-            <span className="mob-pill-lbl">Available</span>
+          <div className="ma-chip">
+            <span className="ma-chip-val" style={{color:'#3498db'}}>{availableCount}</span>
+            <span className="ma-chip-lbl">Available</span>
           </div>
         </div>
       </div>
@@ -2455,10 +2511,9 @@ function TherapistAccounts() {
       </div>
 
       {/* Accounts list */}
-      <div className="card" style={{overflow:'hidden'}}>
+      <div className="ma-card desk-only" style={{overflow:'hidden'}}>
         <div style={{padding:'16px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid var(--border)'}}>
           <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-            <span style={{fontSize:'1rem'}}>👤</span>
             <span style={{fontWeight:'700',fontSize:'0.95rem'}}>Therapist Accounts</span>
             <span className="badge badge-gray">{accounts.length}</span>
           </div>
@@ -2467,54 +2522,75 @@ function TherapistAccounts() {
           <div style={{padding:'48px',textAlign:'center'}}><span className="spin" style={{fontSize:'1.5rem',color:'var(--gold)'}}>✦</span></div>
         ) : accounts.length === 0 ? (
           <div style={{padding:'48px',textAlign:'center',color:'var(--muted)',fontSize:'0.9rem'}}>No accounts yet — create one above.</div>
-        ) : (
-          <>
-            {accounts.map(acc=>(
-              <div key={acc.id} className="item-card">
-                {/* Avatar */}
-                <div className="item-avatar">
-                  {acc.imageUrl
-                    ? <img src={acc.imageUrl} alt={acc.name} style={{width:'44px',height:'44px',borderRadius:'50%',objectFit:'cover',border:'2px solid var(--border-gold)',display:'block'}}/>
-                    : <div style={{width:'44px',height:'44px',borderRadius:'50%',background:'var(--elevated)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--muted)',fontSize:'1.1rem'}}>✦</div>
-                  }
-                </div>
-                {/* Info */}
-                <div className="item-info">
-                  <div className="name">{acc.name||'—'}</div>
-                  <div className="sub">{acc.therapistId}</div>
-                  <div className="meta" style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
-                    <span className={`badge ${acc.onDuty?'badge-green':'badge-gray'}`}>{acc.onDuty?'On Duty':'Off Duty'}</span>
-                    <span className={`badge ${acc.available?'badge-green':'badge-red'}`}>{acc.available?'Available':'Unavailable'}</span>
-                  </div>
-                  {/* Mobile actions */}
-                  <div className="item-actions-mobile">
-                    <button onClick={()=>handleToggleDuty(acc)} disabled={togglingDuty===acc.id}
-                      className="btn btn-sm"
-                      style={{background:acc.onDuty?'rgba(231,76,60,0.12)':'rgba(46,204,113,0.12)',color:acc.onDuty?'var(--danger)':'var(--success)',border:`1px solid ${acc.onDuty?'rgba(231,76,60,0.35)':'rgba(46,204,113,0.35)'}`,minWidth:'80px'}}>
-                      {togglingDuty===acc.id?<span className="spin">✦</span>:acc.onDuty?'End Duty':'Start Duty'}
-                    </button>
-                    <button onClick={()=>handleResetPin(acc)} className="btn btn-ghost btn-sm">Reset PIN</button>
-                    <button onClick={()=>handleDelete(acc)} disabled={deleting===acc.id} className="btn btn-danger btn-sm">
-                      {deleting===acc.id?<span className="spin">✦</span>:'Delete'}
-                    </button>
-                  </div>
-                </div>
-                {/* Desktop actions */}
-                <div className="item-actions item-actions-desktop">
-                  <button onClick={()=>handleToggleDuty(acc)} disabled={togglingDuty===acc.id}
-                    className="btn btn-sm"
-                    style={{background:acc.onDuty?'rgba(231,76,60,0.12)':'rgba(46,204,113,0.12)',color:acc.onDuty?'var(--danger)':'var(--success)',border:`1px solid ${acc.onDuty?'rgba(231,76,60,0.35)':'rgba(46,204,113,0.35)'}`,minWidth:'88px'}}>
-                    {togglingDuty===acc.id?<span className="spin">✦</span>:acc.onDuty?'End Duty':'Start Duty'}
-                  </button>
-                  <button onClick={()=>handleResetPin(acc)} className="btn btn-ghost btn-sm">Reset PIN</button>
-                  <button onClick={()=>handleDelete(acc)} disabled={deleting===acc.id} className="btn btn-danger btn-sm" style={{minWidth:'64px'}}>
-                    {deleting===acc.id?<span className="spin">✦</span>:'Delete'}
-                  </button>
-                </div>
+        ) : accounts.map(acc=>(
+          <div key={acc.id} className="item-card">
+            <div className="item-avatar">
+              {acc.imageUrl
+                ? <img src={acc.imageUrl} alt={acc.name} style={{width:'44px',height:'44px',borderRadius:'50%',objectFit:'cover',border:'2px solid var(--border-gold)',display:'block'}}/>
+                : <div style={{width:'44px',height:'44px',borderRadius:'50%',background:'var(--elevated)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--muted)',fontSize:'1.1rem'}}>✦</div>
+              }
+            </div>
+            <div className="item-info">
+              <div className="name">{acc.name||'—'}</div>
+              <div className="sub">{acc.therapistId}</div>
+              <div className="meta">
+                <span className={`badge ${acc.onDuty?'badge-green':'badge-gray'}`}>{acc.onDuty?'On Duty':'Off Duty'}</span>
+                <span className={`badge ${acc.available?'badge-green':'badge-red'}`}>{acc.available?'Available':'Unavailable'}</span>
               </div>
-            ))}
-          </>
-        )}
+            </div>
+            <div className="item-actions item-actions-desktop">
+              <button onClick={()=>handleToggleDuty(acc)} disabled={togglingDuty===acc.id} className="btn btn-sm"
+                style={{background:acc.onDuty?'rgba(231,76,60,0.12)':'rgba(46,204,113,0.12)',color:acc.onDuty?'var(--danger)':'var(--success)',border:`1px solid ${acc.onDuty?'rgba(231,76,60,0.35)':'rgba(46,204,113,0.35)'}`,minWidth:'88px'}}>
+                {togglingDuty===acc.id?<span className="spin">✦</span>:acc.onDuty?'End Duty':'Start Duty'}
+              </button>
+              <button onClick={()=>handleResetPin(acc)} className="btn btn-ghost btn-sm">Reset PIN</button>
+              <button onClick={()=>handleDelete(acc)} disabled={deleting===acc.id} className="btn btn-danger btn-sm">
+                {deleting===acc.id?<span className="spin">✦</span>:'Delete'}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Mobile account list — clean single-line rows ── */}
+      <div className="mob-only ma-card" style={{overflow:'hidden',flexDirection:'column'}}>
+        {loading ? (
+          <div style={{padding:'40px',textAlign:'center'}}><span className="spin" style={{color:'var(--gold)'}}>✦</span></div>
+        ) : accounts.length === 0 ? (
+          <p style={{padding:'32px',textAlign:'center',color:'var(--muted)',fontSize:'14px',margin:0}}>No accounts yet — create one above.</p>
+        ) : accounts.map(acc=>{
+          const initials=(acc.name||'?').split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()||'?';
+          return (
+            <div key={acc.id} style={{borderBottom:'0.5px solid var(--border)'}}>
+              {/* Main row — single line */}
+              <div style={{display:'flex',alignItems:'center',gap:'12px',padding:'14px 16px',minHeight:'64px'}}>
+                <div style={{width:'42px',height:'42px',borderRadius:'50%',overflow:'hidden',background:'var(--elevated)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--muted)',fontWeight:'700',fontSize:'13px',flexShrink:0}}>
+                  {acc.imageUrl
+                    ? <img src={acc.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>
+                    : initials}
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <p style={{fontSize:'14px',fontWeight:'600',color:'var(--text)',margin:'0 0 3px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{acc.name||'—'}</p>
+                  <p style={{fontSize:'12px',color:'var(--muted)',margin:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontFamily:'monospace'}}>{acc.therapistId}</p>
+                </div>
+                <span className="ma-badge" style={{background:acc.onDuty?'rgba(22,163,74,0.1)':'rgba(100,100,100,0.1)',color:acc.onDuty?'#16a34a':'var(--muted)',border:`1px solid ${acc.onDuty?'rgba(22,163,74,0.25)':'var(--border)'}`}}>
+                  {acc.onDuty?'On Duty':'Off Duty'}
+                </span>
+              </div>
+              {/* Action row */}
+              <div style={{display:'flex',gap:'8px',padding:'0 16px 14px',flexWrap:'wrap'}}>
+                <button onClick={()=>handleToggleDuty(acc)} disabled={togglingDuty===acc.id} className="btn btn-sm"
+                  style={{flex:'1',minHeight:'38px',background:acc.onDuty?'rgba(231,76,60,0.1)':'rgba(22,163,74,0.1)',color:acc.onDuty?'var(--danger)':'var(--success)',border:`1px solid ${acc.onDuty?'rgba(231,76,60,0.3)':'rgba(22,163,74,0.3)'}`}}>
+                  {togglingDuty===acc.id?<span className="spin">✦</span>:acc.onDuty?'End Duty':'Start Duty'}
+                </button>
+                <button onClick={()=>handleResetPin(acc)} className="btn btn-ghost btn-sm" style={{minHeight:'38px'}}>Reset PIN</button>
+                <button onClick={()=>handleDelete(acc)} disabled={deleting===acc.id} className="btn btn-danger btn-sm" style={{minHeight:'38px'}}>
+                  {deleting===acc.id?<span className="spin">✦</span>:'Delete'}
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -2750,34 +2826,34 @@ function BookingsPanel() {
       )}
 
       {/* ── Mobile Page Header ── */}
-      <div className="mob-only mob-page-hdr">
-        <div className="mob-page-hdr-top">
+      <div className="mob-only ma-page-hdr">
+        <div className="ma-page-hdr-top">
           <div>
-            <p className="mob-page-sub">{bookings.length} total bookings</p>
-            <h2 className="mob-page-title">Bookings</h2>
+            <p className="ma-page-sub">{bookings.length} total bookings</p>
+            <h2 className="ma-page-title">Bookings</h2>
           </div>
           <button onClick={()=>setShowBookForm(v=>!v)}
             className={`btn btn-sm ${showBookForm?'btn-ghost':'btn-gold'}`}
             style={{display:'inline-flex',alignItems:'center',gap:'5px'}}>
-            {showBookForm?'✕':'+ New'}
+            {showBookForm?'✕ Cancel':'+ New'}
           </button>
         </div>
         {((counts.admin_pending||0)+(counts.pending||0))>0 && (
-          <div className="mob-alert-amber" style={{display:'flex'}} onClick={()=>setFilter('admin_pending')}>
-            <div className="mob-alert-dot" style={{background:'#f39c12'}}/>
-            <div className="mob-alert-body">
-              <p style={{color:'#f39c12'}}>{(counts.admin_pending||0)+(counts.pending||0)} bookings need attention</p>
-              <p>Tap to view pending approvals</p>
+          <div className="ma-alert" style={{background:'rgba(243,156,18,0.08)',border:'1px solid rgba(243,156,18,0.22)',display:'flex'}}
+            onClick={()=>setFilter('admin_pending')}>
+            <div className="ma-alert-dot" style={{background:'#f39c12'}}/>
+            <div className="ma-alert-body">
+              <p className="ma-alert-title" style={{color:'#f39c12'}}>{(counts.admin_pending||0)+(counts.pending||0)} bookings need attention</p>
+              <p className="ma-alert-sub">Tap to view pending approvals</p>
             </div>
-            <span className="mob-alert-arr">›</span>
+            <span className="ma-alert-arr">›</span>
           </div>
         )}
-        <div className="mob-pill-strip">
+        <div className="ma-chips" style={{marginBottom:0}}>
           {TABS.map(t=>(
-            <button key={t.id} className={`mob-pill${filter===t.id?' pill-active':''}`} onClick={()=>setFilter(t.id)}>
-              <span className="mob-pill-dot" style={{background:t.color}}/>
-              <span className="mob-pill-val" style={{color:filter===t.id?t.color:undefined}}>{counts[t.id]||0}</span>
-              <span className="mob-pill-lbl">{t.label}</span>
+            <button key={t.id} className={`ma-chip${filter===t.id?' active':''}`} onClick={()=>setFilter(t.id)}>
+              <span className="ma-chip-val" style={{color:t.color,fontSize:'18px'}}>{counts[t.id]||0}</span>
+              <span className="ma-chip-lbl">{t.label}</span>
             </button>
           ))}
         </div>
@@ -2897,39 +2973,30 @@ function BookingsPanel() {
 
                     {/* ── Summary row (always visible, tap to expand) ── */}
                     <div onClick={()=>toggleRow(b.id)}
-                      style={{padding:'13px 14px',display:'flex',alignItems:'center',gap:'10px',cursor:'pointer',minHeight:'60px',
-                        background: exp ? 'rgba(212,175,55,0.05)' : b.status==='admin_pending'?'rgba(243,156,18,0.03)':'transparent',
+                      style={{padding:'14px 16px',display:'flex',alignItems:'center',gap:'12px',cursor:'pointer',minHeight:'64px',
+                        background: exp ? 'rgba(212,175,55,0.04)' : b.status==='admin_pending'?'rgba(243,156,18,0.03)':'transparent',
                         transition:'background .12s'}}>
 
                       {/* Status stripe */}
-                      <div style={{width:'4px',height:'36px',borderRadius:'4px',background:c.color,flexShrink:0,alignSelf:'center'}}/>
+                      <div style={{width:'4px',height:'38px',borderRadius:'4px',background:c.color,flexShrink:0,alignSelf:'center'}}/>
 
-                      {/* Main info: stacked on mobile */}
+                      {/* Main info — single line each row */}
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{display:'flex',alignItems:'center',gap:'6px',flexWrap:'wrap',marginBottom:'4px'}}>
-                          <span style={{fontWeight:'700',fontSize:'0.87rem',color:'var(--text)'}}>{b.clientName||'—'}</span>
-                          <span style={{display:'inline-flex',padding:'2px 8px',borderRadius:'20px',fontSize:'0.65rem',fontWeight:'700',background:c.bg,color:c.color,border:`1px solid ${c.border}`}}>
-                            {c.label||b.status}
-                          </span>
+                        <p style={{fontWeight:'600',fontSize:'14px',color:'var(--text)',margin:'0 0 4px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+                          {b.clientName||'—'}
                           {b.status==='admin_pending'&&b.needsTherapistAssignment&&(
-                            <span style={{fontSize:'0.62rem',background:'rgba(243,156,18,0.18)',color:'#f39c12',border:'1px solid rgba(243,156,18,0.4)',borderRadius:'10px',padding:'1px 7px',fontWeight:'700'}}>ASSIGN</span>
+                            <span style={{marginLeft:'6px',fontSize:'11px',background:'rgba(243,156,18,0.18)',color:'#f39c12',border:'1px solid rgba(243,156,18,0.4)',borderRadius:'10px',padding:'1px 7px',fontWeight:'700'}}>ASSIGN</span>
                           )}
-                        </div>
-                        <div style={{display:'flex',alignItems:'center',gap:'6px',flexWrap:'wrap'}}>
-                          <span style={{fontSize:'0.7rem',color:'var(--gold)',fontWeight:'600'}}>{therapistName}</span>
-                          {b.serviceType&&<span style={{fontSize:'0.65rem',color:'var(--muted)'}}>· {b.serviceType}</span>}
-                          <span style={{fontSize:'0.65rem',color:'var(--muted)'}}>{b.bookingType==='now'?'⚡ Now':`📅 ${b.scheduledDate||''} ${b.scheduledTime||''}`}</span>
-                          <span style={{fontSize:'0.65rem',color:'var(--subtle)'}}>{timeAgo(b)}</span>
-                        </div>
+                        </p>
+                        <p style={{fontSize:'12px',color:'var(--muted)',margin:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
+                          {b.serviceType||'Massage'} · {therapistName} · {timeAgo(b)}
+                        </p>
                       </div>
 
-                      {/* Chevron + delete */}
-                      <div style={{display:'flex',alignItems:'center',gap:'6px',flexShrink:0}}>
-                        <button onClick={e=>{e.stopPropagation();handleDelete(b);}} disabled={deleting===b.id}
-                          style={{background:'transparent',border:'none',color:'var(--subtle)',cursor:'pointer',fontSize:'1rem',padding:'6px',lineHeight:1,minWidth:'32px',minHeight:'32px'}}>
-                          {deleting===b.id?<span className="spin" style={{fontSize:'0.7rem'}}>✦</span>:'✕'}
-                        </button>
-                        <span style={{color:'var(--muted)',fontSize:'0.7rem',display:'inline-block',transition:'transform .2s',transform:exp?'rotate(180deg)':'rotate(0deg)'}}>▼</span>
+                      {/* Status badge + chevron */}
+                      <div style={{display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
+                        <span className="ma-badge" style={{background:c.bg,color:c.color,border:`1px solid ${c.color}35`}}>{c.label||b.status}</span>
+                        <span style={{color:'var(--muted)',fontSize:'12px',display:'inline-block',transition:'transform .2s',transform:exp?'rotate(180deg)':'rotate(0deg)'}}>▼</span>
                       </div>
                     </div>
 
