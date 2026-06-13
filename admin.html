@@ -498,6 +498,10 @@
       border-radius:18px 18px 18px 4px;
     }
     .chat-back-btn { display:none; }
+    @keyframes chatMicPulse {
+      0%, 100% { opacity:1; transform:scale(1); }
+      50%       { opacity:0.55; transform:scale(1.15); }
+    }
 
     @media (max-width:1024px) and (min-width:769px) {
       :root { --sidebar-w: 180px; }
@@ -954,10 +958,14 @@ function ChatAdmin() {
   const [sending,     setSending]     = useState(false);
   const [uploading,   setUploading]   = useState(false);
   const [showList,    setShowList]    = useState(true);
-  const messagesEndRef = useRef(null);
-  const imgInputRef    = useRef(null);
-  const audioInputRef  = useRef(null);
-  const videoInputRef  = useRef(null);
+  const [recording,   setRecording]   = useState(false);
+  const [recSecs,     setRecSecs]     = useState(0);
+  const messagesEndRef   = useRef(null);
+  const imgInputRef      = useRef(null);
+  const videoInputRef    = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef   = useRef([]);
+  const recTimerRef      = useRef(null);
 
   const activeTherapist = therapists.find(t => t.id === activeId) || null;
 
@@ -1056,6 +1064,57 @@ function ChatAdmin() {
     } catch (e) { alert('Upload failed: ' + e.message); }
     setUploading(false);
   };
+
+  /* ── Voice recording ── */
+  const startRecording = async () => {
+    if (recording || uploading || sending) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus' : 'audio/webm';
+      const mr = new MediaRecorder(stream, { mimeType });
+      mr.ondataavailable = e => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        clearInterval(recTimerRef.current);
+        setRecSecs(0);
+        if (audioChunksRef.current.length > 0) {
+          const blob = new Blob(audioChunksRef.current, { type: mimeType });
+          const file = new File([blob], `voice_${Date.now()}.webm`, { type: mimeType });
+          await sendMedia(file, 'audio');
+        }
+      };
+      mr.start(250);
+      mediaRecorderRef.current = mr;
+      setRecording(true);
+      setRecSecs(0);
+      recTimerRef.current = setInterval(() => setRecSecs(s => s + 1), 1000);
+    } catch (e) {
+      alert('Microphone access denied. Please allow mic in browser settings.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setRecording(false);
+  };
+
+  const cancelRecording = () => {
+    audioChunksRef.current = [];
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.onstop = () => {};
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream?.getTracks().forEach(t => t.stop());
+    }
+    clearInterval(recTimerRef.current);
+    setRecording(false);
+    setRecSecs(0);
+  };
+
+  const fmtRec = (s) => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
 
   /* ── Helpers ── */
   const fmtTime = (ts) => {
@@ -1250,63 +1309,94 @@ function ChatAdmin() {
         {/* Hidden file inputs */}
         <input ref={imgInputRef} type="file" accept="image/*" style={{ display:'none' }}
           onChange={e => { if (e.target.files[0]) sendMedia(e.target.files[0], 'image'); e.target.value = ''; }}/>
-        <input ref={audioInputRef} type="file" accept="audio/*" style={{ display:'none' }}
-          onChange={e => { if (e.target.files[0]) sendMedia(e.target.files[0], 'audio'); e.target.value = ''; }}/>
         <input ref={videoInputRef} type="file" accept="video/*" style={{ display:'none' }}
           onChange={e => { if (e.target.files[0]) sendMedia(e.target.files[0], 'video'); e.target.value = ''; }}/>
-        {/* Attach buttons */}
+
+        {/* Attach + mic buttons */}
         <div style={{ display:'flex', gap:'4px', flexShrink:0, paddingBottom:'2px' }}>
-          {[
-            { ref: imgInputRef,   emoji:'📷', title:'Image' },
-            { ref: audioInputRef, emoji:'🎵', title:'Audio' },
-            { ref: videoInputRef, emoji:'🎬', title:'Video' },
-          ].map(({ ref, emoji, title }) => (
-            <button key={title} title={`Send ${title}`}
-              onClick={() => ref.current?.click()}
-              disabled={uploading || sending}
-              style={{ width:'36px', height:'36px', borderRadius:'50%',
-                background:'var(--elevated)', border:'0.5px solid var(--border)',
-                cursor:'pointer', fontSize:'15px', display:'flex', alignItems:'center',
-                justifyContent:'center', opacity:(uploading||sending)?0.5:1 }}>
-              {emoji}
-            </button>
-          ))}
+          {/* Image */}
+          <button title="Send image" onClick={() => imgInputRef.current?.click()}
+            disabled={uploading || sending || recording}
+            style={{ width:'36px', height:'36px', borderRadius:'50%',
+              background:'var(--elevated)', border:'0.5px solid var(--border)',
+              cursor:'pointer', fontSize:'15px', display:'flex', alignItems:'center',
+              justifyContent:'center', opacity:(uploading||sending||recording)?0.4:1 }}>
+            📷
+          </button>
+          {/* Video */}
+          <button title="Send video" onClick={() => videoInputRef.current?.click()}
+            disabled={uploading || sending || recording}
+            style={{ width:'36px', height:'36px', borderRadius:'50%',
+              background:'var(--elevated)', border:'0.5px solid var(--border)',
+              cursor:'pointer', fontSize:'15px', display:'flex', alignItems:'center',
+              justifyContent:'center', opacity:(uploading||sending||recording)?0.4:1 }}>
+            🎬
+          </button>
+          {/* Mic — tap to start/stop recording */}
+          <button title={recording ? 'Stop & send' : 'Voice message'}
+            onClick={recording ? stopRecording : startRecording}
+            disabled={uploading || sending}
+            style={{ width:'36px', height:'36px', borderRadius:'50%',
+              background: recording ? '#e74c3c' : 'var(--elevated)',
+              border: recording ? 'none' : '0.5px solid var(--border)',
+              cursor:'pointer', fontSize:'15px', display:'flex', alignItems:'center',
+              justifyContent:'center', transition:'background .2s',
+              animation: recording ? 'chatMicPulse 1.2s ease-in-out infinite' : 'none' }}>
+            🎤
+          </button>
         </div>
-        {/* Text input */}
-        <div style={{ flex:1, background:'var(--elevated)', border:'0.5px solid var(--border)',
-          borderRadius:'22px', padding:'9px 14px', display:'flex', alignItems:'center', minWidth:0 }}>
-          <textarea value={text}
-            onChange={e => setText(e.target.value)}
-            onKeyDown={e => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendText(); } }}
-            placeholder="Type a message…" rows={1}
-            style={{ flex:1, background:'transparent', border:'none', outline:'none',
-              color:'var(--text)', fontSize:'14px', fontFamily:'inherit',
-              resize:'none', lineHeight:'1.4', maxHeight:'80px', overflowY:'auto' }}/>
-        </div>
-        {/* Send */}
-        <button onClick={sendText} disabled={!text.trim() || sending || uploading}
-          style={{ width:'40px', height:'40px', borderRadius:'50%',
-            background: (text.trim() && !sending && !uploading) ? 'var(--gold)' : 'var(--elevated)',
-            border:'none', cursor: text.trim() ? 'pointer' : 'default',
-            fontSize:'16px', display:'flex', alignItems:'center', justifyContent:'center',
-            flexShrink:0, transition:'background .15s',
-            color: text.trim() ? '#1a1200' : 'var(--muted)' }}>
-          {(sending||uploading) ? '…' : '➤'}
-        </button>
+
+        {/* Recording indicator OR text input */}
+        {recording
+          ? <div style={{ flex:1, background:'rgba(231,76,60,0.1)', border:'0.5px solid rgba(231,76,60,0.4)',
+              borderRadius:'22px', padding:'9px 14px', display:'flex', alignItems:'center', gap:'8px', minWidth:0 }}>
+              <div style={{ width:'8px', height:'8px', borderRadius:'50%', background:'#e74c3c',
+                animation:'chatMicPulse 1.2s ease-in-out infinite', flexShrink:0 }}/>
+              <span style={{ fontSize:'14px', color:'#e74c3c', fontWeight:'600', flex:1 }}>
+                Recording… {fmtRec(recSecs)}
+              </span>
+              <button onClick={cancelRecording}
+                style={{ background:'none', border:'none', color:'var(--muted)', cursor:'pointer',
+                  fontSize:'16px', padding:'0', lineHeight:1 }}>✕</button>
+            </div>
+          : <div style={{ flex:1, background:'var(--elevated)', border:'0.5px solid var(--border)',
+              borderRadius:'22px', padding:'9px 14px', display:'flex', alignItems:'center', minWidth:0 }}>
+              <textarea value={text}
+                onChange={e => setText(e.target.value)}
+                onKeyDown={e => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendText(); } }}
+                placeholder="Type a message…" rows={1}
+                style={{ flex:1, background:'transparent', border:'none', outline:'none',
+                  color:'var(--text)', fontSize:'14px', fontFamily:'inherit',
+                  resize:'none', lineHeight:'1.4', maxHeight:'80px', overflowY:'auto' }}/>
+            </div>
+        }
+
+        {/* Send button */}
+        {!recording && (
+          <button onClick={sendText} disabled={!text.trim() || sending || uploading}
+            style={{ width:'40px', height:'40px', borderRadius:'50%',
+              background: (text.trim() && !sending && !uploading) ? 'var(--gold)' : 'var(--elevated)',
+              border:'none', cursor: text.trim() ? 'pointer' : 'default',
+              fontSize:'16px', display:'flex', alignItems:'center', justifyContent:'center',
+              flexShrink:0, transition:'background .15s',
+              color: text.trim() ? '#1a1200' : 'var(--muted)' }}>
+            {(sending||uploading) ? '…' : '➤'}
+          </button>
+        )}
       </div>
     </div>
   );
 
   return (
     <div className="chat-layout">
-      {/* Therapist list */}
+      {/* Therapist list — called as function to avoid remount on re-render */}
       <div className={`chat-list-pane${!showList ? ' chat-hide-mob' : ''}`}>
-        <ListPane />
+        {ListPane()}
       </div>
       {/* Chat window */}
       <div className={`chat-win-pane${showList ? ' chat-hide-mob' : ''}`}>
         {activeId
-          ? <WinPane />
+          ? WinPane()
           : <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center',
               justifyContent:'center', gap:'10px', color:'var(--muted)', height:'100%' }}>
               <span style={{ fontSize:'52px' }}>💬</span>
@@ -1400,7 +1490,10 @@ function MobileSubPage({ title, onBack, children }) {
 //  DASHBOARD SHELL
 // ══════════════════════════════════════════════════════
 function Dashboard({ user }) {
-  const [tab, setTab] = useState('dashboard');
+  const [tab, setTabRaw] = useState(() => {
+    try { return localStorage.getItem('ffs_tab') || 'dashboard'; } catch { return 'dashboard'; }
+  });
+  const setTab = (t) => { setTabRaw(t); try { localStorage.setItem('ffs_tab', t); } catch {} };
   const [dark, toggleTheme] = useTheme();
 
   const tabs = [
