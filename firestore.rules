@@ -15,7 +15,7 @@ service cloud.firestore {
       allow update: if isAdmin()
         || request.resource.data.diff(resource.data)
              .affectedKeys()
-             .hasOnly(['available','name','bio','speciality','workStart','workEnd','workingHours','imageUrl','updatedAt','phone','fcmToken','sessionActive','lastActiveAt']);
+             .hasOnly(['available','name','bio','speciality','workStart','workEnd','workingHours','imageUrl','updatedAt','phone','fcmToken','sessionActive','lastActiveAt','onDuty','dutyStartedAt','locationUpdatedAt','location','emergencyContacts']);
     }
 
     // Gallery tokens: admin full control; clients can read to validate & update name/phone
@@ -59,6 +59,18 @@ service cloud.firestore {
       allow read:          if true;                // admin + therapist can read
       allow create, update: if true;               // therapist portal writes without Firebase auth
       allow delete:        if isAdmin();
+    }
+
+    // Tracking links: client-facing live location tokens (no phone exposed)
+    match /trackingLinks/{token} {
+      allow read:                   if true;       // client opens track.html?t=TOKEN
+      allow create, update, delete: if isAdmin();  // only admin generates/deactivates
+    }
+
+    // App config: admin writes (force refresh signal); therapists read
+    match /config/{docId} {
+      allow read:             if true;
+      allow create, update:   if isAdmin();
     }
   }
 }
