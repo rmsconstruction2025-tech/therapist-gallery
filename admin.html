@@ -164,6 +164,15 @@
     .table-head { background:var(--elevated); padding:8px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
     .table-head span { font-size:0.67rem; color:var(--muted); letter-spacing:1.5px; text-transform:uppercase; font-weight:600; }
 
+    /* ── Tracker layout (desktop) ── */
+    .tracker-grid { display:grid; grid-template-columns:260px 1fr; flex:1; min-height:0; }
+    .tracker-list { border-right:1px solid var(--border); overflow-y:auto; padding:10px; background:var(--surface); }
+    .tracker-map  { position:relative; height:calc(100vh - 120px); min-height:480px; }
+
+    /* ── Booking filter tabs ── */
+    .bk-filter-tabs { display:flex; overflow-x:auto; border-bottom:1px solid var(--border); padding:0 6px; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+    .bk-filter-tabs::-webkit-scrollbar { display:none; }
+
     /* ── Mobile ────────────────────────────────────────── */
     @media (max-width: 768px) {
       :root { --sidebar-w: 0px; }
@@ -226,6 +235,22 @@
 
       /* Card header row */
       .card-header-counts { flex-wrap:wrap; gap:6px !important; }
+
+      /* ── Live Tracker mobile ── */
+      .tracker-grid { grid-template-columns:1fr !important; }
+      .tracker-list { border-right:none !important; border-bottom:1px solid var(--border); max-height:220px; }
+      .tracker-map  { height:50vh !important; min-height:280px !important; }
+      .tracker-hdr  { padding:10px 12px !important; gap:8px !important; }
+      .tracker-hdr-row1 { flex-wrap:wrap; gap:6px; }
+      .tracker-hdr-actions { flex-wrap:wrap; gap:6px; }
+
+      /* ── Bookings filter tabs mobile ── */
+      .bk-filter-tabs { flex-wrap:wrap; overflow-x:unset !important; padding:6px 8px; gap:4px; }
+      .bk-filter-tab  { padding:5px 10px !important; font-size:0.72rem !important; border-bottom:none !important; border:1px solid var(--border) !important; border-radius:20px !important; }
+      .bk-filter-tab.active-tab { border-color:var(--gold) !important; background:var(--gold-glow) !important; }
+
+      /* ── Booking header compact ── */
+      .bk-header-badges { display:none !important; }
     }
 
     @media (max-width:1024px) and (min-width:769px) {
@@ -537,49 +562,50 @@ function LiveTracker() {
   });
 
   return (
-    <div className="tab-content" style={{padding:'0',display:'flex',flexDirection:'column',height:'calc(100vh - 60px)'}}>
+    <div style={{padding:'0',display:'flex',flexDirection:'column',minHeight:'calc(100vh - 130px)'}}>
 
       {/* Header */}
-      <div style={{padding:'13px 18px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:'10px',flexShrink:0}}>
-        <div style={{display:'flex',alignItems:'center',gap:'9px'}}>
-          <div style={{width:'8px',height:'8px',borderRadius:'50%',background:onDutyList.length>0?'#27ae60':'var(--muted)',animation:onDutyList.length>0?'pulse 2s infinite':'none'}}/>
-          <h2 style={{margin:0,fontSize:'1.05rem',fontWeight:'700'}}>Live Tracker</h2>
+      <div className="tracker-hdr" style={{padding:'13px 18px',borderBottom:'1px solid var(--border)',flexShrink:0,display:'flex',flexDirection:'column',gap:'8px'}}>
+        {/* Row 1: title + toggle */}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'8px',flexWrap:'wrap'}}>
+          <div style={{display:'flex',alignItems:'center',gap:'9px'}}>
+            <div style={{width:'8px',height:'8px',borderRadius:'50%',background:onDutyList.length>0?'#27ae60':'var(--muted)',animation:onDutyList.length>0?'pulse 2s infinite':'none'}}/>
+            <h2 style={{margin:0,fontSize:'1rem',fontWeight:'700'}}>Live Tracker</h2>
+            <span style={{fontSize:'0.72rem',fontWeight:'700',color:'#27ae60',background:'rgba(39,174,96,0.1)',border:'1px solid rgba(39,174,96,0.25)',borderRadius:'20px',padding:'3px 9px',display:'flex',alignItems:'center',gap:'4px'}}>
+              <span style={{width:'5px',height:'5px',borderRadius:'50%',background:'#27ae60',display:'inline-block'}}/>
+              {onDutyList.length}/{therapists.length}
+            </span>
+          </div>
+          {/* View toggle */}
+          <div style={{display:'flex',gap:'3px',background:'var(--elevated)',borderRadius:'22px',padding:'3px',border:'1px solid var(--border)'}}>
+            <button style={btnSty(view==='single')} onClick={()=>setView('single')}>👤 Single</button>
+            <button style={btnSty(view==='all')}    onClick={()=>setView('all')}>🗺 All</button>
+          </div>
         </div>
-
-        {/* Toggle */}
-        <div style={{display:'flex',gap:'3px',background:'var(--surface)',borderRadius:'22px',padding:'3px',border:'1px solid var(--border)'}}>
-          <button style={btnSty(view==='single')} onClick={()=>setView('single')}>👤 Single</button>
-          <button style={btnSty(view==='all')}    onClick={()=>setView('all')}>🗺 All therapists</button>
-        </div>
-
-        <div style={{display:'flex',gap:'8px'}}>
-          <span style={{fontSize:'0.72rem',fontWeight:'700',color:'#27ae60',background:'rgba(39,174,96,0.1)',border:'1px solid rgba(39,174,96,0.25)',borderRadius:'20px',padding:'4px 11px',display:'flex',alignItems:'center',gap:'5px'}}>
-            <span style={{width:'5px',height:'5px',borderRadius:'50%',background:'#27ae60',display:'inline-block',animation:'pulse 2s infinite'}}/>
-            {onDutyList.length} on duty
-          </span>
-          <span style={{fontSize:'0.72rem',color:'var(--muted)',background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'20px',padding:'4px 11px'}}>{therapists.length} total</span>
+        {/* Row 2: GPS reminder button */}
+        <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}}>
           <button
             onClick={sendGPSReminder}
             disabled={notifSending}
-            style={{fontSize:'0.72rem',fontWeight:'700',color:'#d4af37',background:'rgba(212,175,55,0.1)',border:'1px solid rgba(212,175,55,0.3)',borderRadius:'20px',padding:'4px 12px',cursor:notifSending?'not-allowed':'pointer',opacity:notifSending?0.7:1,display:'flex',alignItems:'center',gap:'5px'}}
+            style={{fontSize:'0.72rem',fontWeight:'700',color:'var(--gold)',background:'var(--gold-glow)',border:'1px solid var(--border-gold)',borderRadius:'20px',padding:'6px 14px',cursor:notifSending?'not-allowed':'pointer',opacity:notifSending?0.7:1,display:'flex',alignItems:'center',gap:'5px',minHeight:'34px'}}
           >
             {notifSending ? <><span className="spin">✦</span> Sending…</> : '📍 Send GPS Reminder'}
           </button>
+          {notifMsg && <span style={{fontSize:'0.72rem',color:notifMsg.startsWith('✓')?'#27ae60':'#e74c3c'}}>{notifMsg}</span>}
         </div>
-        {notifMsg && <div style={{fontSize:'0.72rem',color:notifMsg.startsWith('✓')?'#27ae60':'#e74c3c',padding:'0 18px 8px',marginTop:'-4px'}}>{notifMsg}</div>}
       </div>
 
       {onDutyList.length===0 ? (
-        <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'14px'}}>
+        <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'14px',padding:'48px 20px'}}>
           <div style={{width:'64px',height:'64px',borderRadius:'50%',background:'var(--elevated)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.6rem'}}>📍</div>
           <p style={{fontWeight:'700',color:'var(--text)',margin:'0 0 4px'}}>No therapists on duty</p>
-          <p style={{fontSize:'0.82rem',color:'var(--muted)',margin:0}}>Therapists appear here when they go Online</p>
+          <p style={{fontSize:'0.82rem',color:'var(--muted)',margin:0,textAlign:'center'}}>Therapists appear here when they go Online</p>
         </div>
       ) : (
-        <div style={{flex:1,display:'grid',gridTemplateColumns:'260px 1fr',minHeight:0}}>
+        <div className="tracker-grid">
 
           {/* Left list */}
-          <div style={{borderRight:'1px solid var(--border)',overflowY:'auto',padding:'10px',background:'var(--surface)'}}>
+          <div className="tracker-list">
             <p style={{fontSize:'0.62rem',color:'var(--muted)',letterSpacing:'1.5px',textTransform:'uppercase',padding:'4px 6px 10px',margin:0}}>Active Therapists</p>
             <div style={{display:'flex',flexDirection:'column',gap:'4px'}}>
               {onDutyList.map(t=>{
@@ -619,7 +645,7 @@ function LiveTracker() {
           </div>
 
           {/* Map */}
-          <div style={{position:'relative',height:'calc(100vh - 120px)',minHeight:'480px'}}>
+          <div className="tracker-map">
             {view==='single' && selT && selT._hasGPS ? (
               <iframe
                 key={`s-${selT.id}-${Math.floor((selT.locationUpdatedAt?.toMillis?.()??0)/30000)}`}
@@ -2102,16 +2128,18 @@ function TherapistAccounts() {
           <span style={{fontSize:'1.1rem'}}>➕</span>
           <h2 style={{fontSize:'0.95rem',fontWeight:'700',color:'var(--text)'}}>Create Therapist Account</h2>
         </div>
-        <form onSubmit={handleCreate} style={{display:'flex',gap:'14px',flexWrap:'wrap',alignItems:'flex-end'}}>
-          <div style={{flex:'1 1 180px'}}>
-            <label className="form-label">Display Name <span style={{color:'var(--danger)'}}>*</span></label>
-            <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. Priya" required className="form-input"/>
+        <form onSubmit={handleCreate} style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+          <div style={{display:'flex',gap:'12px',flexWrap:'wrap'}}>
+            <div style={{flex:'1 1 160px'}}>
+              <label className="form-label">Display Name <span style={{color:'var(--danger)'}}>*</span></label>
+              <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. Priya" required className="form-input"/>
+            </div>
+            <div style={{flex:'1 1 120px'}}>
+              <label className="form-label">PIN <span style={{color:'var(--muted)'}}>(min 4)</span></label>
+              <input value={form.pin} onChange={e=>setForm(f=>({...f,pin:e.target.value}))} placeholder="e.g. 1234" required className="form-input"/>
+            </div>
           </div>
-          <div style={{flex:'1 1 140px'}}>
-            <label className="form-label">PIN <span style={{color:'var(--muted)'}}>(min 4)</span></label>
-            <input value={form.pin} onChange={e=>setForm(f=>({...f,pin:e.target.value}))} placeholder="e.g. 1234" required className="form-input"/>
-          </div>
-          <button type="submit" disabled={saving} className="btn btn-gold btn-md" style={{minWidth:'148px',height:'42px'}}>
+          <button type="submit" disabled={saving} className="btn btn-gold btn-md" style={{width:'100%',minHeight:'46px'}}>
             {saving?<span className="spin">✦</span>:'+ Create Account'}
           </button>
         </form>
@@ -2456,6 +2484,7 @@ function BookingsPanel() {
           <span>📋</span>
           <span style={{fontWeight:'700',fontSize:'0.95rem'}}>All Bookings</span>
           <span className="badge badge-gray">{bookings.length}</span>
+          <div className="bk-header-badges" style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
           {counts.pending>0&&(
             <span style={{display:'inline-flex',alignItems:'center',padding:'2px 10px',borderRadius:'20px',fontSize:'0.7rem',fontWeight:'700',background:'rgba(212,175,55,0.15)',color:'var(--gold)',border:'1px solid rgba(212,175,55,0.4)'}}>
               🔔 {counts.pending} pending
@@ -2463,17 +2492,17 @@ function BookingsPanel() {
           )}
           {counts.admin_pending>0&&(
             <span style={{display:'inline-flex',alignItems:'center',padding:'2px 10px',borderRadius:'20px',fontSize:'0.7rem',fontWeight:'700',background:'rgba(243,156,18,0.15)',color:'#f39c12',border:'1px solid rgba(243,156,18,0.4)'}}>
-              ⚡ {counts.admin_pending} need your confirmation
+              ⚡ {counts.admin_pending} need confirm
             </span>
           )}
           {therapistAcceptedCount>0&&(
             <span style={{display:'inline-flex',alignItems:'center',padding:'2px 10px',borderRadius:'20px',fontSize:'0.7rem',fontWeight:'700',background:'rgba(37,211,102,0.12)',color:'#25D366',border:'1px solid rgba(37,211,102,0.35)'}}>
-              ✅ {therapistAcceptedCount} accepted — send WhatsApp to client
+              ✅ {therapistAcceptedCount} accepted
             </span>
           )}
           {counts.on_way>0&&(
             <span style={{display:'inline-flex',alignItems:'center',padding:'2px 10px',borderRadius:'20px',fontSize:'0.7rem',fontWeight:'700',background:'rgba(74,158,255,0.12)',color:'#4a9eff',border:'1px solid rgba(74,158,255,0.35)'}}>
-              🚗 {counts.on_way} on the way
+              🚗 {counts.on_way} on way
             </span>
           )}
           {counts.in_session>0&&(
@@ -2481,6 +2510,7 @@ function BookingsPanel() {
               ✦ {counts.in_session} in session
             </span>
           )}
+          </div>
         </div>
 
         {/* Search bar */}
@@ -2490,11 +2520,12 @@ function BookingsPanel() {
             style={{width:'100%',background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'9px',padding:'8px 14px',color:'var(--text)',fontSize:'0.85rem',outline:'none',fontFamily:'inherit'}}/>
         </div>
 
-        {/* Filter tabs */}
-        <div style={{display:'flex',overflowX:'auto',borderBottom:'1px solid var(--border)',padding:'0 6px',scrollbarWidth:'none'}}>
+        {/* Filter tabs — horizontal scroll on desktop, wrapping chips on mobile */}
+        <div className="bk-filter-tabs">
           {TABS.map(t=>(
             <button key={t.id} onClick={()=>setFilter(t.id)}
-              style={{padding:'9px 13px',background:'transparent',border:'none',color:filter===t.id?t.color:'var(--muted)',fontWeight:filter===t.id?'700':'500',fontSize:'0.78rem',cursor:'pointer',whiteSpace:'nowrap',fontFamily:'inherit',borderBottom:filter===t.id?`2px solid ${t.color}`:'2px solid transparent',transition:'all .15s',display:'flex',alignItems:'center',gap:'5px'}}>
+              className={`bk-filter-tab${filter===t.id?' active-tab':''}`}
+              style={{padding:'9px 13px',background:'transparent',border:'none',color:filter===t.id?t.color:'var(--muted)',fontWeight:filter===t.id?'700':'500',fontSize:'0.78rem',cursor:'pointer',whiteSpace:'nowrap',fontFamily:'inherit',borderBottom:filter===t.id?`2px solid ${t.color}`:'2px solid transparent',transition:'all .15s',display:'flex',alignItems:'center',gap:'5px',flexShrink:0}}>
               {t.label}
               {counts[t.id]>0&&(
                 <span style={{background:filter===t.id?t.color:'var(--elevated)',color:filter===t.id?'#000':'var(--muted)',borderRadius:'10px',padding:'1px 6px',fontSize:'0.65rem',fontWeight:'700',minWidth:'18px',textAlign:'center'}}>
@@ -2522,50 +2553,41 @@ function BookingsPanel() {
                 return (
                   <div key={b.id} style={{borderBottom:'1px solid var(--border)'}}>
 
-                    {/* ── Summary row (always visible, click to expand) ── */}
+                    {/* ── Summary row (always visible, tap to expand) ── */}
                     <div onClick={()=>toggleRow(b.id)}
-                      style={{padding:'11px 16px',display:'flex',alignItems:'center',gap:'10px',cursor:'pointer',
+                      style={{padding:'13px 14px',display:'flex',alignItems:'center',gap:'10px',cursor:'pointer',minHeight:'60px',
                         background: exp ? 'rgba(212,175,55,0.05)' : b.status==='admin_pending'?'rgba(243,156,18,0.03)':'transparent',
-                        transition:'background .12s'}}
-                      onMouseEnter={e=>e.currentTarget.style.background='rgba(212,175,55,0.05)'}
-                      onMouseLeave={e=>e.currentTarget.style.background=exp?'rgba(212,175,55,0.05)':b.status==='admin_pending'?'rgba(243,156,18,0.03)':'transparent'}>
+                        transition:'background .12s'}}>
 
-                      {/* Status dot */}
-                      <div style={{width:'8px',height:'8px',borderRadius:'50%',background:c.color,flexShrink:0}}/>
+                      {/* Status stripe */}
+                      <div style={{width:'4px',height:'36px',borderRadius:'4px',background:c.color,flexShrink:0,alignSelf:'center'}}/>
 
-                      {/* Client → Therapist + badges */}
-                      <div style={{flex:1,minWidth:0,display:'flex',alignItems:'center',gap:'7px',flexWrap:'wrap'}}>
-                        <span style={{fontWeight:'700',fontSize:'0.88rem'}}>👤 {b.clientName}</span>
-                        <span style={{color:'var(--muted)',fontSize:'0.7rem'}}>→</span>
-                        <span style={{fontSize:'0.82rem',color:'var(--gold)',fontWeight:'600'}}>{therapistName}</span>
-                        <span style={{display:'inline-flex',padding:'2px 8px',borderRadius:'20px',fontSize:'0.66rem',fontWeight:'700',background:c.bg,color:c.color,border:`1px solid ${c.border}`}}>
-                          {c.label||b.status}
-                        </span>
-                        {b.serviceType&&(
-                          <span style={{display:'inline-flex',padding:'2px 8px',borderRadius:'20px',fontSize:'0.62rem',fontWeight:'700',background:'var(--gold-glow)',color:'var(--gold)',border:'0.5px solid var(--border-gold)'}}>
-                            {b.serviceType}
+                      {/* Main info: stacked on mobile */}
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{display:'flex',alignItems:'center',gap:'6px',flexWrap:'wrap',marginBottom:'4px'}}>
+                          <span style={{fontWeight:'700',fontSize:'0.87rem',color:'var(--text)'}}>{b.clientName||'—'}</span>
+                          <span style={{display:'inline-flex',padding:'2px 8px',borderRadius:'20px',fontSize:'0.65rem',fontWeight:'700',background:c.bg,color:c.color,border:`1px solid ${c.border}`}}>
+                            {c.label||b.status}
                           </span>
-                        )}
-                        <span style={{fontSize:'0.7rem',color:'var(--muted)'}}>
-                          {b.bookingType==='now'?'⚡ Now':`📅 ${b.scheduledDate||''} ${b.scheduledTime||''}`}
-                        </span>
-                        {b.status==='admin_pending'&&b.needsTherapistAssignment&&(
-                          <span style={{fontSize:'0.62rem',background:'rgba(243,156,18,0.18)',color:'#f39c12',border:'1px solid rgba(243,156,18,0.4)',borderRadius:'10px',padding:'1px 7px',fontWeight:'700'}}>
-                            ASSIGN
-                          </span>
-                        )}
+                          {b.status==='admin_pending'&&b.needsTherapistAssignment&&(
+                            <span style={{fontSize:'0.62rem',background:'rgba(243,156,18,0.18)',color:'#f39c12',border:'1px solid rgba(243,156,18,0.4)',borderRadius:'10px',padding:'1px 7px',fontWeight:'700'}}>ASSIGN</span>
+                          )}
+                        </div>
+                        <div style={{display:'flex',alignItems:'center',gap:'6px',flexWrap:'wrap'}}>
+                          <span style={{fontSize:'0.7rem',color:'var(--gold)',fontWeight:'600'}}>{therapistName}</span>
+                          {b.serviceType&&<span style={{fontSize:'0.65rem',color:'var(--muted)'}}>· {b.serviceType}</span>}
+                          <span style={{fontSize:'0.65rem',color:'var(--muted)'}}>{b.bookingType==='now'?'⚡ Now':`📅 ${b.scheduledDate||''} ${b.scheduledTime||''}`}</span>
+                          <span style={{fontSize:'0.65rem',color:'var(--subtle)'}}>{timeAgo(b)}</span>
+                        </div>
                       </div>
 
-                      {/* Right: time • chevron • delete */}
-                      <div style={{display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
-                        <span style={{fontSize:'0.67rem',color:'var(--muted)',whiteSpace:'nowrap'}}>{timeAgo(b)}</span>
-                        <span style={{color:'var(--muted)',fontSize:'0.62rem',display:'inline-block',transition:'transform .2s',transform:exp?'rotate(180deg)':'rotate(0deg)'}}>▼</span>
+                      {/* Chevron + delete */}
+                      <div style={{display:'flex',alignItems:'center',gap:'6px',flexShrink:0}}>
                         <button onClick={e=>{e.stopPropagation();handleDelete(b);}} disabled={deleting===b.id}
-                          style={{background:'transparent',border:'none',color:'var(--subtle)',cursor:'pointer',fontSize:'0.75rem',padding:'4px',lineHeight:1,transition:'color .1s'}}
-                          onMouseEnter={e=>{e.stopPropagation();e.currentTarget.style.color='var(--danger)';}}
-                          onMouseLeave={e=>e.currentTarget.style.color='var(--subtle)'}>
+                          style={{background:'transparent',border:'none',color:'var(--subtle)',cursor:'pointer',fontSize:'1rem',padding:'6px',lineHeight:1,minWidth:'32px',minHeight:'32px'}}>
                           {deleting===b.id?<span className="spin" style={{fontSize:'0.7rem'}}>✦</span>:'✕'}
                         </button>
+                        <span style={{color:'var(--muted)',fontSize:'0.7rem',display:'inline-block',transition:'transform .2s',transform:exp?'rotate(180deg)':'rotate(0deg)'}}>▼</span>
                       </div>
                     </div>
 
