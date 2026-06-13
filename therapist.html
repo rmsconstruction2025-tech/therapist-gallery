@@ -605,12 +605,10 @@ function TherapistPortal({ session, onLogout }) {
       } catch(_) { /* GPS failed — will show warning below */ }
     }
     if(!initialLoc){
-      showMsg('⚠️ GPS unavailable. Enable Location & restart duty.', 'error');
-      setDutyLoading(false);
-      return; // Don't start duty without location
+      showMsg('⚠️ GPS unavailable — going on duty anyway. Allow location in browser settings.', 'error');
     }
     try {
-      const updates = { onDuty:true, available:true, dutyStartedAt:FieldValue.serverTimestamp(), locationUpdatedAt:FieldValue.serverTimestamp(), location:initialLoc };
+      const updates = { onDuty:true, available:true, dutyStartedAt:FieldValue.serverTimestamp(), locationUpdatedAt:FieldValue.serverTimestamp(), ...(initialLoc ? {location:initialLoc} : {}) };
       await db.collection('therapists').doc(session.docId).update(updates);
       setOnDuty(true);
       setAvailable(true);
@@ -782,11 +780,10 @@ function TherapistPortal({ session, onLogout }) {
         } catch(_) {}
       }
       if(!initialLoc){
-        showMsg('⚠️ GPS unavailable. Enable Location & try again.', 'error');
-        setAvailable(false); setDutyLoading(false); return;
+        showMsg('⚠️ GPS unavailable — going on duty anyway. Allow location in browser settings.', 'error');
       }
       try {
-        const updates = { available:true, onDuty:true, dutyStartedAt:FieldValue.serverTimestamp(), locationUpdatedAt:FieldValue.serverTimestamp(), location:initialLoc };
+        const updates = { available:true, onDuty:true, dutyStartedAt:FieldValue.serverTimestamp(), locationUpdatedAt:FieldValue.serverTimestamp(), ...(initialLoc ? {location:initialLoc} : {}) };
         await db.collection('therapists').doc(session.docId).update(updates);
         setOnDuty(true);
         setDutySeconds(0);
@@ -1767,8 +1764,13 @@ function DutyCard({ onDuty, dutySeconds, onSOS, session, showMsg }) {
         }).then(()=>showMsg('📍 Location updated!')).catch(()=>showMsg('Save failed','error'));
         setLocLoading(false);
       },
-      () => { showMsg('⚠️ GPS failed. Check Location permission.','error'); setLocLoading(false); },
-      {enableHighAccuracy:true, timeout:10000, maximumAge:0}
+      err => {
+        const msg = err.code===1
+          ? '⚠️ Location blocked — tap 🔒 in browser address bar → Allow'
+          : '⚠️ GPS timeout — move to open area or try again';
+        showMsg(msg,'error'); setLocLoading(false);
+      },
+      {enableHighAccuracy:false, timeout:12000, maximumAge:0}
     );
   };
   return (
