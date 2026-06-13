@@ -1421,11 +1421,9 @@ function Dashboard({ user }) {
 
   const tabs = [
     { id:'dashboard',  icon:'📊', label:'Dashboard' },
-    { id:'therapists', icon:'🖼️', label:'Therapist Photos' },
     { id:'links',      icon:'🔗', label:'Gallery Links' },
     { id:'accounts',   icon:'👤', label:'Accounts' },
     { id:'bookings',   icon:'📋', label:'Bookings' },
-    { id:'attendance', icon:'📅', label:'Attendance' },
     { id:'tracker',    icon:'📍', label:'Live Tracker' },
     { id:'chat',       icon:'💬', label:'Chat' },
   ];
@@ -1439,9 +1437,7 @@ function Dashboard({ user }) {
   ];
   // Extra tabs accessible via "More"
   const moreTabs = [
-    { id:'therapists', icon:'🖼️', label:'Therapist Photos',  desc:'Upload & manage therapist profile photos' },
     { id:'links',      icon:'🔗', label:'Gallery Links',     desc:'Create & share booking gallery links' },
-    { id:'attendance', icon:'📅', label:'Attendance',        desc:'View therapist attendance & duty records' },
     { id:'tracker',    icon:'📍', label:'Live Tracker',      desc:'Track therapist GPS locations in real time' },
   ];
   // Is the current tab one of the "more" extras (highlight More in bottom nav)?
@@ -1529,12 +1525,10 @@ function Dashboard({ user }) {
 
         <div className="content">
           {tab==='dashboard'  && <DashboardTab onNavigate={setTab}/>}
-          {tab==='therapists' && <MobileSubPage title="Therapist Photos" onBack={()=>setTab('more')}><TherapistManager/></MobileSubPage>}
-          {tab==='links'      && <MobileSubPage title="Gallery Links"     onBack={()=>setTab('more')}><LinkCreator/></MobileSubPage>}
+          {tab==='links'      && <MobileSubPage title="Gallery Links" onBack={()=>setTab('more')}><LinkCreator/></MobileSubPage>}
           {tab==='accounts'   && <TherapistAccounts/>}
           {tab==='bookings'   && <BookingsPanel/>}
-          {tab==='attendance' && <MobileSubPage title="Attendance"        onBack={()=>setTab('more')}><AttendanceAdmin/></MobileSubPage>}
-          {tab==='tracker'    && <MobileSubPage title="Live Tracker"      onBack={()=>setTab('more')}><LiveTracker/></MobileSubPage>}
+          {tab==='tracker'    && <MobileSubPage title="Live Tracker"  onBack={()=>setTab('more')}><LiveTracker/></MobileSubPage>}
           {tab==='chat'       && <ChatAdmin/>}
           {tab==='more'       && <MobileMoreMenu moreTabs={moreTabs} onNavigate={setTab} user={user} onSignOut={()=>auth.signOut()} onTheme={toggleTheme} dark={dark}/>}
         </div>
@@ -2805,28 +2799,37 @@ const inputStyle = {background:'var(--elevated)',border:'1px solid var(--border)
 const goldBtn = {background:'linear-gradient(135deg,var(--gold-dark),var(--gold))',color:'#0a0a0a',border:'none',borderRadius:'10px',fontWeight:'700',cursor:'pointer',display:'inline-flex',alignItems:'center',justifyContent:'center',gap:'6px',fontFamily:'inherit'};
 
 // ══════════════════════════════════════════════════════
-//  THERAPIST ACCOUNTS — create / manage therapist logins
+//  THERAPIST ACCOUNTS — list + full detail/edit view
 // ══════════════════════════════════════════════════════
 function TherapistAccounts() {
-  const [accounts, setAccounts]   = useState([]);
-  const [loading,  setLoading]    = useState(true);
-  const [form,     setForm]       = useState({ name:'', pin:'' });
-  const [saving,   setSaving]     = useState(false);
-  const [msg,      setMsg]        = useState('');
-  const [deleting, setDeleting]   = useState(null);
+  const [accounts,    setAccounts]   = useState([]);
+  const [loading,     setLoading]    = useState(true);
+  const [form,        setForm]       = useState({ name:'', pin:'' });
+  const [saving,      setSaving]     = useState(false);
+  const [msg,         setMsg]        = useState('');
+  const [selected,    setSelected]   = useState(null); // therapist doc shown in detail
+  const [togglingDuty, setTogglingDuty] = useState(null);
+  const [deleting,    setDeleting]   = useState(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      const snap = await db.collection('therapists')
-        .where('pin', '>=', '')
-        .get();
+      const snap = await db.collection('therapists').get();
       setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch(e) { console.error(e); }
     setLoading(false);
   };
 
   useEffect(() => { load(); }, []);
+
+  // Keep selected in sync with realtime updates
+  useEffect(()=>{
+    if (!selected) return;
+    const unsub = db.collection('therapists').doc(selected.id).onSnapshot(snap=>{
+      if (snap.exists) setSelected({ id: snap.id, ...snap.data() });
+    });
+    return ()=>unsub();
+  }, [selected?.id]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -2836,12 +2839,8 @@ function TherapistAccounts() {
     try {
       const therapistId = `TH_${Date.now().toString(36).toUpperCase()}_${Math.random().toString(36).slice(2,6).toUpperCase()}`;
       await db.collection('therapists').add({
-        therapistId,
-        name:      form.name.trim(),
-        pin:       form.pin.trim(),
-        available: false,
-        imageUrl:  '',
-        createdAt: FieldValue.serverTimestamp()
+        therapistId, name: form.name.trim(), pin: form.pin.trim(),
+        available: false, imageUrl: '', createdAt: FieldValue.serverTimestamp()
       });
       setMsg(`✓ Account created! ID: ${therapistId}`);
       setForm({ name:'', pin:'' });
@@ -2851,17 +2850,18 @@ function TherapistAccounts() {
   };
 
   const handleDelete = async (acc) => {
-    if (!window.confirm(`Delete therapist "${acc.name}" (${acc.therapistId})? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete therapist "${acc.name}"? Cannot be undone.`)) return;
     setDeleting(acc.id);
     try {
       await db.collection('therapists').doc(acc.id).delete();
+      setSelected(null);
       load();
     } catch(e) { alert(`Error: ${e.message}`); }
     setDeleting(null);
   };
 
   const handleResetPin = async (acc) => {
-    const newPin = prompt(`New PIN for "${acc.name}":`);
+    const newPin = prompt(`New PIN for "${acc.name}" (min 4 digits):`);
     if (!newPin || newPin.length < 4) { alert('PIN must be at least 4 characters.'); return; }
     try {
       await db.collection('therapists').doc(acc.id).update({ pin: newPin.trim() });
@@ -2869,168 +2869,321 @@ function TherapistAccounts() {
     } catch(e) { alert(`Error: ${e.message}`); }
   };
 
-  const [togglingDuty, setTogglingDuty] = useState(null);
   const handleToggleDuty = async (acc) => {
     const turningOn = !acc.onDuty;
-    if(!turningOn && !window.confirm(`Mark ${acc.name} as Off Duty?`)) return;
+    if (!turningOn && !window.confirm(`Mark ${acc.name} as Off Duty?`)) return;
     setTogglingDuty(acc.id);
     try {
       const updates = turningOn
         ? { onDuty: true, available: true, dutyStartedAt: FieldValue.serverTimestamp() }
-        : { onDuty: false, available: false, location: null, locationUpdatedAt: FieldValue.serverTimestamp() };
+        : { onDuty: false, available: false, locationUpdatedAt: FieldValue.serverTimestamp() };
       await db.collection('therapists').doc(acc.id).update(updates);
-      setAccounts(prev => prev.map(a => a.id === acc.id ? { ...a, ...updates, onDuty: turningOn, available: turningOn } : a));
+      setAccounts(prev => prev.map(a => a.id === acc.id ? { ...a, ...updates } : a));
     } catch(e) { alert(`Error: ${e.message}`); }
     setTogglingDuty(null);
   };
 
-  const onDutyCount   = accounts.filter(a=>a.onDuty).length;
-  const availableCount = accounts.filter(a=>a.available).length;
+  // ── DETAIL VIEW ──────────────────────────────────────
+  if (selected) {
+    return <TherapistDetail
+      acc={selected}
+      onBack={()=>setSelected(null)}
+      onDelete={handleDelete}
+      onResetPin={handleResetPin}
+      onToggleDuty={handleToggleDuty}
+      togglingDuty={togglingDuty}
+      deleting={deleting}
+      reload={load}
+    />;
+  }
+
+  // ── LIST VIEW ────────────────────────────────────────
+  const onDutyCount = accounts.filter(a=>a.onDuty).length;
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:'24px'}}>
 
-      {/* ── Mobile Page Header ── */}
-      <div className="mob-only ma-page-hdr">
-        <div className="ma-page-hdr-top">
-          <div>
-            <p className="ma-page-sub">{accounts.length} registered accounts</p>
-            <h2 className="ma-page-title">Accounts</h2>
-          </div>
-        </div>
-        <div className="ma-chips" style={{marginBottom:0}}>
-          <div className="ma-chip" style={{borderColor:'rgba(212,175,55,0.35)',background:'var(--gold-glow)'}}>
-            <span className="ma-chip-val" style={{color:'var(--gold)'}}>{accounts.length}</span>
-            <span className="ma-chip-lbl">Total</span>
-          </div>
-          <div className="ma-chip">
-            <span className="ma-chip-val" style={{color:'#16a34a'}}>{onDutyCount}</span>
-            <span className="ma-chip-lbl">On Duty</span>
-          </div>
-          <div className="ma-chip">
-            <span className="ma-chip-val" style={{color:'var(--muted)'}}>{accounts.length-onDutyCount}</span>
-            <span className="ma-chip-lbl">Off Duty</span>
-          </div>
-          <div className="ma-chip">
-            <span className="ma-chip-val" style={{color:'#3498db'}}>{availableCount}</span>
-            <span className="ma-chip-lbl">Available</span>
-          </div>
+      {/* Header */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:'12px'}}>
+        <div>
+          <h2 style={{fontSize:'20px',fontWeight:'700',color:'var(--text)',margin:'0 0 4px',letterSpacing:'-.4px'}}>Therapist Accounts</h2>
+          <p style={{fontSize:'12px',color:'var(--muted)',margin:0}}>{accounts.length} accounts · {onDutyCount} on duty</p>
         </div>
       </div>
 
-      {/* Create account card */}
-      <div className="card-gold acc-create-card" style={{padding:'24px'}}>
-        <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'20px'}}>
-          <span style={{fontSize:'1.1rem'}}>➕</span>
-          <h2 style={{fontSize:'0.95rem',fontWeight:'700',color:'var(--text)'}}>Create Therapist Account</h2>
-        </div>
-        <form onSubmit={handleCreate} style={{display:'flex',flexDirection:'column',gap:'12px'}}>
-          <div style={{display:'flex',gap:'12px',flexWrap:'wrap'}}>
-            <div style={{flex:'1 1 160px'}}>
-              <label className="form-label">Display Name <span style={{color:'var(--danger)'}}>*</span></label>
-              <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. Priya" required className="form-input"/>
+      {/* Create account */}
+      <div className="card-gold acc-create-card" style={{padding:'20px'}}>
+        <p style={{fontSize:'13px',fontWeight:'700',color:'var(--text)',margin:'0 0 14px'}}>➕ Create New Account</p>
+        <form onSubmit={handleCreate} style={{display:'flex',flexDirection:'column',gap:'10px'}}>
+          <div style={{display:'flex',gap:'10px',flexWrap:'wrap'}}>
+            <div style={{flex:'1 1 150px'}}>
+              <label className="form-label">Name *</label>
+              <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. Priya" className="form-input"/>
             </div>
-            <div style={{flex:'1 1 120px'}}>
-              <label className="form-label">PIN <span style={{color:'var(--muted)'}}>(min 4)</span></label>
-              <input value={form.pin} onChange={e=>setForm(f=>({...f,pin:e.target.value}))} placeholder="e.g. 1234" required className="form-input"/>
+            <div style={{flex:'0 1 120px'}}>
+              <label className="form-label">PIN (min 4)</label>
+              <input value={form.pin} onChange={e=>setForm(f=>({...f,pin:e.target.value}))} placeholder="e.g. 1234" className="form-input"/>
             </div>
           </div>
-          <button type="submit" disabled={saving} className="btn btn-gold btn-md" style={{width:'100%',minHeight:'46px'}}>
+          <button type="submit" disabled={saving} className="btn btn-gold btn-md" style={{minHeight:'44px'}}>
             {saving?<span className="spin">✦</span>:'+ Create Account'}
           </button>
         </form>
-        {msg && (
-          <div style={{marginTop:'14px',padding:'10px 14px',borderRadius:'8px',fontSize:'0.84rem',
-            background:msg.startsWith('✓')?'var(--success-bg)':'var(--danger-bg)',
-            border:`1px solid ${msg.startsWith('✓')?'rgba(46,204,113,.3)':'rgba(231,76,60,.3)'}`,
-            color:msg.startsWith('✓')?'var(--success)':'var(--danger)'}}>
-            {msg}
-          </div>
-        )}
+        {msg && <div style={{marginTop:'12px',padding:'10px 14px',borderRadius:'8px',fontSize:'0.84rem',
+          background:msg.startsWith('✓')?'var(--success-bg)':'var(--danger-bg)',
+          color:msg.startsWith('✓')?'var(--success)':'var(--danger)'}}>
+          {msg}
+        </div>}
       </div>
 
-      {/* Accounts list */}
-      <div className="ma-card desk-only" style={{overflow:'hidden'}}>
-        <div style={{padding:'16px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid var(--border)'}}>
-          <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-            <span style={{fontWeight:'700',fontSize:'0.95rem'}}>Therapist Accounts</span>
-            <span className="badge badge-gray">{accounts.length}</span>
+      {/* Account list — click row to open detail */}
+      <div className="ma-card" style={{overflow:'hidden'}}>
+        {loading
+          ? <div style={{padding:'48px',textAlign:'center'}}><span className="spin" style={{color:'var(--gold)'}}>✦</span></div>
+          : accounts.length === 0
+            ? <p style={{padding:'32px',textAlign:'center',color:'var(--muted)',fontSize:'14px',margin:0}}>No accounts yet.</p>
+            : accounts.map(acc=>{
+                const initials=(acc.name||'?').split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()||'?';
+                return (
+                  <div key={acc.id} onClick={()=>setSelected(acc)}
+                    style={{display:'flex',alignItems:'center',gap:'14px',padding:'14px 18px',
+                      borderBottom:'0.5px solid var(--border)',cursor:'pointer',transition:'background .12s'}}
+                    onMouseEnter={e=>e.currentTarget.style.background='var(--elevated)'}
+                    onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                    <div style={{width:'46px',height:'46px',borderRadius:'50%',overflow:'hidden',flexShrink:0,
+                      background:'var(--elevated)',border:'1.5px solid var(--border)',
+                      display:'flex',alignItems:'center',justifyContent:'center',fontWeight:'700',fontSize:'14px',color:'var(--gold)'}}>
+                      {acc.imageUrl
+                        ? <img src={acc.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>
+                        : initials}
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <p style={{fontSize:'14px',fontWeight:'700',color:'var(--text)',margin:'0 0 3px',
+                        whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{acc.name||'—'}</p>
+                      <p style={{fontSize:'11px',color:'var(--muted)',margin:0,fontFamily:'monospace'}}>{acc.therapistId}</p>
+                    </div>
+                    <div style={{display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
+                      <span className="ma-badge" style={{
+                        background:acc.onDuty?'rgba(22,163,74,0.1)':'rgba(100,100,100,0.08)',
+                        color:acc.onDuty?'#16a34a':'var(--muted)',
+                        border:`1px solid ${acc.onDuty?'rgba(22,163,74,0.25)':'var(--border)'}`}}>
+                        {acc.onDuty?'On Duty':'Off Duty'}
+                      </span>
+                      <span style={{color:'var(--muted)',fontSize:'16px'}}>›</span>
+                    </div>
+                  </div>
+                );
+              })
+        }
+      </div>
+    </div>
+  );
+}
+
+// ── Therapist Detail / Edit View ─────────────────────
+function TherapistDetail({ acc, onBack, onDelete, onResetPin, onToggleDuty, togglingDuty, deleting, reload }) {
+  const [editName,    setEditName]   = useState(acc.name||'');
+  const [savingName,  setSavingName] = useState(false);
+  const [uploadingImg,setUploadingImg] = useState(false);
+  const [photoMsg,    setPhotoMsg]   = useState('');
+  const imgRef = useRef(null);
+
+  // Attendance state
+  const now          = new Date();
+  const yr           = now.getFullYear();
+  const mo           = now.getMonth();
+  const daysInMonth  = new Date(yr, mo+1, 0).getDate();
+  const todayStr     = now.toISOString().split('T')[0];
+  const monthStart   = `${yr}-${String(mo+1).padStart(2,'0')}-01`;
+  const monthEnd     = `${yr}-${String(mo+1).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`;
+  const [attRecords, setAttRecords] = useState([]);
+  const [attLoading, setAttLoading] = useState(true);
+
+  useEffect(()=>{
+    db.collection('attendance').get().then(snap=>{
+      const all = snap.docs.map(d=>({id:d.id,...d.data()}));
+      setAttRecords(all.filter(r=>r.therapistDocId===acc.id && r.date>=monthStart && r.date<=monthEnd));
+      setAttLoading(false);
+    }).catch(()=>setAttLoading(false));
+  },[acc.id]);
+
+  const S_COLOR = { present:'#27ae60','half-day':'#f39c12',absent:'#e74c3c','no-data':'var(--border)',weekend:'var(--elevated)',future:'transparent' };
+
+  const getStatus = (dayNum) => {
+    const ds   = `${yr}-${String(mo+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
+    const date = new Date(yr, mo, dayNum);
+    if (ds > todayStr) return 'future';
+    if (date.getDay() === 0) return 'weekend';
+    const r = attRecords.find(x=>x.date===ds);
+    if (r) return r.status||'present';
+    const firstDate = attRecords.length>0 ? attRecords.reduce((m,x)=>x.date<m?x.date:m, attRecords[0].date) : null;
+    if (firstDate && ds>=firstDate && ds<todayStr) return 'absent';
+    return 'no-data';
+  };
+
+  const summary = {
+    present:  attRecords.filter(r=>r.status==='present').length,
+    half:     attRecords.filter(r=>r.status==='half-day').length,
+    absent:   Array.from({length:daysInMonth},(_,i)=>i+1).filter(d=>getStatus(d)==='absent').length,
+    hours:    attRecords.reduce((s,r)=>s+(r.hoursOnDuty||0),0),
+    sessions: attRecords.reduce((s,r)=>s+(r.sessions||0),0),
+  };
+
+  const saveName = async () => {
+    if (!editName.trim()) return;
+    setSavingName(true);
+    try {
+      await db.collection('therapists').doc(acc.id).update({ name: editName.trim() });
+      reload();
+    } catch(e) { alert('Error: '+e.message); }
+    setSavingName(false);
+  };
+
+  const uploadPhoto = async (file) => {
+    if (!file) return;
+    setUploadingImg(true); setPhotoMsg('');
+    try {
+      const ext  = file.name.split('.').pop();
+      const path = `therapists/${acc.id}/profile.${ext}`;
+      const ref  = storage.ref(path);
+      await ref.put(file);
+      const url  = await ref.getDownloadURL();
+      await db.collection('therapists').doc(acc.id).update({ imageUrl: url });
+      setPhotoMsg('✓ Photo updated');
+      reload();
+    } catch(e) { setPhotoMsg('Error: '+e.message); }
+    setUploadingImg(false);
+  };
+
+  const initials = (acc.name||'?').split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()||'?';
+  const firstDow = new Date(yr,mo,1).getDay();
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:'20px',maxWidth:'760px'}}>
+
+      {/* Back */}
+      <button onClick={onBack}
+        style={{alignSelf:'flex-start',background:'none',border:'1px solid var(--border)',borderRadius:'8px',
+          padding:'7px 14px',color:'var(--muted)',cursor:'pointer',fontSize:'13px',display:'flex',alignItems:'center',gap:'6px'}}>
+        ← Back to Accounts
+      </button>
+
+      {/* Profile card */}
+      <div className="ma-card" style={{padding:'24px'}}>
+        <div style={{display:'flex',alignItems:'flex-start',gap:'20px',flexWrap:'wrap'}}>
+          {/* Photo */}
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'10px'}}>
+            <div style={{width:'80px',height:'80px',borderRadius:'50%',overflow:'hidden',flexShrink:0,
+              background:'var(--elevated)',border:'2px solid var(--border-gold)',
+              display:'flex',alignItems:'center',justifyContent:'center',fontWeight:'700',fontSize:'24px',color:'var(--gold)'}}>
+              {acc.imageUrl
+                ? <img src={acc.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>
+                : initials}
+            </div>
+            <input ref={imgRef} type="file" accept="image/*" style={{display:'none'}} onChange={e=>{ if(e.target.files[0]) uploadPhoto(e.target.files[0]); e.target.value=''; }}/>
+            <button onClick={()=>imgRef.current?.click()} disabled={uploadingImg}
+              style={{fontSize:'12px',padding:'5px 12px',borderRadius:'8px',border:'1px solid var(--border)',
+                background:'var(--elevated)',color:'var(--muted)',cursor:'pointer',fontFamily:'inherit'}}>
+              {uploadingImg?'Uploading…':'Change Photo'}
+            </button>
+            {photoMsg && <p style={{fontSize:'11px',color:photoMsg.startsWith('✓')?'var(--success)':'var(--danger)',margin:0,textAlign:'center'}}>{photoMsg}</p>}
+          </div>
+
+          {/* Info */}
+          <div style={{flex:1,minWidth:'200px',display:'flex',flexDirection:'column',gap:'14px'}}>
+            {/* Name edit */}
+            <div>
+              <label className="form-label">Display Name</label>
+              <div style={{display:'flex',gap:'8px'}}>
+                <input value={editName} onChange={e=>setEditName(e.target.value)} className="form-input" style={{flex:1}}/>
+                <button onClick={saveName} disabled={savingName||editName===acc.name} className="btn btn-gold btn-sm" style={{minWidth:'60px'}}>
+                  {savingName?<span className="spin">✦</span>:'Save'}
+                </button>
+              </div>
+            </div>
+            {/* ID */}
+            <div>
+              <label className="form-label">Therapist ID</label>
+              <div style={{padding:'9px 12px',background:'var(--elevated)',borderRadius:'8px',fontSize:'12px',fontFamily:'monospace',color:'var(--muted)',border:'1px solid var(--border)'}}>{acc.therapistId}</div>
+            </div>
+            {/* Status badges */}
+            <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+              <span className="ma-badge" style={{background:acc.onDuty?'rgba(22,163,74,0.12)':'rgba(100,100,100,0.08)',color:acc.onDuty?'#16a34a':'var(--muted)',border:`1px solid ${acc.onDuty?'rgba(22,163,74,0.25)':'var(--border)'}`}}>{acc.onDuty?'On Duty':'Off Duty'}</span>
+              <span className="ma-badge" style={{background:acc.available?'rgba(22,163,74,0.12)':'rgba(220,38,38,0.08)',color:acc.available?'#16a34a':'var(--danger)',border:`1px solid ${acc.available?'rgba(22,163,74,0.25)':'rgba(220,38,38,0.2)'}`}}>{acc.available?'Available':'Unavailable'}</span>
+            </div>
           </div>
         </div>
-        {loading ? (
-          <div style={{padding:'48px',textAlign:'center'}}><span className="spin" style={{fontSize:'1.5rem',color:'var(--gold)'}}>✦</span></div>
-        ) : accounts.length === 0 ? (
-          <div style={{padding:'48px',textAlign:'center',color:'var(--muted)',fontSize:'0.9rem'}}>No accounts yet — create one above.</div>
-        ) : accounts.map(acc=>(
-          <div key={acc.id} className="item-card">
-            <div className="item-avatar">
-              {acc.imageUrl
-                ? <img src={acc.imageUrl} alt={acc.name} style={{width:'44px',height:'44px',borderRadius:'50%',objectFit:'cover',border:'2px solid var(--border-gold)',display:'block'}}/>
-                : <div style={{width:'44px',height:'44px',borderRadius:'50%',background:'var(--elevated)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--muted)',fontSize:'1.1rem'}}>✦</div>
-              }
-            </div>
-            <div className="item-info">
-              <div className="name">{acc.name||'—'}</div>
-              <div className="sub">{acc.therapistId}</div>
-              <div className="meta">
-                <span className={`badge ${acc.onDuty?'badge-green':'badge-gray'}`}>{acc.onDuty?'On Duty':'Off Duty'}</span>
-                <span className={`badge ${acc.available?'badge-green':'badge-red'}`}>{acc.available?'Available':'Unavailable'}</span>
-              </div>
-            </div>
-            <div className="item-actions item-actions-desktop">
-              <button onClick={()=>handleToggleDuty(acc)} disabled={togglingDuty===acc.id} className="btn btn-sm"
-                style={{background:acc.onDuty?'rgba(231,76,60,0.12)':'rgba(46,204,113,0.12)',color:acc.onDuty?'var(--danger)':'var(--success)',border:`1px solid ${acc.onDuty?'rgba(231,76,60,0.35)':'rgba(46,204,113,0.35)'}`,minWidth:'88px'}}>
-                {togglingDuty===acc.id?<span className="spin">✦</span>:acc.onDuty?'End Duty':'Start Duty'}
-              </button>
-              <button onClick={()=>handleResetPin(acc)} className="btn btn-ghost btn-sm">Reset PIN</button>
-              <button onClick={()=>handleDelete(acc)} disabled={deleting===acc.id} className="btn btn-danger btn-sm">
-                {deleting===acc.id?<span className="spin">✦</span>:'Delete'}
-              </button>
-            </div>
-          </div>
-        ))}
       </div>
 
-      {/* ── Mobile account list — clean single-line rows ── */}
-      <div className="mob-only ma-card" style={{overflow:'hidden',flexDirection:'column'}}>
-        {loading ? (
-          <div style={{padding:'40px',textAlign:'center'}}><span className="spin" style={{color:'var(--gold)'}}>✦</span></div>
-        ) : accounts.length === 0 ? (
-          <p style={{padding:'32px',textAlign:'center',color:'var(--muted)',fontSize:'14px',margin:0}}>No accounts yet — create one above.</p>
-        ) : accounts.map(acc=>{
-          const initials=(acc.name||'?').split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()||'?';
-          return (
-            <div key={acc.id} style={{borderBottom:'0.5px solid var(--border)'}}>
-              {/* Main row — single line */}
-              <div style={{display:'flex',alignItems:'center',gap:'12px',padding:'14px 16px',minHeight:'64px'}}>
-                <div style={{width:'42px',height:'42px',borderRadius:'50%',overflow:'hidden',background:'var(--elevated)',border:'1px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--muted)',fontWeight:'700',fontSize:'13px',flexShrink:0}}>
-                  {acc.imageUrl
-                    ? <img src={acc.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>
-                    : initials}
-                </div>
-                <div style={{flex:1,minWidth:0}}>
-                  <p style={{fontSize:'14px',fontWeight:'600',color:'var(--text)',margin:'0 0 3px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{acc.name||'—'}</p>
-                  <p style={{fontSize:'12px',color:'var(--muted)',margin:0,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',fontFamily:'monospace'}}>{acc.therapistId}</p>
-                </div>
-                <span className="ma-badge" style={{background:acc.onDuty?'rgba(22,163,74,0.1)':'rgba(100,100,100,0.1)',color:acc.onDuty?'#16a34a':'var(--muted)',border:`1px solid ${acc.onDuty?'rgba(22,163,74,0.25)':'var(--border)'}`}}>
-                  {acc.onDuty?'On Duty':'Off Duty'}
-                </span>
-              </div>
-              {/* Action row */}
-              <div style={{display:'flex',gap:'8px',padding:'0 16px 14px',flexWrap:'wrap'}}>
-                <button onClick={()=>handleToggleDuty(acc)} disabled={togglingDuty===acc.id} className="btn btn-sm"
-                  style={{flex:'1',minHeight:'38px',background:acc.onDuty?'rgba(231,76,60,0.1)':'rgba(22,163,74,0.1)',color:acc.onDuty?'var(--danger)':'var(--success)',border:`1px solid ${acc.onDuty?'rgba(231,76,60,0.3)':'rgba(22,163,74,0.3)'}`}}>
-                  {togglingDuty===acc.id?<span className="spin">✦</span>:acc.onDuty?'End Duty':'Start Duty'}
-                </button>
-                <button onClick={()=>handleResetPin(acc)} className="btn btn-ghost btn-sm" style={{minHeight:'38px'}}>Reset PIN</button>
-                <button onClick={()=>handleDelete(acc)} disabled={deleting===acc.id} className="btn btn-danger btn-sm" style={{minHeight:'38px'}}>
-                  {deleting===acc.id?<span className="spin">✦</span>:'Delete'}
-                </button>
-              </div>
-            </div>
-          );
-        })}
+      {/* Actions */}
+      <div className="ma-card" style={{padding:'16px 20px',display:'flex',gap:'10px',flexWrap:'wrap'}}>
+        <button onClick={()=>onToggleDuty(acc)} disabled={togglingDuty===acc.id} className="btn btn-sm"
+          style={{flex:'1 1 120px',minHeight:'40px',background:acc.onDuty?'rgba(231,76,60,0.1)':'rgba(22,163,74,0.1)',
+            color:acc.onDuty?'var(--danger)':'var(--success)',border:`1px solid ${acc.onDuty?'rgba(231,76,60,0.3)':'rgba(22,163,74,0.3)'}`}}>
+          {togglingDuty===acc.id?<span className="spin">✦</span>:acc.onDuty?'End Duty':'Start Duty'}
+        </button>
+        <button onClick={()=>onResetPin(acc)} className="btn btn-ghost btn-sm" style={{flex:'1 1 100px',minHeight:'40px'}}>Reset PIN</button>
+        <button onClick={()=>onDelete(acc)} disabled={deleting===acc.id} className="btn btn-danger btn-sm" style={{flex:'1 1 80px',minHeight:'40px'}}>
+          {deleting===acc.id?<span className="spin">✦</span>:'Delete'}
+        </button>
       </div>
+
+      {/* Attendance this month */}
+      <div className="ma-card" style={{padding:'20px'}}>
+        <p style={{fontSize:'13px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'1px',color:'var(--muted)',margin:'0 0 16px'}}>
+          Attendance — {now.toLocaleDateString('en-IN',{month:'long',year:'numeric'})}
+        </p>
+
+        {attLoading ? <div style={{padding:'24px',textAlign:'center'}}><span className="spin" style={{color:'var(--gold)'}}>✦</span></div> : (<>
+
+          {/* Stats row */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'8px',marginBottom:'20px'}}>
+            {[
+              [summary.present,'Present','#27ae60'],
+              [summary.half,'Half Day','#f39c12'],
+              [summary.absent,'Absent','#e74c3c'],
+              [`${summary.hours.toFixed(0)}h`,'Hours','var(--text)'],
+              [summary.sessions,'Sessions','var(--gold)'],
+            ].map(([v,l,c])=>(
+              <div key={l} style={{background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'10px',padding:'12px 8px',textAlign:'center'}}>
+                <p style={{fontSize:'18px',fontWeight:'800',color:c,margin:0,lineHeight:1}}>{v}</p>
+                <p style={{fontSize:'10px',color:'var(--muted)',margin:'4px 0 0',textTransform:'uppercase',letterSpacing:'0.5px'}}>{l}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Calendar */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'2px',marginBottom:'6px',textAlign:'center'}}>
+            {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d=><div key={d} style={{fontSize:'10px',color:'var(--muted)',paddingBottom:'4px'}}>{d}</div>)}
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'3px'}}>
+            {Array.from({length:firstDow},(_,i)=><div key={'e'+i}/>)}
+            {Array.from({length:daysInMonth},(_,i)=>{
+              const day=i+1, s=getStatus(day), isToday=day===now.getDate();
+              return (
+                <div key={day} style={{aspectRatio:'1',borderRadius:'5px',background:S_COLOR[s]||'var(--border)',
+                  border:isToday?'2px solid var(--gold)':'2px solid transparent',
+                  opacity:(s==='future'||s==='no-data')?0.3:1,
+                  display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <span style={{fontSize:'10px',fontWeight:'700',
+                    color:s==='present'?'#fff':s==='half-day'?'#fff':s==='absent'?'#fff':'var(--muted)'}}>{day}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Legend */}
+          <div style={{display:'flex',gap:'14px',flexWrap:'wrap',marginTop:'14px',justifyContent:'center'}}>
+            {[['#27ae60','Present'],['#f39c12','Half Day'],['#e74c3c','Absent']].map(([c,l])=>(
+              <div key={l} style={{display:'flex',alignItems:'center',gap:'5px'}}>
+                <div style={{width:'10px',height:'10px',borderRadius:'3px',background:c}}/>
+                <span style={{fontSize:'11px',color:'var(--muted)'}}>{l}</span>
+              </div>
+            ))}
+          </div>
+        </>)}
+      </div>
+
     </div>
   );
 }
