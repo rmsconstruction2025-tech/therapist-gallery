@@ -81,7 +81,6 @@ const FIREBASE_CONFIG = {
 if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
 const db = firebase.firestore();
 const storage = firebase.storage();
-const FieldValue = firebase.firestore.FieldValue;
 // Auto-detect and fall back to long-polling when QUIC/WebSocket is blocked
 db.settings({ experimentalAutoDetectionLongPolling: true, merge: true });
 // Enable offline persistence so cached data survives connection drops
