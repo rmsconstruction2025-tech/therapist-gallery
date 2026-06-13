@@ -1011,6 +1011,7 @@ function TherapistPortal({ session, onLogout }) {
           onStartDuty={handleStartDuty}
           onEndDuty={handleEndDuty}
           onSOS={handleSOS}
+          showMsg={showMsg}
         />}
 
         {/* ══ EARNINGS TAB ══ */}
@@ -1215,7 +1216,7 @@ function TherapistPortal({ session, onLogout }) {
 // ══════════════════════════════════════════════════════
 //  HOME TAB
 // ══════════════════════════════════════════════════════
-function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allBookings, myGPS, onAccept, onDecline, onMarkComplete, onUpdateStatus, onViewEarnings, onLogout, onDuty, dutySeconds, dutyLoading, onStartDuty, onEndDuty, onSOS }) {
+function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allBookings, myGPS, onAccept, onDecline, onMarkComplete, onUpdateStatus, onViewEarnings, onLogout, onDuty, dutySeconds, dutyLoading, onStartDuty, onEndDuty, onSOS, showMsg }) {
   const [earnings,      setEarnings]      = useState([]);
   const [earningsLoaded,setEarningsLoaded]= useState(false);
   const [markingId,     setMarkingId]     = useState(null);
