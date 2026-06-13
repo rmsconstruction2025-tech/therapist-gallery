@@ -1688,17 +1688,17 @@ function DashboardTab({ onNavigate = ()=>{} }) {
       <div className="ma-section">
         <p className="ma-sec-lbl">Quick Access</p>
         <div className="ma-quick-grid">
-          <button className="ma-quick-btn" onClick={()=>onNavigate('therapists')}>
-            <span className="ma-quick-ico">🖼️</span>
-            <span className="ma-quick-lbl">Photos</span>
+          <button className="ma-quick-btn" onClick={()=>onNavigate('accounts')}>
+            <span className="ma-quick-ico">👤</span>
+            <span className="ma-quick-lbl">Accounts</span>
           </button>
           <button className="ma-quick-btn" onClick={()=>onNavigate('links')}>
             <span className="ma-quick-ico">🔗</span>
             <span className="ma-quick-lbl">Links</span>
           </button>
-          <button className="ma-quick-btn" onClick={()=>onNavigate('attendance')}>
-            <span className="ma-quick-ico">📅</span>
-            <span className="ma-quick-lbl">Attendance</span>
+          <button className="ma-quick-btn" onClick={()=>onNavigate('bookings')}>
+            <span className="ma-quick-ico">📋</span>
+            <span className="ma-quick-lbl">Bookings</span>
           </button>
           <button className="ma-quick-btn" onClick={()=>onNavigate('tracker')}>
             <span className="ma-quick-ico">📍</span>
@@ -3129,57 +3129,101 @@ function TherapistDetail({ acc, onBack, onDelete, onResetPin, onToggleDuty, togg
       </div>
 
       {/* Attendance this month */}
-      <div className="ma-card" style={{padding:'20px'}}>
-        <p style={{fontSize:'13px',fontWeight:'700',textTransform:'uppercase',letterSpacing:'1px',color:'var(--muted)',margin:'0 0 16px'}}>
-          Attendance — {now.toLocaleDateString('en-IN',{month:'long',year:'numeric'})}
-        </p>
+      <div className="ma-card" style={{overflow:'hidden'}}>
+        {/* Header */}
+        <div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',
+          display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div>
+            <p style={{fontSize:'13px',fontWeight:'700',color:'var(--text)',margin:0}}>Attendance</p>
+            <p style={{fontSize:'11px',color:'var(--muted)',margin:'2px 0 0'}}>
+              {now.toLocaleDateString('en-IN',{month:'long',year:'numeric'})}
+            </p>
+          </div>
+          <span style={{fontSize:'20px'}}>📅</span>
+        </div>
 
-        {attLoading ? <div style={{padding:'24px',textAlign:'center'}}><span className="spin" style={{color:'var(--gold)'}}>✦</span></div> : (<>
-
-          {/* Stats row */}
-          <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'8px',marginBottom:'20px'}}>
+        {attLoading
+          ? <div style={{padding:'40px',textAlign:'center'}}><span className="spin" style={{color:'var(--gold)'}}>✦</span></div>
+          : (<>
+          {/* Stats strip */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',borderBottom:'0.5px solid var(--border)'}}>
             {[
-              [summary.present,'Present','#27ae60'],
-              [summary.half,'Half Day','#f39c12'],
-              [summary.absent,'Absent','#e74c3c'],
-              [`${summary.hours.toFixed(0)}h`,'Hours','var(--text)'],
-              [summary.sessions,'Sessions','var(--gold)'],
-            ].map(([v,l,c])=>(
-              <div key={l} style={{background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'10px',padding:'12px 8px',textAlign:'center'}}>
-                <p style={{fontSize:'18px',fontWeight:'800',color:c,margin:0,lineHeight:1}}>{v}</p>
-                <p style={{fontSize:'10px',color:'var(--muted)',margin:'4px 0 0',textTransform:'uppercase',letterSpacing:'0.5px'}}>{l}</p>
+              [summary.present,'Present','#27ae60','rgba(39,174,96,0.12)'],
+              [summary.half,'Half','#f39c12','rgba(243,156,18,0.1)'],
+              [summary.absent,'Absent','#e74c3c','rgba(231,76,60,0.1)'],
+              [`${summary.hours.toFixed(0)}h`,'Hours','var(--text)','transparent'],
+              [summary.sessions,'Sessions','var(--gold)','transparent'],
+            ].map(([v,l,c,bg],i)=>(
+              <div key={l} style={{padding:'14px 6px',textAlign:'center',background:bg,
+                borderRight:i<4?'0.5px solid var(--border)':'none'}}>
+                <p style={{fontSize:'20px',fontWeight:'800',color:c,margin:0,lineHeight:1}}>{v}</p>
+                <p style={{fontSize:'10px',color:'var(--muted)',margin:'5px 0 0',fontWeight:'600',
+                  textTransform:'uppercase',letterSpacing:'0.4px',whiteSpace:'nowrap'}}>{l}</p>
               </div>
             ))}
           </div>
 
-          {/* Calendar */}
-          <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'2px',marginBottom:'6px',textAlign:'center'}}>
-            {['Su','Mo','Tu','We','Th','Fr','Sa'].map(d=><div key={d} style={{fontSize:'10px',color:'var(--muted)',paddingBottom:'4px'}}>{d}</div>)}
-          </div>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'3px'}}>
-            {Array.from({length:firstDow},(_,i)=><div key={'e'+i}/>)}
-            {Array.from({length:daysInMonth},(_,i)=>{
-              const day=i+1, s=getStatus(day), isToday=day===now.getDate();
-              return (
-                <div key={day} style={{aspectRatio:'1',borderRadius:'5px',background:S_COLOR[s]||'var(--border)',
-                  border:isToday?'2px solid var(--gold)':'2px solid transparent',
-                  opacity:(s==='future'||s==='no-data')?0.3:1,
-                  display:'flex',alignItems:'center',justifyContent:'center'}}>
-                  <span style={{fontSize:'10px',fontWeight:'700',
-                    color:s==='present'?'#fff':s==='half-day'?'#fff':s==='absent'?'#fff':'var(--muted)'}}>{day}</span>
+          {/* Calendar grid */}
+          <div style={{padding:'16px'}}>
+            {/* Day headers */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'3px',marginBottom:'6px'}}>
+              {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>(
+                <div key={d} style={{textAlign:'center',fontSize:'10px',fontWeight:'700',
+                  color:'var(--muted)',letterSpacing:'0.5px',paddingBottom:'4px'}}>{d}</div>
+              ))}
+            </div>
+
+            {/* Day cells */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'4px'}}>
+              {Array.from({length:firstDow},(_,i)=><div key={'e'+i}/>)}
+              {Array.from({length:daysInMonth},(_,i)=>{
+                const day=i+1, s=getStatus(day), isToday=day===now.getDate();
+                const isFilled = s==='present'||s==='half-day'||s==='absent';
+                const BG = {
+                  present: 'linear-gradient(135deg,#27ae60,#2ecc71)',
+                  'half-day': 'linear-gradient(135deg,#f39c12,#f1c40f)',
+                  absent: 'linear-gradient(135deg,#e74c3c,#c0392b)',
+                  weekend: 'transparent',
+                  'no-data': 'transparent',
+                  future: 'transparent',
+                };
+                return (
+                  <div key={day} style={{
+                    aspectRatio:'1', borderRadius:'8px',
+                    background: BG[s]||'transparent',
+                    border: isToday
+                      ? '2px solid var(--gold)'
+                      : isFilled ? '2px solid transparent'
+                      : s==='weekend' ? '1.5px solid var(--elevated)'
+                      : '1.5px solid var(--border)',
+                    display:'flex', flexDirection:'column',
+                    alignItems:'center', justifyContent:'center',
+                    opacity: s==='future' ? 0.2 : 1,
+                    position:'relative',
+                  }}>
+                    <span style={{
+                      fontSize:'11px', fontWeight:'700', lineHeight:1,
+                      color: isFilled ? '#fff' : isToday ? 'var(--gold)' : 'var(--muted)',
+                    }}>{day}</span>
+                    {s==='half-day' && <span style={{fontSize:'7px',color:'rgba(255,255,255,0.8)',fontWeight:'600',letterSpacing:'.2px',marginTop:'1px'}}>½</span>}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Legend */}
+            <div style={{display:'flex',gap:'16px',flexWrap:'wrap',marginTop:'16px',justifyContent:'center'}}>
+              {[
+                ['linear-gradient(135deg,#27ae60,#2ecc71)','Present'],
+                ['linear-gradient(135deg,#f39c12,#f1c40f)','Half Day'],
+                ['linear-gradient(135deg,#e74c3c,#c0392b)','Absent'],
+              ].map(([bg,label])=>(
+                <div key={label} style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                  <div style={{width:'12px',height:'12px',borderRadius:'4px',background:bg,flexShrink:0}}/>
+                  <span style={{fontSize:'11px',color:'var(--muted)',fontWeight:'500'}}>{label}</span>
                 </div>
-              );
-            })}
-          </div>
-
-          {/* Legend */}
-          <div style={{display:'flex',gap:'14px',flexWrap:'wrap',marginTop:'14px',justifyContent:'center'}}>
-            {[['#27ae60','Present'],['#f39c12','Half Day'],['#e74c3c','Absent']].map(([c,l])=>(
-              <div key={l} style={{display:'flex',alignItems:'center',gap:'5px'}}>
-                <div style={{width:'10px',height:'10px',borderRadius:'3px',background:c}}/>
-                <span style={{fontSize:'11px',color:'var(--muted)'}}>{l}</span>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </>)}
       </div>
