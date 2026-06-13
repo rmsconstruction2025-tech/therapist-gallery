@@ -589,7 +589,7 @@ function TherapistPortal({ session, onLogout }) {
     let initialLoc = null;
     try {
       const pos = await new Promise((res, rej) =>
-        navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:false, timeout:6000, maximumAge:60000})
+        navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:false, timeout:6000, maximumAge:0})
       );
       initialLoc = {lat: pos.coords.latitude, lng: pos.coords.longitude};
     } catch(_) {
@@ -631,7 +631,7 @@ function TherapistPortal({ session, onLogout }) {
             location: {lat: p.coords.latitude, lng: p.coords.longitude},
             locationUpdatedAt: FieldValue.serverTimestamp(),
           }).catch(()=>{});
-        }, ()=>{}, {enableHighAccuracy:false, maximumAge:60000, timeout:8000});
+        }, ()=>{}, {enableHighAccuracy:false, maximumAge:0, timeout:8000});
       }, 5 * 60 * 1000);
     } catch(err) {
       showMsg(`StartDuty: ${err.message}`, 'error');
@@ -762,7 +762,7 @@ function TherapistPortal({ session, onLogout }) {
       let initialLoc = null;
       try {
         const pos = await new Promise((res, rej) =>
-          navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:false, timeout:6000, maximumAge:60000})
+          navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:false, timeout:6000, maximumAge:0})
         );
         initialLoc = {lat: pos.coords.latitude, lng: pos.coords.longitude};
       } catch(_) {
@@ -803,7 +803,7 @@ function TherapistPortal({ session, onLogout }) {
               location: {lat: p.coords.latitude, lng: p.coords.longitude},
               locationUpdatedAt: FieldValue.serverTimestamp(),
             }).catch(()=>{});
-          }, ()=>{}, {enableHighAccuracy:false, maximumAge:60000, timeout:8000});
+          }, ()=>{}, {enableHighAccuracy:false, maximumAge:0, timeout:8000});
         }, 5 * 60 * 1000);
       } catch(err) { setAvailable(false); setOnDuty(false); showMsg(`ToggleOn: ${err.message}`, 'error'); setDutyLoading(false); return; }
     } else {
