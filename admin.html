@@ -314,155 +314,65 @@
 
     /* ── Mobile utility: show/hide ── */
     .mob-only  { display:none; }
+
+    /* ── Shared design system (mobile + desktop) ── */
+    .ma-sec-lbl { font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin:0 0 10px; }
+    .ma-section { margin-bottom:28px; }
+    .ma-card { background:var(--card); border:0.5px solid var(--border); border-radius:14px; overflow:hidden; }
+    .ma-row { display:flex; align-items:center; gap:12px; padding:14px 16px; min-height:56px; border-bottom:0.5px solid var(--border); }
+    .ma-row:last-child { border-bottom:none; }
+    .ma-av-sq { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; flex-shrink:0; letter-spacing:-.5px; }
+    .ma-av-ci { width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; flex-shrink:0; overflow:hidden; position:relative; }
+    .ma-av-dot { position:absolute; bottom:0; right:0; width:10px; height:10px; border-radius:50%; background:#16a34a; border:2px solid var(--card); }
+    .ma-row-body { flex:1; min-width:0; }
+    .ma-row-title { font-size:14px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0 0 3px; line-height:1.3; }
+    .ma-row-sub { font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0; line-height:1.3; }
+    .ma-badge { font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; flex-shrink:0; white-space:nowrap; }
+    .ma-chips { display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch; margin-bottom:28px; }
+    .ma-chips::-webkit-scrollbar { display:none; }
+    .ma-chip { flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:3px; padding:12px 18px; background:var(--card); border:0.5px solid var(--border); border-radius:14px; min-width:72px; text-align:center; cursor:pointer; font-family:inherit; }
+    .ma-chip.active { border-color:var(--gold); background:var(--gold-glow); }
+    .ma-chip-val { font-size:22px; font-weight:800; line-height:1; }
+    .ma-chip-lbl { font-size:11px; color:var(--muted); font-weight:500; white-space:nowrap; }
+    .ma-quick-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+    .ma-quick-btn { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:20px 8px; min-height:82px; border-radius:14px; border:0.5px solid var(--border); background:var(--card); cursor:pointer; font-family:inherit; transition:all .15s; }
+    .ma-quick-btn:hover { border-color:var(--border-gold); background:var(--gold-glow); }
+    .ma-quick-btn:active { opacity:.7; }
+    .ma-quick-ico { font-size:24px; line-height:1; }
+    .ma-quick-lbl { font-size:13px; font-weight:600; color:var(--text); }
+    .ma-page-hdr { flex-direction:column; gap:16px; margin-bottom:24px; }
+    .ma-page-hdr-top { display:flex; align-items:center; justify-content:space-between; }
+    .ma-page-title { font-size:20px; font-weight:700; color:var(--text); margin:0; letter-spacing:-.4px; }
+    .ma-page-sub { font-size:12px; color:var(--muted); margin:0 0 3px; }
+    .ma-alert { align-items:center; gap:12px; padding:13px 16px; border-radius:12px; cursor:pointer; }
+    .ma-alert-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+    .ma-alert-body { flex:1; min-width:0; }
+    .ma-alert-title { font-size:13px; font-weight:700; margin:0 0 2px; }
+    .ma-alert-sub { font-size:12px; color:var(--muted); margin:0; }
+    .ma-alert-arr { font-size:16px; color:var(--muted); flex-shrink:0; }
+    .ma-sec-hdr { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+    .dash-2col { margin-top:0; }
+    .dash-stat-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:28px; }
+
     @media (max-width:768px) {
       .mob-only  { display:flex; }
       .desk-only { display:none !important; }
-
-      /* ── Concept A: Clean minimal mobile design system ── */
-
-      /* Content area: more breathing room */
       .content { padding:20px 16px !important; gap:0 !important; }
-
-      /* Section label */
-      .ma-sec-lbl {
-        font-size:11px; font-weight:700; letter-spacing:1px;
-        text-transform:uppercase; color:var(--muted);
-        margin:0 0 10px;
-      }
-
-      /* Section wrapper */
-      .ma-section { margin-bottom:28px; }
-
-      /* Clean card */
-      .ma-card {
-        background:var(--card); border:0.5px solid var(--border);
-        border-radius:14px; overflow:hidden;
-      }
-
-      /* Row inside a card — single-line, 56px min height */
-      .ma-row {
-        display:flex; align-items:center; gap:12px;
-        padding:14px 16px; min-height:56px;
-        border-bottom:0.5px solid var(--border);
-      }
-      .ma-row:last-child { border-bottom:none; }
-
-      /* Square avatar (for service initials) */
-      .ma-av-sq {
-        width:40px; height:40px; border-radius:10px;
-        display:flex; align-items:center; justify-content:center;
-        font-size:12px; font-weight:700; flex-shrink:0; letter-spacing:-.5px;
-      }
-      /* Circle avatar (for people) */
-      .ma-av-ci {
-        width:40px; height:40px; border-radius:50%;
-        display:flex; align-items:center; justify-content:center;
-        font-size:13px; font-weight:700; flex-shrink:0;
-        overflow:hidden; position:relative;
-      }
-      /* Online dot on avatar */
-      .ma-av-dot {
-        position:absolute; bottom:0; right:0;
-        width:10px; height:10px; border-radius:50%;
-        background:#16a34a; border:2px solid var(--card);
-      }
-
-      /* Row text body */
-      .ma-row-body { flex:1; min-width:0; }
-      .ma-row-title {
-        font-size:14px; font-weight:600; color:var(--text);
-        white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-        margin:0 0 3px; line-height:1.3;
-      }
-      .ma-row-sub {
-        font-size:12px; color:var(--muted);
-        white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-        margin:0; line-height:1.3;
-      }
-
-      /* Status badge */
-      .ma-badge {
-        font-size:11px; font-weight:700;
-        padding:4px 10px; border-radius:20px;
-        flex-shrink:0; white-space:nowrap;
-      }
-
-      /* Stat chips — horizontal scroll row */
-      .ma-chips {
-        display:flex; gap:8px; overflow-x:auto;
-        scrollbar-width:none; -webkit-overflow-scrolling:touch;
-        margin-bottom:28px;
-      }
-      .ma-chips::-webkit-scrollbar { display:none; }
-      .ma-chip {
-        flex-shrink:0; display:flex; flex-direction:column;
-        align-items:center; gap:3px; padding:12px 18px;
-        background:var(--card); border:0.5px solid var(--border);
-        border-radius:14px; min-width:72px; text-align:center;
-        cursor:pointer; font-family:inherit;
-      }
-      .ma-chip.active { border-color:var(--gold); background:var(--gold-glow); }
-      .ma-chip-val { font-size:22px; font-weight:800; line-height:1; }
-      .ma-chip-lbl { font-size:11px; color:var(--muted); font-weight:500; white-space:nowrap; }
-
-      /* Quick access 2x2 grid */
-      .ma-quick-grid {
-        display:grid; grid-template-columns:1fr 1fr; gap:10px;
-      }
-      .ma-quick-btn {
-        display:flex; flex-direction:column; align-items:center;
-        justify-content:center; gap:8px; padding:20px 8px;
-        min-height:82px; border-radius:14px;
-        border:0.5px solid var(--border); background:var(--card);
-        cursor:pointer; font-family:inherit; transition:opacity .15s;
-      }
-      .ma-quick-btn:active { opacity:.7; }
-      .ma-quick-ico { font-size:24px; line-height:1; }
-      .ma-quick-lbl { font-size:13px; font-weight:600; color:var(--text); }
-
-      /* Page header (Bookings / Accounts) */
-      .ma-page-hdr { flex-direction:column; gap:16px; margin-bottom:24px; }
-      .ma-page-hdr-top {
-        display:flex; align-items:center; justify-content:space-between;
-      }
-      .ma-page-title { font-size:20px; font-weight:700; color:var(--text); margin:0; letter-spacing:-.4px; }
-      .ma-page-sub { font-size:12px; color:var(--muted); margin:0 0 3px; }
-
-      /* Alert banner */
-      .ma-alert {
-        align-items:center; gap:12px; padding:13px 16px; border-radius:12px;
-        cursor:pointer;
-      }
-      .ma-alert-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
-      .ma-alert-body { flex:1; min-width:0; }
-      .ma-alert-title { font-size:13px; font-weight:700; margin:0 0 2px; }
-      .ma-alert-sub { font-size:12px; color:var(--muted); margin:0; }
-      .ma-alert-arr { font-size:16px; color:var(--muted); flex-shrink:0; }
-
-      /* Section header with "View all" link */
-      .ma-sec-hdr {
-        display:flex; align-items:center; justify-content:space-between;
-        margin-bottom:10px;
-      }
-
-      /* Item cards on accounts — proper sizing */
+      .ma-quick-grid { grid-template-columns:1fr 1fr; }
       .item-card { padding:14px 16px !important; gap:12px !important; min-height:64px; }
       .item-info .name { font-size:14px !important; font-weight:600; }
       .item-info .sub  { font-size:12px !important; }
       .item-info .meta { margin-top:6px !important; }
       .item-actions-mobile { gap:8px !important; margin-top:10px !important; }
-
-      /* Hide desktop stats grid in BookingsPanel */
       .bk-stats-desk { display:none !important; }
-
-      /* Account create form */
       .acc-create-card { padding:20px !important; margin-bottom:24px !important; }
-
-      /* Chat mobile */
       .chat-layout { height:calc(100dvh - 120px) !important; }
       .chat-list-pane { width:100% !important; border-right:none !important; }
       .chat-hide-mob { display:none !important; }
       .chat-back-btn { display:flex !important; }
+      .dash-2col { grid-template-columns:1fr !important; gap:24px !important; }
+      .dash-2col .ma-section { margin-bottom:0; }
+      .dash-stat-grid { display:none !important; }
     }
 
     /* ══ Chat — WhatsApp-style admin↔therapist messaging ══ */
@@ -1744,28 +1654,27 @@ function DashboardTab({ onNavigate = ()=>{} }) {
         </div>
       </div>
 
-      {/* ── Stat chips — horizontal scroll ── */}
-      <div className="ma-chips">
-        <div className="ma-chip">
-          <span className="ma-chip-val" style={{color:'var(--gold)'}}>{loadingB?'—':todayCount}</span>
-          <span className="ma-chip-lbl">Today</span>
-        </div>
-        <div className="ma-chip">
-          <span className="ma-chip-val" style={{color:'#16a34a'}}>{onlineCount}</span>
-          <span className="ma-chip-lbl">Online</span>
-        </div>
-        <div className="ma-chip" style={pendingCount>0?{borderColor:'rgba(220,38,38,0.35)',background:'rgba(220,38,38,0.05)'}:{}}>
-          <span className="ma-chip-val" style={{color:pendingCount>0?'#dc2626':'var(--muted)'}}>{pendingCount}</span>
-          <span className="ma-chip-lbl">Pending</span>
-        </div>
-        <div className="ma-chip">
-          <span className="ma-chip-val" style={{color:'#2563eb'}}>{confirmedCount}</span>
-          <span className="ma-chip-lbl">Confirmed</span>
-        </div>
-        <div className="ma-chip">
-          <span className="ma-chip-val" style={{color:noGPSCount>0?'#f59e0b':'var(--muted)'}}>{noGPSCount}</span>
-          <span className="ma-chip-lbl">No GPS</span>
-        </div>
+      {/* ── Stat cards (desktop: 4-col grid; mobile: horizontal scroll chips) ── */}
+      <div className="dash-stat-grid">
+        {[
+          {label:'Today',    value:loadingB?'—':todayCount,  color:'var(--gold)', sub:`${bookings.length} total`},
+          {label:'Online',   value:onlineCount,              color:'#16a34a',     sub:`of ${therapists.length}`},
+          {label:'Pending',  value:pendingCount,             color:pendingCount>0?'#dc2626':'var(--muted)', sub:pendingCount>0?'need action':'all clear'},
+          {label:'Confirmed',value:confirmedCount,           color:'#2563eb',     sub:'confirmed today'},
+        ].map(s=>(
+          <div key={s.label} style={{background:'var(--card)',border:'0.5px solid var(--border)',borderRadius:'14px',padding:'18px 20px'}}>
+            <p style={{fontSize:'11px',fontWeight:'700',letterSpacing:'1px',textTransform:'uppercase',color:'var(--muted)',margin:'0 0 8px'}}>{s.label}</p>
+            <p style={{fontSize:'32px',fontWeight:'800',color:s.color,margin:'0 0 4px',lineHeight:1}}>{s.value}</p>
+            <p style={{fontSize:'12px',color:'var(--muted)',margin:0}}>{s.sub}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mob-only ma-chips">
+        <div className="ma-chip"><span className="ma-chip-val" style={{color:'var(--gold)'}}>{loadingB?'—':todayCount}</span><span className="ma-chip-lbl">Today</span></div>
+        <div className="ma-chip"><span className="ma-chip-val" style={{color:'#16a34a'}}>{onlineCount}</span><span className="ma-chip-lbl">Online</span></div>
+        <div className="ma-chip" style={pendingCount>0?{borderColor:'rgba(220,38,38,0.35)',background:'rgba(220,38,38,0.05)'}:{}}><span className="ma-chip-val" style={{color:pendingCount>0?'#dc2626':'var(--muted)'}}>{pendingCount}</span><span className="ma-chip-lbl">Pending</span></div>
+        <div className="ma-chip"><span className="ma-chip-val" style={{color:'#2563eb'}}>{confirmedCount}</span><span className="ma-chip-lbl">Confirmed</span></div>
+        <div className="ma-chip"><span className="ma-chip-val" style={{color:noGPSCount>0?'#f59e0b':'var(--muted)'}}>{noGPSCount}</span><span className="ma-chip-lbl">No GPS</span></div>
       </div>
 
       {/* ── Quick Access ── */}
@@ -1791,83 +1700,87 @@ function DashboardTab({ onNavigate = ()=>{} }) {
         </div>
       </div>
 
-      {/* ── Active Therapists ── */}
-      <div className="ma-section">
-        <div className="ma-sec-hdr">
-          <p className="ma-sec-lbl" style={{margin:0}}>Active Therapists</p>
-          <button onClick={()=>onNavigate('tracker')}
-            style={{fontSize:'13px',color:'var(--gold)',background:'none',border:'none',fontWeight:'600',cursor:'pointer',padding:0}}>
-            View all ›
-          </button>
-        </div>
-        <div className="ma-card">
-          {activeTherps.length===0
-            ? <p style={{padding:'24px',textAlign:'center',color:'var(--muted)',fontSize:'14px',margin:0}}>No therapists on duty right now</p>
-            : activeTherps.map(t=>{
-                const initials=(t.name||'?').split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()||'?';
-                const ls=lastSeen(t);
-                const hasGPS=!!(t.lat||t.latitude||t.lastLocation);
-                return (
-                  <div key={t.id} className="ma-row">
-                    <div style={{position:'relative',flexShrink:0}}>
-                      <div className="ma-av-ci" style={{background:'rgba(212,175,55,0.1)',border:'1.5px solid rgba(212,175,55,0.3)',color:'var(--gold)'}}>
-                        {t.imageUrl
-                          ? <img src={t.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>
-                          : initials}
-                        <div className="ma-av-dot"/>
-                      </div>
-                    </div>
-                    <div className="ma-row-body">
-                      <p className="ma-row-title">{t.name||t.therapistId||'—'}</p>
-                      <p className="ma-row-sub" style={{color:ls.color||'var(--muted)'}}>{hasGPS?'📍':'⚠️'} {ls.text||'Currently online'}</p>
-                    </div>
-                    <span className="ma-badge" style={{background:hasGPS?'rgba(22,163,74,0.1)':'rgba(245,158,11,0.1)',color:hasGPS?'#16a34a':'#f59e0b',border:`1px solid ${hasGPS?'rgba(22,163,74,0.25)':'rgba(245,158,11,0.25)'}`}}>
-                      {hasGPS?'On Duty':'No GPS'}
-                    </span>
-                  </div>
-                );
-              })
-          }
-        </div>
-      </div>
+      {/* ── Two-column on desktop, stacked on mobile ── */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'20px'}} className="dash-2col">
 
-      {/* ── Recent Bookings ── */}
-      <div className="ma-section">
-        <div className="ma-sec-hdr">
-          <p className="ma-sec-lbl" style={{margin:0}}>Recent Bookings</p>
-          <button onClick={()=>onNavigate('bookings')}
-            style={{fontSize:'13px',color:'var(--gold)',background:'none',border:'none',fontWeight:'600',cursor:'pointer',padding:0}}>
-            View all ›
-          </button>
-        </div>
-        <div className="ma-card">
-          {loadingB
-            ? <div style={{padding:'32px',textAlign:'center'}}><span className="spin" style={{color:'var(--gold)'}}>✦</span></div>
-            : bookings.length===0
-              ? <p style={{padding:'24px',textAlign:'center',color:'var(--muted)',fontSize:'14px',margin:0}}>No bookings yet</p>
-              : bookings.slice(0,6).map(b=>{
-                  const c=cfg(b.status);
-                  const svc=b.serviceType||b.service||'Massage';
-                  const svcI=svc.split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()||'M';
+        {/* ── Active Therapists ── */}
+        <div className="ma-section" style={{margin:0}}>
+          <div className="ma-sec-hdr">
+            <p className="ma-sec-lbl" style={{margin:0}}>Active Therapists</p>
+            <button onClick={()=>onNavigate('tracker')}
+              style={{fontSize:'13px',color:'var(--gold)',background:'none',border:'none',fontWeight:'600',cursor:'pointer',padding:0}}>
+              View all ›
+            </button>
+          </div>
+          <div className="ma-card">
+            {activeTherps.length===0
+              ? <p style={{padding:'24px',textAlign:'center',color:'var(--muted)',fontSize:'14px',margin:0}}>No therapists on duty right now</p>
+              : activeTherps.map(t=>{
+                  const initials=(t.name||'?').split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()||'?';
+                  const ls=lastSeen(t);
+                  const hasGPS=!!(t.lat||t.latitude||t.lastLocation);
                   return (
-                    <div key={b.id} className="ma-row">
-                      <div className="ma-av-sq" style={{background:'rgba(212,175,55,0.08)',border:'0.5px solid rgba(212,175,55,0.2)',color:'var(--gold)'}}>
-                        {svcI}
+                    <div key={t.id} className="ma-row">
+                      <div style={{position:'relative',flexShrink:0}}>
+                        <div className="ma-av-ci" style={{background:'rgba(212,175,55,0.1)',border:'1.5px solid rgba(212,175,55,0.3)',color:'var(--gold)'}}>
+                          {t.imageUrl
+                            ? <img src={t.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>
+                            : initials}
+                          <div className="ma-av-dot"/>
+                        </div>
                       </div>
                       <div className="ma-row-body">
-                        <p className="ma-row-title">{svc}</p>
-                        <p className="ma-row-sub">{timeAgo(b)} · {b.clientName||'—'}</p>
+                        <p className="ma-row-title">{t.name||t.therapistId||'—'}</p>
+                        <p className="ma-row-sub" style={{color:ls.color||'var(--muted)'}}>{hasGPS?'📍':'⚠️'} {ls.text||'Currently online'}</p>
                       </div>
-                      <span className="ma-badge" style={{background:c.bg,color:c.color,border:`1px solid ${c.color}30`}}>
-                        {c.label}
+                      <span className="ma-badge" style={{background:hasGPS?'rgba(22,163,74,0.1)':'rgba(245,158,11,0.1)',color:hasGPS?'#16a34a':'#f59e0b',border:`1px solid ${hasGPS?'rgba(22,163,74,0.25)':'rgba(245,158,11,0.25)'}`}}>
+                        {hasGPS?'On Duty':'No GPS'}
                       </span>
                     </div>
                   );
                 })
-          }
+            }
+          </div>
         </div>
-      </div>
 
+        {/* ── Recent Bookings ── */}
+        <div className="ma-section" style={{margin:0}}>
+          <div className="ma-sec-hdr">
+            <p className="ma-sec-lbl" style={{margin:0}}>Recent Bookings</p>
+            <button onClick={()=>onNavigate('bookings')}
+              style={{fontSize:'13px',color:'var(--gold)',background:'none',border:'none',fontWeight:'600',cursor:'pointer',padding:0}}>
+              View all ›
+            </button>
+          </div>
+          <div className="ma-card">
+            {loadingB
+              ? <div style={{padding:'32px',textAlign:'center'}}><span className="spin" style={{color:'var(--gold)'}}>✦</span></div>
+              : bookings.length===0
+                ? <p style={{padding:'24px',textAlign:'center',color:'var(--muted)',fontSize:'14px',margin:0}}>No bookings yet</p>
+                : bookings.slice(0,6).map(b=>{
+                    const c=cfg(b.status);
+                    const svc=b.serviceType||b.service||'Massage';
+                    const svcI=svc.split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()||'M';
+                    return (
+                      <div key={b.id} className="ma-row">
+                        <div className="ma-av-sq" style={{background:'rgba(212,175,55,0.08)',border:'0.5px solid rgba(212,175,55,0.2)',color:'var(--gold)'}}>
+                          {svcI}
+                        </div>
+                        <div className="ma-row-body">
+                          <p className="ma-row-title">{svc}</p>
+                          <p className="ma-row-sub">{timeAgo(b)} · {b.clientName||'—'}</p>
+                        </div>
+                        <span className="ma-badge" style={{background:c.bg,color:c.color,border:`1px solid ${c.color}30`}}>
+                          {c.label}
+                        </span>
+                      </div>
+                    );
+                  })
+            }
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 }
