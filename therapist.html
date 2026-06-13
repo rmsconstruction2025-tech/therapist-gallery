@@ -51,7 +51,11 @@ const FIREBASE_CONFIG = {
   appId:             "1:826400735387:web:379974d8aa913786f0063e"
 };
 if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
-const db        = firebase.firestore();
+const db = firebase.firestore();
+// Force long-polling — avoids QUIC/WebSocket blocks on mobile networks
+db.settings({ experimentalForceLongPolling: true, merge: true });
+// Enable offline persistence so cached data survives connection drops
+db.enablePersistence({ synchronizeTabs: false }).catch(() => {});
 const messaging = firebase.messaging();
 const FieldValue = firebase.firestore.FieldValue;
 
