@@ -1262,13 +1262,25 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
     if(['confirmed','accepted','admin_pending','on_way','in_session','completed'].includes(b.status)){
       const d=b.createdAt?.toDate?.(); return d&&d>=todayStart;
     }
-    if(b.status==='scheduled'&&b.scheduledDate===todayStr) return true;
+    // Scheduled for today: only show in TODAY if within 2 hours of appointment time
+    if(b.status==='scheduled'&&b.scheduledDate===todayStr){
+      if(!b.scheduledTime) return true; // no time = treat as immediate
+      const msLeft = new Date(`${b.scheduledDate}T${b.scheduledTime}`) - new Date();
+      return msLeft <= 2*60*60*1000; // ≤2h away → show in TODAY
+    }
     return false;
   }).sort((a,b)=>(a.scheduledTime||'').localeCompare(b.scheduledTime||''));
 
-  const upcomingBookings = allBookings.filter(b=>
-    b.status==='scheduled'&&b.scheduledDate&&b.scheduledDate>todayStr
-  ).sort((a,b)=>a.scheduledDate===b.scheduledDate
+  const upcomingBookings = allBookings.filter(b=>{
+    if(b.status!=='scheduled') return false;
+    if(b.scheduledDate>todayStr) return true; // future date
+    // Today's scheduled booking >2h away goes to UPCOMING
+    if(b.scheduledDate===todayStr&&b.scheduledTime){
+      const msLeft = new Date(`${b.scheduledDate}T${b.scheduledTime}`) - new Date();
+      return msLeft > 2*60*60*1000;
+    }
+    return false;
+  }).sort((a,b)=>a.scheduledDate===b.scheduledDate
     ?(a.scheduledTime||'').localeCompare(b.scheduledTime||'')
     :a.scheduledDate.localeCompare(b.scheduledDate));
 
@@ -1446,7 +1458,7 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
               const isConfirmed = ['confirmed','accepted','admin_pending'].includes(b.status);
               const isOnWay     = b.status==='on_way';
               const isInSession = b.status==='in_session';
-              const isScheduled = b.bookingType==='later';
+              const isScheduled = b.bookingType==='later' || b.status==='scheduled' || !!(b.scheduledDate);
               const accentColor = isCompleted?'#27ae60':isInSession?'#ffa500':isOnWay?'#4a9eff':isConfirmed?'var(--gold)':isScheduled?'#4a9eff':'var(--muted)';
               const statusLabel = isCompleted?'Done':isInSession?'In Session':isOnWay?'On the Way':isConfirmed?'Active':'Awaiting';
               // Overdue check

@@ -1383,8 +1383,11 @@ function AdminBookingForm({ therapistList, onClose }) {
         payload.therapistAccepted = true;
       }
       if (type==='later') {
+        payload.bookingType   = 'later';
         payload.scheduledDate = schedDate;
         payload.scheduledTime = schedTime;
+      } else {
+        payload.bookingType   = 'now';
       }
       await db.collection('bookings').add(payload);
       setDone(true);
