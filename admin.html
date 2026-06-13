@@ -1060,30 +1060,52 @@ function ChatAdmin() {
   /* ── Message bubble ── */
   const Bubble = ({ msg }) => {
     const sent = msg.sender === 'admin';
+    const [hovered, setHovered] = useState(false);
+
+    const deleteMsg = async () => {
+      if (!window.confirm('Delete this message?')) return;
+      try {
+        await db.collection('chats').doc(activeId).collection('messages').doc(msg.id).delete();
+      } catch(e){ alert('Could not delete: '+e.message); }
+    };
+
     return (
-      <div style={{ display:'flex', flexDirection:'column', alignItems: sent ? 'flex-end' : 'flex-start', gap:'3px' }}>
-        <div className={sent ? 'chat-bubble-sent' : 'chat-bubble-recv'}
-          style={{ maxWidth:'72%', padding: msg.mediaType ? '6px' : '10px 14px', display:'inline-block' }}>
-          {msg.mediaType === 'image' && (
-            <img src={msg.mediaUrl} alt="photo"
-              onClick={() => window.open(msg.mediaUrl, '_blank')}
-              style={{ maxWidth:'220px', maxHeight:'220px', borderRadius:'12px', display:'block',
-                cursor:'pointer', objectFit:'contain' }} />
-          )}
-          {msg.mediaType === 'audio' && (
-            <audio controls src={msg.mediaUrl}
-              style={{ maxWidth:'240px', display:'block', borderRadius:'8px' }} />
-          )}
-          {msg.mediaType === 'video' && (
-            <video controls src={msg.mediaUrl}
-              style={{ maxWidth:'240px', maxHeight:'200px', borderRadius:'12px', display:'block' }} />
-          )}
-          {msg.text && (
-            <p style={{ margin:0, fontSize:'14px', lineHeight:'1.5', wordBreak:'break-word',
-              color: sent ? '#1a1200' : 'var(--text)' }}>
-              {msg.text}
-            </p>
-          )}
+      <div style={{ display:'flex', flexDirection:'column', alignItems: sent ? 'flex-end' : 'flex-start', gap:'3px' }}
+        onMouseEnter={()=>setHovered(true)} onMouseLeave={()=>setHovered(false)}>
+        <div style={{ display:'flex', alignItems:'center', gap:'6px', flexDirection: sent ? 'row-reverse' : 'row' }}>
+          <div className={sent ? 'chat-bubble-sent' : 'chat-bubble-recv'}
+            style={{ maxWidth:'72%', padding: msg.mediaType ? '6px' : '10px 14px', display:'inline-block' }}>
+            {msg.mediaType === 'image' && (
+              <img src={msg.mediaUrl} alt="photo"
+                onClick={() => window.open(msg.mediaUrl, '_blank')}
+                style={{ maxWidth:'220px', maxHeight:'220px', borderRadius:'12px', display:'block',
+                  cursor:'pointer', objectFit:'contain' }} />
+            )}
+            {msg.mediaType === 'audio' && (
+              <audio controls src={msg.mediaUrl}
+                style={{ maxWidth:'240px', display:'block', borderRadius:'8px' }} />
+            )}
+            {msg.mediaType === 'video' && (
+              <video controls src={msg.mediaUrl}
+                style={{ maxWidth:'240px', maxHeight:'200px', borderRadius:'12px', display:'block' }} />
+            )}
+            {msg.text && (
+              <p style={{ margin:0, fontSize:'14px', lineHeight:'1.5', wordBreak:'break-word',
+                color: sent ? '#1a1200' : 'var(--text)' }}>
+                {msg.text}
+              </p>
+            )}
+          </div>
+          {/* Delete button — shows on hover */}
+          <button onClick={deleteMsg}
+            title="Delete message"
+            style={{ background:'rgba(220,38,38,0.12)', border:'1px solid rgba(220,38,38,0.3)',
+              borderRadius:'50%', width:'24px', height:'24px', color:'#dc2626',
+              fontSize:'11px', cursor:'pointer', display:'flex', alignItems:'center',
+              justifyContent:'center', flexShrink:0, lineHeight:1,
+              opacity: hovered ? 1 : 0, transition:'opacity .15s', padding:0 }}>
+            ✕
+          </button>
         </div>
         <span style={{ fontSize:'10px', color:'var(--muted)',
           paddingLeft: sent ? 0 : '4px', paddingRight: sent ? '4px' : 0,
@@ -1191,6 +1213,22 @@ function ChatAdmin() {
             {activeTherapist?.available ? 'Online' : 'Offline'}
           </p>
         </div>
+        <button onClick={async()=>{
+          if(!window.confirm('Clear all messages in this chat?')) return;
+          try {
+            const snap = await db.collection('chats').doc(activeId).collection('messages').get();
+            const batch = db.batch();
+            snap.docs.forEach(d => batch.delete(d.ref));
+            await batch.commit();
+            await db.collection('chats').doc(activeId).update({ unreadAdmin:0, unreadTherapist:0 });
+          } catch(e){ alert('Delete failed: '+e.message); }
+        }} title="Clear chat" style={{ background:'none', border:'none', cursor:'pointer',
+          color:'var(--muted)', fontSize:'18px', padding:'6px', borderRadius:'8px',
+          lineHeight:1, flexShrink:0, transition:'color .15s' }}
+          onMouseEnter={e=>e.target.style.color='#dc2626'}
+          onMouseLeave={e=>e.target.style.color='var(--muted)'}>
+          🗑️
+        </button>
       </div>
 
       {/* Messages */}
@@ -1216,33 +1254,8 @@ function ChatAdmin() {
       {/* Input bar */}
       <div style={{ padding:'10px 12px', borderTop:'0.5px solid var(--border)',
         background:'var(--surface)', display:'flex', alignItems:'flex-end', gap:'8px', flexShrink:0 }}>
-        {/* Hidden file inputs */}
-        <input ref={imgInputRef} type="file" accept="image/*" style={{ display:'none' }}
-          onChange={e => { if (e.target.files[0]) sendMedia(e.target.files[0], 'image'); e.target.value = ''; }}/>
-        <input ref={videoInputRef} type="file" accept="video/*" style={{ display:'none' }}
-          onChange={e => { if (e.target.files[0]) sendMedia(e.target.files[0], 'video'); e.target.value = ''; }}/>
-
-        {/* Attach + mic buttons */}
+        {/* Mic only — no photo/video */}
         <div style={{ display:'flex', gap:'4px', flexShrink:0, paddingBottom:'2px' }}>
-          {/* Image */}
-          <button title="Send image" onClick={() => imgInputRef.current?.click()}
-            disabled={uploading || sending || recording}
-            style={{ width:'36px', height:'36px', borderRadius:'50%',
-              background:'var(--elevated)', border:'0.5px solid var(--border)',
-              cursor:'pointer', fontSize:'15px', display:'flex', alignItems:'center',
-              justifyContent:'center', opacity:(uploading||sending||recording)?0.4:1 }}>
-            📷
-          </button>
-          {/* Video */}
-          <button title="Send video" onClick={() => videoInputRef.current?.click()}
-            disabled={uploading || sending || recording}
-            style={{ width:'36px', height:'36px', borderRadius:'50%',
-              background:'var(--elevated)', border:'0.5px solid var(--border)',
-              cursor:'pointer', fontSize:'15px', display:'flex', alignItems:'center',
-              justifyContent:'center', opacity:(uploading||sending||recording)?0.4:1 }}>
-            🎬
-          </button>
-          {/* Mic — tap to start/stop recording */}
           <button title={recording ? 'Stop & send' : 'Voice message'}
             onClick={recording ? stopRecording : startRecording}
             disabled={uploading || sending}

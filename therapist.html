@@ -1541,22 +1541,8 @@ function ChatTab({ session }) {
       {/* Input bar */}
       <div style={{ padding:'10px 12px', borderTop:'1px solid var(--border)',
         background:'var(--surface)', display:'flex', alignItems:'flex-end', gap:'8px', flexShrink:0 }}>
-        <input ref={imgInputRef} type="file" accept="image/*" style={{ display:'none' }}
-          onChange={e => { if(e.target.files[0]) sendMedia(e.target.files[0],'image'); e.target.value=''; }}/>
-        <input ref={videoInputRef} type="file" accept="video/*" style={{ display:'none' }}
-          onChange={e => { if(e.target.files[0]) sendMedia(e.target.files[0],'video'); e.target.value=''; }}/>
-        {/* Attach + mic */}
+        {/* Mic only — no photo/video */}
         <div style={{ display:'flex', gap:'4px', flexShrink:0, paddingBottom:'2px' }}>
-          <button onClick={() => imgInputRef.current?.click()} disabled={uploading||sending||recording}
-            style={{ width:'36px',height:'36px',borderRadius:'50%',background:'var(--elevated)',
-              border:'1px solid var(--border)',cursor:'pointer',fontSize:'15px',
-              display:'flex',alignItems:'center',justifyContent:'center',
-              opacity:(uploading||sending||recording)?0.4:1 }}>📷</button>
-          <button onClick={() => videoInputRef.current?.click()} disabled={uploading||sending||recording}
-            style={{ width:'36px',height:'36px',borderRadius:'50%',background:'var(--elevated)',
-              border:'1px solid var(--border)',cursor:'pointer',fontSize:'15px',
-              display:'flex',alignItems:'center',justifyContent:'center',
-              opacity:(uploading||sending||recording)?0.4:1 }}>🎬</button>
           <button onClick={recording ? stopRecording : startRecording} disabled={uploading||sending}
             style={{ width:'36px',height:'36px',borderRadius:'50%',
               background:recording?'#e74c3c':'var(--elevated)',
