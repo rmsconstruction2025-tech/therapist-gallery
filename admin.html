@@ -1871,6 +1871,21 @@ function TherapistAccounts() {
     } catch(e) { alert(`Error: ${e.message}`); }
   };
 
+  const [togglingDuty, setTogglingDuty] = useState(null);
+  const handleToggleDuty = async (acc) => {
+    const turningOn = !acc.onDuty;
+    if(!turningOn && !window.confirm(`Mark ${acc.name} as Off Duty?`)) return;
+    setTogglingDuty(acc.id);
+    try {
+      const updates = turningOn
+        ? { onDuty: true, available: true, dutyStartedAt: FieldValue.serverTimestamp() }
+        : { onDuty: false, available: false, location: null, locationUpdatedAt: FieldValue.serverTimestamp() };
+      await db.collection('therapists').doc(acc.id).update(updates);
+      setAccounts(prev => prev.map(a => a.id === acc.id ? { ...a, ...updates, onDuty: turningOn, available: turningOn } : a));
+    } catch(e) { alert(`Error: ${e.message}`); }
+    setTogglingDuty(null);
+  };
+
   return (
     <div style={{display:'flex',flexDirection:'column',gap:'24px'}}>
 
@@ -1931,11 +1946,17 @@ function TherapistAccounts() {
                 <div className="item-info">
                   <div className="name">{acc.name||'—'}</div>
                   <div className="sub">{acc.therapistId}</div>
-                  <div className="meta">
+                  <div className="meta" style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
+                    <span className={`badge ${acc.onDuty?'badge-green':'badge-gray'}`}>{acc.onDuty?'On Duty':'Off Duty'}</span>
                     <span className={`badge ${acc.available?'badge-green':'badge-red'}`}>{acc.available?'Available':'Unavailable'}</span>
                   </div>
                   {/* Mobile actions */}
                   <div className="item-actions-mobile">
+                    <button onClick={()=>handleToggleDuty(acc)} disabled={togglingDuty===acc.id}
+                      className="btn btn-sm"
+                      style={{background:acc.onDuty?'rgba(231,76,60,0.12)':'rgba(46,204,113,0.12)',color:acc.onDuty?'var(--danger)':'var(--success)',border:`1px solid ${acc.onDuty?'rgba(231,76,60,0.35)':'rgba(46,204,113,0.35)'}`,minWidth:'80px'}}>
+                      {togglingDuty===acc.id?<span className="spin">✦</span>:acc.onDuty?'End Duty':'Start Duty'}
+                    </button>
                     <button onClick={()=>handleResetPin(acc)} className="btn btn-ghost btn-sm">Reset PIN</button>
                     <button onClick={()=>handleDelete(acc)} disabled={deleting===acc.id} className="btn btn-danger btn-sm">
                       {deleting===acc.id?<span className="spin">✦</span>:'Delete'}
@@ -1944,6 +1965,11 @@ function TherapistAccounts() {
                 </div>
                 {/* Desktop actions */}
                 <div className="item-actions item-actions-desktop">
+                  <button onClick={()=>handleToggleDuty(acc)} disabled={togglingDuty===acc.id}
+                    className="btn btn-sm"
+                    style={{background:acc.onDuty?'rgba(231,76,60,0.12)':'rgba(46,204,113,0.12)',color:acc.onDuty?'var(--danger)':'var(--success)',border:`1px solid ${acc.onDuty?'rgba(231,76,60,0.35)':'rgba(46,204,113,0.35)'}`,minWidth:'88px'}}>
+                    {togglingDuty===acc.id?<span className="spin">✦</span>:acc.onDuty?'End Duty':'Start Duty'}
+                  </button>
                   <button onClick={()=>handleResetPin(acc)} className="btn btn-ghost btn-sm">Reset PIN</button>
                   <button onClick={()=>handleDelete(acc)} disabled={deleting===acc.id} className="btn btn-danger btn-sm" style={{minWidth:'64px'}}>
                     {deleting===acc.id?<span className="spin">✦</span>:'Delete'}
