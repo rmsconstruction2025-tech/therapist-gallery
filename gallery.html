@@ -395,7 +395,7 @@ function App() {
   if (status==='invalid') return <FullScreen><div style={{fontSize:'3rem',color:'var(--gold)',marginBottom:'16px'}}>⚠</div><h2 style={msgTitle}>Invalid Link</h2><p style={msgSub}>This gallery link is invalid.</p></FullScreen>;
   if (status==='expired') return <FullScreen><div style={{fontSize:'3rem',color:'var(--gold)',marginBottom:'16px'}}>⏱</div><h2 style={msgTitle}>Link Expired</h2><p style={msgSub}>This gallery link has expired. Please contact us for a new link.</p></FullScreen>;
   if (status==='info')    return <ClientInfoForm tokenData={tokenData} onConfirmed={(n,p)=>{ setClient({name:n,phone:p}); setStatus('loc-prompt'); }}/>;
-  if (status==='loc-prompt') return <LocationPrompt onDone={async loc=>{ if(loc){ setClientLoc(loc); setStatus('gallery'); try{ await db.collection('clientVisits').add({ clientName:client.name, clientPhone:client.phone, tokenId:tokenData?.id||'', visitedAt:FieldValue.serverTimestamp(), clientLocation:{lat:loc.lat,lng:loc.lng}, hasBooked:false, bookingId:null, source:tokenData?.bookType||'direct', }); }catch(e){ console.warn('Visit log:',e); } } }}/>;
+  if (status==='loc-prompt') return <LocationPrompt onDone={async loc=>{ if(loc){ setClientLoc(loc); setStatus('gallery'); try{ if(tokenData?.id){ // Collect device & browser info const ua=navigator.userAgent; const isMobile=/Android|iPhone|iPad|iPod|Mobile/i.test(ua); const isIOS=/iPhone|iPad|iPod/i.test(ua); const isAndroid=/Android/i.test(ua); const browserMatch=ua.match(/(Chrome|Safari|Firefox|Edge|OPR|SamsungBrowser)\/?([\d.]+)/); const browserName=browserMatch?browserMatch[1]:'Unknown'; const conn=navigator.connection||navigator.mozConnection||navigator.webkitConnection; // Try IP geolocation — fire and forget let ipInfo={}; try{ const r=await Promise.race([fetch('https://ipapi.co/json/'),new Promise((_,rej)=>setTimeout(rej,3000))]); const j=await r.json(); ipInfo={ip:j.ip,city:j.city,region:j.region,country:j.country_name,isp:j.org,timezone:j.timezone}; }catch(_){} await db.collection('galleryTokens').doc(tokenData.id).update({ visited:true, visitedAt:FieldValue.serverTimestamp(), clientLocation:{lat:loc.lat,lng:loc.lng}, clientName:client.name||tokenData.clientName||'', clientPhone:client.phone||tokenData.clientPhone||'', hasBooked:false, // Device device:{ type:isMobile?(isIOS?'iOS':isAndroid?'Android':'Mobile'):'Desktop', os:isIOS?'iOS':isAndroid?'Android':ua.includes('Windows')?'Windows':ua.includes('Mac')?'macOS':ua.includes('Linux')?'Linux':'Other', browser:browserName, screen:`${screen.width}×${screen.height}`, language:navigator.language||'—', connection:conn?.effectiveType||'—', }, // IP geo ipGeo:Object.keys(ipInfo).length?ipInfo:null, // Session referrer:document.referrer||'direct', pageUrl:window.location.href, visitCount:(tokenData.visitCount||0)+1, }); } }catch(e){ console.warn('Visit log:',e); } } }}/>;
 
   return (
     <div style={{position:'relative'}}>
@@ -888,8 +888,8 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
       sessionStorage.setItem('pendingBooking', JSON.stringify({
         bookingId: ref.id, therapistId: therapist.id, endAt: Date.now() + 86400000,
       }));
-      // Update visit record — mark as booked
-      if(tokenData?.id){ db.collection('clientVisits').where('tokenId','==',tokenData.id).get().then(snap=>{ if(!snap.empty) snap.docs[0].ref.update({hasBooked:true,bookingId:ref.id,bookedAt:FieldValue.serverTimestamp()}); }).catch(()=>{}); }
+      // Update token record — mark as booked
+      if(tokenData?.id){ db.collection('galleryTokens').doc(tokenData.id).update({hasBooked:true,bookingId:ref.id,bookedAt:FieldValue.serverTimestamp()}).catch(()=>{}); }
       setBookingResult({
         id: ref.id,
         therapistName: therapist.name || therapist.therapistId,
@@ -1478,7 +1478,11 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
               Booking in progress…
             </div>
           : <button
-              onClick={()=>{ setShowBooking(true); onPendingChange(therapist.id); }}
+              onClick={()=>{
+                setShowBooking(true); onPendingChange(therapist.id);
+                // Track therapist interest
+                if(tokenData?.id){ db.collection('galleryTokens').doc(tokenData.id).update({ interestedInTherapist: therapist.name||therapist.therapistId||therapist.id, interestedAt: FieldValue.serverTimestamp(), }).catch(()=>{}); }
+              }}
               className="book-btn"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
