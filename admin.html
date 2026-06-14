@@ -2090,10 +2090,11 @@ function TherapistManager() {
 //  LINK CREATOR
 // ══════════════════════════════════════════════════════
 function LinkCreator() {
-  const [form, setForm] = useState({bookType:'now',scheduledDate:'',clientName:'',clientPhone:'',serviceType:'',selectedTherapistId:'',expiryMinutes:60,maxViewsPerImage:2,viewDurationSeconds:3});
+  const [form, setForm] = useState({bookType:'now',scheduledDate:'',clientName:'',clientPhone:'',serviceType:'',selectedTherapistIds:[],expiryMinutes:60,maxViewsPerImage:2,viewDurationSeconds:3});
   const [links,    setLinks]    = useState([]);
   const [creating, setCreating] = useState(false);
   const [allTherps, setAllTherps] = useState([]);
+  const [therapistDropOpen, setTherapistDropOpen] = useState(false);
   const [newLink,  setNewLink]  = useState('');
   const [loading,  setLoading]  = useState(true);
   const [copied,   setCopied]   = useState('');
@@ -2133,7 +2134,7 @@ function LinkCreator() {
         clientName: form.clientName.trim(), clientPhone: form.clientPhone.trim(),
         serviceType: form.serviceType || '',
         bookType: 'now',
-        selectedTherapistId: form.selectedTherapistId || '',
+        selectedTherapistIds: form.selectedTherapistIds,
         used: false, createdAt: FieldValue.serverTimestamp(),
       };
       await db.collection('galleryTokens').add(doc);
@@ -2208,20 +2209,53 @@ function LinkCreator() {
               </select>
             </div>
 
-            {/* Therapist selection */}
-            <div style={{gridColumn:'1/-1'}}>
-              <label className="form-label">Choose Therapist <span style={{color:'var(--muted)',fontWeight:'400'}}>(optional — leave blank to show all online)</span></label>
-              <select value={form.selectedTherapistId} onChange={e=>setForm(p=>({...p,selectedTherapistId:e.target.value}))} className="form-input">
-                <option value=''>— All Available Therapists —</option>
-                {allTherps.map(t=>(
-                  <option key={t.id} value={t.id}>
-                    {t.name||t.therapistId||t.id}{t.available?' ✓ Online':' ○ Offline'}
-                  </option>
-                ))}
-              </select>
-              {form.selectedTherapistId && (
-                <p style={{fontSize:'0.73rem',color:'#f59e0b',marginTop:'5px'}}>
-                  ⚡ This therapist will appear in the gallery regardless of online status or working hours
+            {/* Therapist multi-select */}
+            <div style={{gridColumn:'1/-1',position:'relative'}}>
+              <label className="form-label">Choose Therapist(s) <span style={{color:'var(--muted)',fontWeight:'400'}}>(optional — leave blank to show all online)</span></label>
+              {/* Trigger button */}
+              <button type="button" onClick={()=>setTherapistDropOpen(o=>!o)}
+                className="form-input"
+                style={{width:'100%',textAlign:'left',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',background:'var(--elevated)'}}>
+                <span style={{color:form.selectedTherapistIds.length?'var(--text)':'var(--muted)'}}>
+                  {form.selectedTherapistIds.length===0
+                    ? '— All Available Therapists —'
+                    : form.selectedTherapistIds.length===1
+                      ? (allTherps.find(t=>t.id===form.selectedTherapistIds[0])?.name||'1 therapist selected')
+                      : `${form.selectedTherapistIds.length} therapists selected`}
+                </span>
+                <span style={{fontSize:'0.7rem',color:'var(--muted)'}}>{therapistDropOpen?'▲':'▼'}</span>
+              </button>
+              {/* Dropdown list */}
+              {therapistDropOpen&&(
+                <div style={{position:'absolute',zIndex:50,top:'100%',left:0,right:0,marginTop:'4px',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'10px',overflow:'hidden',boxShadow:'0 8px 32px rgba(0,0,0,0.5)',maxHeight:'220px',overflowY:'auto'}}>
+                  {/* Clear all */}
+                  <div style={{padding:'8px 14px',borderBottom:'1px solid var(--border)',display:'flex',gap:'10px'}}>
+                    <button type="button" onClick={()=>setForm(f=>({...f,selectedTherapistIds:[]}))}
+                      style={{fontSize:'0.75rem',color:'var(--muted)',background:'none',border:'none',cursor:'pointer',padding:0}}>Clear all</button>
+                    <button type="button" onClick={()=>setForm(f=>({...f,selectedTherapistIds:allTherps.map(t=>t.id)}))}
+                      style={{fontSize:'0.75rem',color:'var(--gold)',background:'none',border:'none',cursor:'pointer',padding:0}}>Select all</button>
+                  </div>
+                  {allTherps.map(t=>{
+                    const checked=form.selectedTherapistIds.includes(t.id);
+                    const toggle=()=>setForm(f=>({...f,selectedTherapistIds:checked?f.selectedTherapistIds.filter(id=>id!==t.id):[...f.selectedTherapistIds,t.id]}));
+                    return (
+                      <div key={t.id} onClick={toggle}
+                        style={{display:'flex',alignItems:'center',gap:'12px',padding:'10px 14px',cursor:'pointer',background:checked?'rgba(212,175,55,0.06)':'transparent',borderBottom:'1px solid var(--border)',transition:'background .12s'}}>
+                        <div style={{width:'18px',height:'18px',borderRadius:'5px',border:`2px solid ${checked?'var(--gold)':'var(--border)'}`,background:checked?'var(--gold)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all .12s'}}>
+                          {checked&&<span style={{color:'#0a0a0a',fontSize:'0.7rem',fontWeight:'900'}}>✓</span>}
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <p style={{margin:0,fontSize:'0.88rem',fontWeight:checked?'600':'400',color:'var(--text)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.name||t.therapistId||t.id}</p>
+                        </div>
+                        <span style={{fontSize:'0.7rem',fontWeight:'600',color:t.available?'#27ae60':'var(--muted)',flexShrink:0}}>{t.available?'● Online':'○ Offline'}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {form.selectedTherapistIds.length>0&&(
+                <p style={{fontSize:'0.73rem',color:'#f59e0b',marginTop:'6px',margin:'6px 0 0'}}>
+                  ⚡ Selected therapist(s) will appear in the gallery regardless of online status or working hours
                 </p>
               )}
             </div>
