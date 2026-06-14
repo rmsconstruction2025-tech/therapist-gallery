@@ -31,148 +31,202 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #080808; --surface: #111111; --elevated: #1a1a1a;
-      --gold: #d4af37; --gold-dark: #a07820; --gold-light: #f0d060;
-      --gold-glow: rgba(212,175,55,0.08);
-      --text: #f5f5f0; --muted: #777; --border: #222;
-      --border-gold: rgba(212,175,55,0.25);
+      --bg: #0c0a07;
+      --gold: #d4af37; --gold-dark: #9a6e00; --gold-light: #f0d472;
+      --text: #f2ede4; --muted: #7a7168; --border: #1e1b16;
       --danger: #e74c3c; --success: #27ae60;
-      --card-radius: 20px;
     }
     html, body {
       background: var(--bg); color: var(--text);
-      font-family: 'Georgia', serif;
+      font-family: 'Georgia', 'Times New Roman', serif;
       min-height: 100dvh;
       user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
     }
     input { user-select: text; -webkit-user-select: text; }
-    img { pointer-events: none; -webkit-user-drag: none; }
+    img   { pointer-events: none; -webkit-user-drag: none; }
     button { cursor: pointer; font-family: inherit; }
 
-    /* ── Animations ── */
-    @keyframes spin    { to { transform: rotate(360deg); } }
-    @keyframes pulseRing { 0%{transform:scale(1);opacity:0.4} 70%{transform:scale(2.4);opacity:0} 100%{transform:scale(2.4);opacity:0} }
-    @keyframes fadeUp  { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:none; } }
-    @keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
-    @keyframes glowPulse { 0%,100%{box-shadow:0 0 20px rgba(212,175,55,.15)} 50%{box-shadow:0 0 40px rgba(212,175,55,.35)} }
+    /* ── Keyframes ── */
+    @keyframes spin      { to { transform: rotate(360deg); } }
+    @keyframes pulseRing { 0%{transform:scale(1);opacity:.4} 70%{transform:scale(2.5);opacity:0} 100%{transform:scale(2.5);opacity:0} }
+    @keyframes fadeUp    { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:none} }
+    @keyframes cardIn    { from{opacity:0;transform:scale(.94) translateY(16px)} to{opacity:1;transform:none} }
 
-    .spin     { display:inline-block; animation:spin 0.8s linear infinite; }
-    .fade-in  { animation:fadeUp 0.35s ease forwards; }
-    .fade-up  { animation:fadeUp 0.45s cubic-bezier(.22,.68,0,1.2) forwards; }
+    .spin    { display:inline-block; animation:spin .8s linear infinite; }
+    .fade-in { animation:fadeUp .35s ease forwards; }
+    .fade-up { animation:cardIn .5s cubic-bezier(.22,.68,0,1.15) both; }
     .screenshield { -webkit-user-select:none; user-select:none; pointer-events:none; }
     @media print { body { display:none !important; } }
 
-    /* ── Gallery grid ── */
+    /* ══════════════════════════════════
+       HEADER
+    ══════════════════════════════════ */
+    .gallery-header {
+      position: relative;
+      text-align: center;
+      padding: 56px 20px 36px;
+      overflow: hidden;
+    }
+    .gallery-header::before {
+      content: '';
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 70% 80% at 50% 0%, rgba(212,175,55,.13) 0%, transparent 60%),
+        linear-gradient(180deg, rgba(212,175,55,.04) 0%, transparent 100%);
+      pointer-events: none;
+    }
+    /* decorative corner lines */
+    .gallery-header::after {
+      content: '';
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(212,175,55,.4) 30%, rgba(212,175,55,.4) 70%, transparent);
+    }
+    .header-ornament {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      margin-bottom: 18px;
+    }
+    .header-ornament .line {
+      height: 1px; width: 52px;
+      background: linear-gradient(90deg, transparent, rgba(212,175,55,.6));
+    }
+    .header-ornament .line.r { transform: scaleX(-1); }
+    .header-ornament .diamond {
+      width: 6px; height: 6px;
+      background: var(--gold);
+      transform: rotate(45deg);
+      box-shadow: 0 0 10px rgba(212,175,55,.6);
+    }
+    .header-title {
+      font-size: clamp(1.7rem, 5vw, 2.6rem);
+      font-weight: 700;
+      color: var(--gold);
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      text-shadow: 0 0 40px rgba(212,175,55,.25);
+    }
+    .header-sub {
+      font-size: .86rem; letter-spacing: .5px;
+      color: rgba(242,237,228,.5);
+      font-style: italic;
+    }
+    .header-sub strong { color: var(--gold-light); font-style: normal; font-weight: 600; }
+    .header-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin-top: 14px;
+      background: rgba(212,175,55,.07);
+      border: 1px solid rgba(212,175,55,.18);
+      border-radius: 24px;
+      padding: 5px 16px;
+      font-size: .75rem; color: rgba(212,175,55,.75);
+    }
+    @media (max-width:500px) {
+      .gallery-header { padding: 36px 16px 26px; }
+      .header-title { letter-spacing: 4px; }
+    }
+
+    /* ══════════════════════════════════
+       GALLERY GRID
+    ══════════════════════════════════ */
     .gallery-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 20px;
-      padding: 28px 20px 40px;
-      max-width: 1120px;
+      gap: 18px;
+      padding: 28px 20px 48px;
+      max-width: 1100px;
       margin: 0 auto;
     }
-    @media (max-width: 900px) {
-      .gallery-grid { grid-template-columns: repeat(2, 1fr); gap: 14px; padding: 20px 14px 36px; }
+    @media (max-width: 860px) {
+      .gallery-grid { grid-template-columns: repeat(2, 1fr); gap: 14px; padding: 20px 14px 40px; }
     }
-    @media (max-width: 500px) {
-      .gallery-grid { grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px 10px 32px; }
+    @media (max-width: 480px) {
+      .gallery-grid { grid-template-columns: 1fr; gap: 16px; padding: 16px 14px 40px; }
     }
 
-    /* ── Therapist card ── */
+    /* ══════════════════════════════════
+       THERAPIST CARD — full-bleed portrait
+       Info panel floats over the bottom
+    ══════════════════════════════════ */
     .t-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--card-radius);
+      position: relative;
+      border-radius: 22px;
       overflow: hidden;
-      transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+      aspect-ratio: 3/4;          /* full card is portrait */
+      background: #0d0b08;
+      border: 1px solid rgba(212,175,55,.12);
+      transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+      box-shadow: 0 8px 32px rgba(0,0,0,.55);
     }
     .t-card:hover {
-      transform: translateY(-4px);
-      border-color: var(--border-gold);
-      box-shadow: 0 16px 48px rgba(0,0,0,.6), 0 0 0 1px rgba(212,175,55,.1);
+      transform: translateY(-6px) scale(1.01);
+      border-color: rgba(212,175,55,.38);
+      box-shadow: 0 24px 60px rgba(0,0,0,.7), 0 0 0 1px rgba(212,175,55,.12);
     }
     .t-card.nearest {
-      border-color: rgba(39,174,96,0.4);
-      box-shadow: 0 8px 32px rgba(37,162,64,.12);
+      border-color: rgba(39,174,96,.4);
+      box-shadow: 0 12px 40px rgba(37,162,64,.18), 0 0 0 1px rgba(39,174,96,.1);
+    }
+    @media (max-width:480px) {
+      .t-card { aspect-ratio: 3/4; border-radius: 18px; }
     }
 
-    /* ── Photo area ── */
-    .t-photo {
-      position: relative;
-      aspect-ratio: 3/4;
-      background: #0a0a0a;
-      overflow: hidden;
+    /* Full-card photo layer */
+    .t-bg {
+      position: absolute; inset: 0;
+      background: linear-gradient(160deg, #1a1610, #0a0906);
     }
 
-    /* ── Card footer ── */
-    .t-footer {
-      padding: 14px 16px 16px;
+    /* Bottom glass info panel */
+    .t-panel {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      /* glass effect */
+      background: linear-gradient(0deg, rgba(8,7,4,.97) 55%, rgba(8,7,4,.88) 80%, rgba(8,7,4,0) 100%);
+      backdrop-filter: blur(0px);
+      padding: 44px 16px 16px;      /* top padding creates fade-in space */
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 9px;
     }
-    @media (max-width: 500px) {
-      .t-footer { padding: 10px 12px 14px; gap: 8px; }
+    @media (max-width:480px) {
+      .t-panel { padding: 40px 14px 14px; gap: 8px; }
     }
 
-    /* ── Day pills ── */
-    .day-pill { flex:1; text-align:center; padding:5px 2px; border-radius:7px; }
-    .day-pill.on  { background:linear-gradient(135deg,#9a6800,var(--gold)); }
-    .day-pill.off { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.07); }
-    .day-pill span { font-size:0.58rem; font-weight:800; letter-spacing:0.3px; }
-    .day-pill.on  span { color:#0a0a0a; }
-    .day-pill.off span { color:rgba(255,255,255,0.18); }
+    /* Day pills inside panel */
+    .day-pills { display: flex; gap: 3px; }
+    .dp {
+      flex: 1; text-align: center;
+      padding: 4px 1px; border-radius: 6px;
+      font-size: .56rem; font-weight: 800; letter-spacing: .3px;
+    }
+    .dp.on  { background: linear-gradient(135deg,#7a5200,var(--gold)); color: #0a0800; }
+    .dp.off { background: rgba(255,255,255,.04); color: rgba(255,255,255,.18);
+              border: 1px solid rgba(255,255,255,.07); }
 
-    /* ── Book button ── */
+    /* Book button */
     .book-btn {
-      width:100%; padding:13px 16px;
-      background: linear-gradient(135deg,#1a6e2e,#25a240);
-      color:#fff; border:none; border-radius:12px;
-      font-size:0.88rem; font-weight:700; letter-spacing:0.3px;
-      display:flex; align-items:center; justify-content:center; gap:6px;
-      box-shadow: 0 4px 16px rgba(37,162,64,.25);
-      transition: opacity .15s, transform .1s;
-      min-height: 48px;
+      width: 100%; min-height: 48px;
+      background: linear-gradient(135deg, #145c26, #1e9638);
+      color: #fff; border: none; border-radius: 13px;
+      font-size: .88rem; font-weight: 700; letter-spacing: .4px;
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+      box-shadow: 0 4px 18px rgba(30,150,56,.3), inset 0 1px 0 rgba(255,255,255,.08);
+      transition: transform .12s, opacity .12s;
     }
-    .book-btn:active { opacity:.85; transform:scale(.98); }
-    @media (max-width:500px) { .book-btn { font-size:0.82rem; padding:11px 12px; } }
+    .book-btn:active { transform: scale(.97); opacity: .88; }
 
-    /* ── View photo button ── */
+    /* View Photo button */
     .view-btn {
-      display:flex; flex-direction:column; align-items:center; gap:5px;
-      background:linear-gradient(135deg,var(--gold-dark),var(--gold));
-      color:#0a0a0a; border:none; border-radius:14px;
-      padding:14px 24px; font-size:0.9rem; font-weight:800;
-      box-shadow: 0 6px 24px rgba(212,175,55,.35);
-      transition: transform .12s, box-shadow .12s;
-      min-width:130px;
+      display: flex; flex-direction: column; align-items: center; gap: 5px;
+      background: linear-gradient(135deg, var(--gold-dark), var(--gold));
+      color: #0a0800; border: none; border-radius: 15px;
+      padding: 14px 28px; font-size: .92rem; font-weight: 800;
+      box-shadow: 0 6px 28px rgba(212,175,55,.4);
+      transition: transform .12s;
+      min-width: 140px;
     }
-    .view-btn:active { transform:scale(.95); }
-
-    /* ── Header ── */
-    .gallery-header {
-      text-align: center;
-      padding: 48px 20px 32px;
-      background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(212,175,55,.12), transparent);
-      border-bottom: 1px solid var(--border);
-      position: relative;
-    }
-    .gallery-header::before {
-      content:'';
-      position:absolute; inset:0;
-      background: linear-gradient(180deg, rgba(212,175,55,.04) 0%, transparent 100%);
-      pointer-events:none;
-    }
-    .header-rule {
-      display:flex; align-items:center; gap:12px; justify-content:center;
-      margin-bottom:16px;
-    }
-    .header-rule span { height:1px; width:60px; background:linear-gradient(90deg,transparent,var(--gold-dark)); }
-    .header-rule span:last-child { transform:scaleX(-1); }
-
-    @media (max-width:500px) {
-      .gallery-header { padding:32px 16px 22px; }
-    }
+    .view-btn:active { transform: scale(.95); }
   </style>
 </head>
 <body>
@@ -584,25 +638,21 @@ function TherapistGallery({ tokenData, clientName, clientPhone, clientLoc, isBlu
 
       {/* ── Header ── */}
       <header className="gallery-header">
-        <div className="header-rule">
-          <span></span>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--gold)" style={{opacity:.7}}><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
-          <span></span>
+        <div className="header-ornament">
+          <span className="line"></span>
+          <span className="diamond"></span>
+          <span className="line r"></span>
         </div>
-        <h1 style={{fontSize:'clamp(1.5rem,5vw,2.2rem)',fontWeight:'700',color:'var(--gold)',letterSpacing:'4px',textTransform:'uppercase',marginBottom:'10px',fontFamily:'Georgia,serif'}}>
-          Our Therapists
-        </h1>
-        <p style={{color:'var(--muted)',fontSize:'0.88rem',letterSpacing:'0.5px'}}>
-          Welcome, <span style={{color:'var(--gold-light)',fontWeight:'600'}}>{clientName}</span>
-        </p>
+        <h1 className="header-title">Our Therapists</h1>
+        <p className="header-sub">Welcome, <strong>{clientName}</strong></p>
         {!hasPinnedTherapists && (
-          <div style={{marginTop:'14px',display:'inline-flex',alignItems:'center',gap:'6px',background:'rgba(212,175,55,0.08)',border:'1px solid rgba(212,175,55,0.2)',borderRadius:'24px',padding:'6px 18px',fontSize:'0.78rem',color:'var(--muted)'}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            Available on <strong style={{color:'var(--gold)',marginLeft:'3px'}}>{filterInfo.label}</strong>
+          <div className="header-badge">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Available on <strong style={{color:'var(--gold-light)',marginLeft:'2px'}}>{filterInfo.label}</strong>
           </div>
         )}
         {hasDistances && (
-          <div style={{marginTop:'8px',display:'inline-flex',alignItems:'center',gap:'5px',background:'rgba(39,174,96,0.08)',border:'1px solid rgba(39,174,96,0.22)',borderRadius:'24px',padding:'5px 16px',fontSize:'0.76rem',color:'#27ae60'}}>
+          <div className="header-badge" style={{marginLeft:'6px',borderColor:'rgba(39,174,96,.25)',color:'rgba(39,174,96,.8)'}}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#27ae60" strokeWidth="2.5"><circle cx="12" cy="10" r="3"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
             Sorted by distance
           </div>
@@ -611,9 +661,9 @@ function TherapistGallery({ tokenData, clientName, clientPhone, clientLoc, isBlu
 
       {/* ── Body ── */}
       {loading
-        ? <div style={{display:'flex',flexDirection:'column',alignItems:'center',padding:'80px 20px'}}>
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="var(--gold)" className="spin"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
-            <p style={{color:'var(--muted)',marginTop:'14px',fontSize:'0.88rem'}}>Loading gallery…</p>
+        ? <div style={{display:'flex',flexDirection:'column',alignItems:'center',padding:'80px 20px',gap:'16px'}}>
+            <div style={{width:'48px',height:'48px',borderRadius:'50%',border:'2px solid rgba(212,175,55,.15)',borderTopColor:'var(--gold)',animation:'spin .9s linear infinite'}}/>
+            <p style={{color:'rgba(122,113,104,.7)',fontSize:'0.82rem',letterSpacing:'1px',textTransform:'uppercase'}}>Loading gallery…</p>
           </div>
         : therapists.length === 0
           ? <div style={{textAlign:'center',padding:'80px 20px',color:'var(--muted)'}}>No therapists available on {filterInfo.label}.</div>
@@ -631,8 +681,8 @@ function TherapistGallery({ tokenData, clientName, clientPhone, clientLoc, isBlu
             </div>
       }
 
-      <footer style={{textAlign:'center',color:'rgba(255,255,255,0.15)',fontSize:'0.72rem',padding:'20px',borderTop:'1px solid var(--border)',letterSpacing:'0.5px'}}>
-        All images are watermarked with your identity · Sharing is strictly prohibited
+      <footer style={{textAlign:'center',color:'rgba(122,113,104,0.45)',fontSize:'0.7rem',padding:'24px 20px',borderTop:'1px solid rgba(212,175,55,0.08)',letterSpacing:'0.8px',textTransform:'uppercase'}}>
+        All images are watermarked · Sharing is strictly prohibited
       </footer>
     </div>
   );
@@ -1377,142 +1427,130 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
   };
   const status = getOnlineStatus();
 
+  const DAYS = [{k:'mon',l:'M'},{k:'tue',l:'T'},{k:'wed',l:'W'},{k:'thu',l:'T'},{k:'fri',l:'F'},{k:'sat',l:'S'},{k:'sun',l:'S'}];
+  const wh = therapist.workingHours;
+  const hasSchedule = wh && Object.values(wh).some(d=>d?.on);
+  const initials = (therapist.name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)||'?';
+
   return (
     <div className={`t-card fade-up${isNearest&&therapist._dist!=null?' nearest':''}`}>
       <canvas ref={canvasRef} style={{display:'none'}}/>
 
-      {/* ── Photo area ── */}
-      <div className="t-photo">
-        {/* No photo placeholder */}
-        {!therapist.imageUrl && (
-          <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'10px',background:'linear-gradient(160deg,#181818,#0e0e0e)'}}>
-            <div style={{width:'68px',height:'68px',borderRadius:'50%',background:'rgba(212,175,55,0.1)',border:'1.5px solid rgba(212,175,55,0.25)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.5rem',fontWeight:'700',color:'var(--gold)'}}>
-              {(therapist.name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)||'?'}
-            </div>
-            <p style={{color:'var(--muted)',fontSize:'0.74rem',margin:0,letterSpacing:'0.3px'}}>No photo uploaded</p>
+      {/* ── Full-card background layer ── */}
+      <div className="t-bg">
+        {/* initials placeholder always renders behind photo */}
+        <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'12px'}}>
+          <div style={{width:'80px',height:'80px',borderRadius:'50%',background:'rgba(212,175,55,0.08)',border:'1px solid rgba(212,175,55,0.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.8rem',fontWeight:'700',color:'rgba(212,175,55,0.4)',letterSpacing:'-1px'}}>
+            {initials}
           </div>
-        )}
-
-        {/* Solid black bg — prevent screenshot of unmasked photo */}
-        <div style={{position:'absolute',inset:0,background:'#080808'}}/>
-
-        {/* Status pill */}
-        <div style={{position:'absolute',top:'10px',left:'10px',zIndex:10,display:'flex',alignItems:'center',gap:'5px',background:'rgba(0,0,0,0.72)',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',borderRadius:'20px',padding:'4px 10px',border:`1px solid ${status.dot}44`}}>
-          <div style={{position:'relative',width:'8px',height:'8px',flexShrink:0}}>
-            <div style={{position:'absolute',inset:0,borderRadius:'50%',background:status.dot}}/>
-            {status.pulse && <div style={{position:'absolute',inset:'-3px',borderRadius:'50%',background:status.dot,opacity:0.4,animation:'pulseRing 1.5s ease-out infinite'}}/>}
-          </div>
-          <span style={{fontSize:'0.63rem',fontWeight:'700',color:'#fff',letterSpacing:'0.4px'}}>{status.label}</span>
+          {!therapist.imageUrl && <p style={{color:'rgba(122,113,104,0.6)',fontSize:'0.72rem',letterSpacing:'0.5px'}}>No photo uploaded</p>}
         </div>
-
-        {/* Nearest badge */}
-        {isNearest && therapist._dist != null && (
-          <div style={{position:'absolute',top:'38px',left:'10px',zIndex:10,background:'linear-gradient(135deg,#1a6e2e,#25a240)',color:'#fff',fontSize:'0.6rem',fontWeight:'800',borderRadius:'10px',padding:'3px 9px',border:'1px solid rgba(39,174,96,0.45)',letterSpacing:'0.6px',boxShadow:'0 2px 10px rgba(37,162,64,.3)'}}>
-            ★ NEAREST
-          </div>
-        )}
-
-        {/* Watermarked photo visible */}
-        {isVisible && canvasUrl && (
-          <div style={{position:'absolute',inset:0}}>
-            {isIOS
-              ? <img src={canvasUrl} onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover',display:'block',WebkitUserSelect:'none',userSelect:'none'}}/>
-              : <video ref={videoRef} poster={canvasUrl} muted playsInline autoPlay onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
-            }
-            <div style={{position:'absolute',top:'10px',right:'10px',zIndex:10,background:'rgba(0,0,0,.75)',color:'var(--gold)',borderRadius:'16px',padding:'4px 12px',fontSize:'0.82rem',fontWeight:'800',letterSpacing:'0.5px'}}>{timeLeft}s</div>
-          </div>
-        )}
-
-        {/* View Photo / Limit overlay */}
-        {therapist.imageUrl && !isVisible && (
-          <div style={{position:'absolute',inset:0,zIndex:6,display:'flex',alignItems:'center',justifyContent:'center',background:'linear-gradient(180deg,rgba(0,0,0,0.3) 0%,rgba(0,0,0,0.6) 100%)'}}>
-            {limitReached
-              ? <div style={{textAlign:'center',padding:'20px'}}>
-                  <div style={{fontSize:'2rem',marginBottom:'6px'}}>🚫</div>
-                  <p style={{fontSize:'0.82rem',color:'var(--muted)',fontWeight:'600'}}>View limit reached</p>
-                  <p style={{fontSize:'0.72rem',color:'rgba(255,255,255,0.3)',marginTop:'3px'}}>{viewCount}/{maxViews} views used</p>
-                </div>
-              : <button onClick={handleView} disabled={loading} className="view-btn">
-                  {loading
-                    ? <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--gold-dark)" className="spin"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/></svg>
-                    : <>
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" strokeWidth="2.2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                        <span>View Photo</span>
-                        <span style={{fontSize:'0.68rem',opacity:0.6,fontWeight:'600'}}>{viewCount}/{maxViews} views</span>
-                      </>
-                  }
-                </button>
-            }
-          </div>
-        )}
       </div>
 
-      {/* ── Card footer ── */}
-      <div className="t-footer">
+      {/* Opaque black screen — prevents seeing unmasked photo */}
+      <div style={{position:'absolute',inset:0,background:'#080604',zIndex:1}}/>
 
-        {/* Name + status row */}
-        <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'8px'}}>
-          <div style={{minWidth:0}}>
-            <p style={{color:'var(--gold)',fontSize:'1rem',fontWeight:'700',letterSpacing:'0.8px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',lineHeight:1.2}}>{therapist.name || therapist.therapistId}</p>
-            {therapist.speciality && (
-              <p style={{color:'var(--muted)',fontSize:'0.74rem',marginTop:'3px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2" style={{verticalAlign:'middle',marginRight:'4px'}}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-                {therapist.speciality}
-              </p>
+      {/* ── Status pill ── top-left corner ── */}
+      <div style={{position:'absolute',top:'12px',left:'12px',zIndex:20,display:'flex',alignItems:'center',gap:'5px',background:'rgba(0,0,0,0.75)',backdropFilter:'blur(10px)',WebkitBackdropFilter:'blur(10px)',borderRadius:'20px',padding:'5px 11px',border:`1px solid ${status.dot}33`}}>
+        <div style={{position:'relative',width:'7px',height:'7px',flexShrink:0}}>
+          <div style={{position:'absolute',inset:0,borderRadius:'50%',background:status.dot}}/>
+          {status.pulse && <div style={{position:'absolute',inset:'-4px',borderRadius:'50%',background:status.dot,opacity:.4,animation:'pulseRing 1.6s ease-out infinite'}}/>}
+        </div>
+        <span style={{fontSize:'0.62rem',fontWeight:'700',color:'#fff',letterSpacing:'0.4px'}}>{status.label}</span>
+      </div>
+
+      {/* Nearest badge */}
+      {isNearest && therapist._dist!=null && (
+        <div style={{position:'absolute',top:'12px',right:'12px',zIndex:20,background:'linear-gradient(135deg,#0f5c22,#1e9638)',color:'#fff',fontSize:'0.58rem',fontWeight:'800',borderRadius:'10px',padding:'4px 10px',letterSpacing:'0.8px',boxShadow:'0 2px 12px rgba(30,150,56,.4)'}}>
+          ★ NEAREST
+        </div>
+      )}
+
+      {/* ── Watermarked photo (when visible) ── */}
+      {isVisible && canvasUrl && (
+        <div style={{position:'absolute',inset:0,zIndex:2}}>
+          {isIOS
+            ? <img src={canvasUrl} onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover',display:'block',WebkitUserSelect:'none',userSelect:'none'}}/>
+            : <video ref={videoRef} poster={canvasUrl} muted playsInline autoPlay onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
+          }
+          {/* Countdown pill */}
+          <div style={{position:'absolute',top:'12px',right:'12px',zIndex:10,background:'rgba(0,0,0,0.8)',color:'var(--gold)',borderRadius:'16px',padding:'4px 13px',fontSize:'0.85rem',fontWeight:'800',letterSpacing:'0.5px',backdropFilter:'blur(6px)'}}>{timeLeft}s</div>
+        </div>
+      )}
+
+      {/* ── View Photo overlay (when photo hidden) ── */}
+      {therapist.imageUrl && !isVisible && (
+        <div style={{position:'absolute',inset:0,zIndex:5,display:'flex',alignItems:'center',justifyContent:'center'}}>
+          {limitReached
+            ? <div style={{textAlign:'center'}}>
+                <div style={{width:'52px',height:'52px',borderRadius:'50%',background:'rgba(231,76,60,.1)',border:'1px solid rgba(231,76,60,.3)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 10px'}}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e74c3c" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                </div>
+                <p style={{fontSize:'0.8rem',color:'rgba(255,255,255,.5)',fontWeight:'600'}}>View limit reached</p>
+                <p style={{fontSize:'0.7rem',color:'rgba(255,255,255,.25)',marginTop:'3px'}}>{viewCount}/{maxViews} views used</p>
+              </div>
+            : <button onClick={handleView} disabled={loading} className="view-btn">
+                {loading
+                  ? <svg width="20" height="20" viewBox="0 0 24 24" fill="#5a3c00" className="spin"><circle cx="12" cy="12" r="10" stroke="#5a3c00" strokeWidth="2" fill="none"/><path d="M12 6v6l4 2" stroke="#0a0800" strokeWidth="2"/></svg>
+                  : <>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0a0800" strokeWidth="2.2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      <span>View Photo</span>
+                      <span style={{fontSize:'0.66rem',opacity:0.55,fontWeight:'600'}}>{viewCount}/{maxViews} uses</span>
+                    </>
+                }
+              </button>
+          }
+        </div>
+      )}
+
+      {/* ══ Glass info panel — floats over photo bottom ══ */}
+      <div className="t-panel" style={{zIndex:10}}>
+
+        {/* Name + speciality */}
+        <div>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'6px',marginBottom:'3px'}}>
+            <p style={{color:'var(--gold)',fontSize:'1.02rem',fontWeight:'700',letterSpacing:'0.8px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',lineHeight:1.15,textShadow:'0 1px 6px rgba(0,0,0,.8)'}}>
+              {therapist.name || therapist.therapistId}
+            </p>
+            {/* distance pill */}
+            {therapist._dist!=null && (
+              <span style={{flexShrink:0,fontSize:'0.6rem',color:isNearest?'#27ae60':'rgba(122,113,104,0.9)',whiteSpace:'nowrap',letterSpacing:'0.2px'}}>
+                ~{fmtDist(therapist._dist)}
+              </span>
             )}
           </div>
-          <span style={{flexShrink:0,display:'flex',alignItems:'center',gap:'4px',background:therapist.available?'rgba(39,174,96,0.1)':'rgba(80,80,80,0.12)',borderRadius:'10px',padding:'3px 8px',border:`1px solid ${therapist.available?'rgba(39,174,96,0.22)':'rgba(80,80,80,0.18)'}`}}>
-            <div style={{width:'5px',height:'5px',borderRadius:'50%',background:status.dot}}/>
-            <span style={{fontSize:'0.6rem',fontWeight:'700',color:status.dot,whiteSpace:'nowrap'}}>{status.label}</span>
-          </span>
+          {therapist.speciality && (
+            <p style={{color:'rgba(122,113,104,0.9)',fontSize:'0.72rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',letterSpacing:'0.3px'}}>{therapist.speciality}</p>
+          )}
         </div>
 
-        {/* Working days + hours */}
-        {(()=>{
-          const DAYS = [{k:'mon',l:'M'},{k:'tue',l:'T'},{k:'wed',l:'W'},{k:'thu',l:'T'},{k:'fri',l:'F'},{k:'sat',l:'S'},{k:'sun',l:'S'}];
-          const wh = therapist.workingHours;
-          const hasSchedule = wh && Object.values(wh).some(d=>d?.on);
-          if (!hasSchedule && !therapist.workStart) return null;
-          return (
-            <div style={{padding:'8px 10px',background:'rgba(255,255,255,0.025)',border:'1px solid rgba(255,255,255,0.055)',borderRadius:'10px'}}>
-              {hasSchedule && (
-                <div style={{display:'flex',gap:'3px',marginBottom:therapist.workStart?'7px':'0'}}>
-                  {DAYS.map(({k,l})=>{
-                    const on = wh[k]?.on === true;
-                    return (
-                      <div key={k} className={`day-pill ${on?'on':'off'}`}>
-                        <span>{l}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {therapist.workStart && therapist.workEnd && (
-                <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                  <span style={{fontSize:'0.76rem',fontWeight:'600',color:'rgba(255,255,255,0.75)',letterSpacing:'0.3px'}}>{therapist.workStart} – {therapist.workEnd}</span>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* Bio */}
+        {/* Bio (1 line max) */}
         {therapist.bio && (
-          <p style={{color:'var(--muted)',fontSize:'0.74rem',lineHeight:'1.55',fontStyle:'italic',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>{therapist.bio}</p>
+          <p style={{color:'rgba(122,113,104,0.7)',fontSize:'0.7rem',lineHeight:1.5,fontStyle:'italic',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{therapist.bio}</p>
         )}
 
-        {/* Distance badge */}
-        {therapist._dist != null && (
-          <div style={{display:'inline-flex',alignItems:'center',gap:'4px',background:isNearest?'rgba(39,174,96,0.08)':'rgba(255,255,255,0.035)',border:`1px solid ${isNearest?'rgba(39,174,96,0.28)':'rgba(255,255,255,0.07)'}`,borderRadius:'16px',padding:'3px 10px',fontSize:'0.72rem',color:isNearest?'#27ae60':'var(--muted)',alignSelf:'flex-start'}}>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="10" r="3"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
-            ~{fmtDist(therapist._dist)} away
+        {/* Working days + hours */}
+        {(hasSchedule || therapist.workStart) && (
+          <div style={{display:'flex',flexDirection:'column',gap:'5px'}}>
+            {hasSchedule && (
+              <div className="day-pills">
+                {DAYS.map(({k,l})=>(
+                  <div key={k} className={`dp ${wh[k]?.on?'on':'off'}`}>{l}</div>
+                ))}
+              </div>
+            )}
+            {therapist.workStart && therapist.workEnd && (
+              <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span style={{fontSize:'0.72rem',fontWeight:'600',color:'rgba(242,237,228,.6)',letterSpacing:'0.3px'}}>{therapist.workStart} – {therapist.workEnd}</span>
+              </div>
+            )}
           </div>
         )}
 
         {/* Book button */}
         <button onClick={()=>setShowBooking(true)} className="book-btn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           Book Appointment
         </button>
       </div>
