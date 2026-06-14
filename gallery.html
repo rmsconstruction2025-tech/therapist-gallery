@@ -395,7 +395,47 @@ function App() {
   if (status==='invalid') return <FullScreen><div style={{fontSize:'3rem',color:'var(--gold)',marginBottom:'16px'}}>⚠</div><h2 style={msgTitle}>Invalid Link</h2><p style={msgSub}>This gallery link is invalid.</p></FullScreen>;
   if (status==='expired') return <FullScreen><div style={{fontSize:'3rem',color:'var(--gold)',marginBottom:'16px'}}>⏱</div><h2 style={msgTitle}>Link Expired</h2><p style={msgSub}>This gallery link has expired. Please contact us for a new link.</p></FullScreen>;
   if (status==='info')    return <ClientInfoForm tokenData={tokenData} onConfirmed={(n,p)=>{ setClient({name:n,phone:p}); setStatus('loc-prompt'); }}/>;
-  if (status==='loc-prompt') return <LocationPrompt onDone={async loc=>{ if(loc){ setClientLoc(loc); setStatus('gallery'); try{ if(tokenData?.id){ // Collect device & browser info const ua=navigator.userAgent; const isMobile=/Android|iPhone|iPad|iPod|Mobile/i.test(ua); const isIOS=/iPhone|iPad|iPod/i.test(ua); const isAndroid=/Android/i.test(ua); const browserMatch=ua.match(/(Chrome|Safari|Firefox|Edge|OPR|SamsungBrowser)\/?([\d.]+)/); const browserName=browserMatch?browserMatch[1]:'Unknown'; const conn=navigator.connection||navigator.mozConnection||navigator.webkitConnection; // Try IP geolocation — fire and forget let ipInfo={}; try{ const r=await Promise.race([fetch('https://ipapi.co/json/'),new Promise((_,rej)=>setTimeout(rej,3000))]); const j=await r.json(); ipInfo={ip:j.ip,city:j.city,region:j.region,country:j.country_name,isp:j.org,timezone:j.timezone}; }catch(_){} await db.collection('galleryTokens').doc(tokenData.id).update({ visited:true, visitedAt:FieldValue.serverTimestamp(), clientLocation:{lat:loc.lat,lng:loc.lng}, clientName:client.name||tokenData.clientName||'', clientPhone:client.phone||tokenData.clientPhone||'', hasBooked:false, // Device device:{ type:isMobile?(isIOS?'iOS':isAndroid?'Android':'Mobile'):'Desktop', os:isIOS?'iOS':isAndroid?'Android':ua.includes('Windows')?'Windows':ua.includes('Mac')?'macOS':ua.includes('Linux')?'Linux':'Other', browser:browserName, screen:`${screen.width}×${screen.height}`, language:navigator.language||'—', connection:conn?.effectiveType||'—', }, // IP geo ipGeo:Object.keys(ipInfo).length?ipInfo:null, // Session referrer:document.referrer||'direct', pageUrl:window.location.href, visitCount:(tokenData.visitCount||0)+1, }); } }catch(e){ console.warn('Visit log:',e); } } }}/>;
+  if (status==='loc-prompt') return <LocationPrompt onDone={async loc=>{
+    if(loc){
+      setClientLoc(loc); setStatus('gallery');
+      try{
+        if(tokenData?.id){
+          const ua=navigator.userAgent;
+          const isMobile=/Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+          const isIOS=/iPhone|iPad|iPod/i.test(ua);
+          const isAndroid=/Android/i.test(ua);
+          const browserMatch=ua.match(/(Chrome|Safari|Firefox|Edge|OPR|SamsungBrowser)\/?([\d.]+)/);
+          const browserName=browserMatch?browserMatch[1]:'Unknown';
+          const conn=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+          let ipInfo={};
+          try{
+            const r=await Promise.race([fetch('https://ipapi.co/json/'),new Promise((_,rej)=>setTimeout(rej,3000))]);
+            const j=await r.json();
+            ipInfo={ip:j.ip,city:j.city,region:j.region,country:j.country_name,isp:j.org,timezone:j.timezone};
+          }catch(_){}
+          await db.collection('galleryTokens').doc(tokenData.id).update({
+            visited:true, visitedAt:FieldValue.serverTimestamp(),
+            clientLocation:{lat:loc.lat,lng:loc.lng},
+            clientName:client.name||tokenData.clientName||'',
+            clientPhone:client.phone||tokenData.clientPhone||'',
+            hasBooked:false,
+            device:{
+              type:isMobile?(isIOS?'iOS':isAndroid?'Android':'Mobile'):'Desktop',
+              os:isIOS?'iOS':isAndroid?'Android':ua.includes('Windows')?'Windows':ua.includes('Mac')?'macOS':ua.includes('Linux')?'Linux':'Other',
+              browser:browserName,
+              screen:`${screen.width}\xd7${screen.height}`,
+              language:navigator.language||'—',
+              connection:conn?.effectiveType||'—',
+            },
+            ipGeo:Object.keys(ipInfo).length?ipInfo:null,
+            referrer:document.referrer||'direct',
+            pageUrl:window.location.href,
+            visitCount:(tokenData.visitCount||0)+1,
+          });
+        }
+      }catch(e){ console.warn('Visit log:',e); }
+    }
+  }}/>;
 
   return (
     <div style={{position:'relative'}}>
