@@ -167,16 +167,14 @@
       box-shadow: 0 10px 36px rgba(37,162,64,.18);
     }
 
-    /* Photo area — fixed height, clean */
+    /* Photo area — tall portrait, scales with card width */
     .t-photo {
       position: relative;
-      height: 240px;
+      aspect-ratio: 2/3;
       background: #0a0806;
       overflow: hidden;
       flex-shrink: 0;
     }
-    @media (max-width: 860px) { .t-photo { height: 210px; } }
-    @media (max-width: 480px) { .t-photo { height: 200px; } }
 
     /* Info panel — below photo, never overlaps */
     .t-panel {
