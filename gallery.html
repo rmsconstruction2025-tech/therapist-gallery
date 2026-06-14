@@ -710,73 +710,33 @@ function parseGoogleMapsUrl(url) {
   return null;
 }
 
+const SERVICE_TYPES = [
+  'Swedish Massage','Deep Tissue Massage','Thai Massage',
+  'Hot Stone Massage','Aromatherapy','Reflexology',
+  'Head & Shoulder Massage','Full Body Massage','Other',
+];
+
 function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }) {
-  const lockedDate = tokenData?.bookType === 'later' ? (tokenData.scheduledDate || '') : '';
-  const [step,         setStep]         = useState('choose');
-  const [timeLeft,     setTimeLeft]     = useState(180);
-  const [form,         setForm]         = useState({ date: lockedDate, time:'', notes:'', landmark:'' });
-  const [saving,       setSaving]       = useState(false);
-  const [mapUrl,       setMapUrl]       = useState('');
-  const [locError,     setLocError]     = useState('');
-  const [gpsLoading,   setGpsLoading]   = useState(false);
-  const [clientMapsLink, setClientMapsLink] = useState('');
-  const timerRef    = useRef(null);
-  const unsubRef    = useRef(null);
+  const [step,      setStep]    = useState('details');
+  const [saving,    setSaving]  = useState(false);
+  const [locError,  setLocError]= useState('');
+  const [gpsLoading,setGpsLoad] = useState(false);
+  const [errors,    setErrors]  = useState({});
+
+  const [form, setForm] = useState({
+    name:        clientName || '',
+    phone:       clientPhone || '',
+    serviceType: '',
+    otherService:'',
+    date:        '',
+    time:        '',
+    notes:       '',
+  });
+  const [locationData, setLocationData] = useState(null); // {lat,lng,mapsUrl}
+  const [mapUrlInput,  setMapUrlInput]  = useState('');
+  const [bookingResult,setBookingResult]= useState(null); // saved booking details
+
   const bookingIdRef = useRef(null);
-  const SECS = 180;
-
-  // ── Cleanup on unmount ──
-  useEffect(()=>{
-    return ()=>{
-      clearInterval(timerRef.current);
-      if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
-    };
-  },[]);
-
-  // ── Resume from sessionStorage if page was refreshed mid-wait ──
-  useEffect(()=>{
-    try {
-      const pending = JSON.parse(sessionStorage.getItem('pendingBooking')||'null');
-      if(!pending || pending.therapistId !== therapist.id) return;
-      bookingIdRef.current = pending.bookingId;
-      const rem = Math.ceil((pending.endAt - Date.now()) / 1000);
-      if(rem <= 0){
-        db.collection('bookings').doc(pending.bookingId).update({status:'expired'}).catch(()=>{});
-        sessionStorage.removeItem('pendingBooking');
-        setStep('expired');
-        return;
-      }
-      setTimeLeft(rem);
-      setStep('waiting');
-      const endAt = pending.endAt;
-      timerRef.current = setInterval(()=>{
-        const remaining = Math.ceil((endAt - Date.now()) / 1000);
-        if(remaining <= 0){
-          clearInterval(timerRef.current);
-          if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
-          db.collection('bookings').doc(pending.bookingId).update({status:'expired'}).catch(()=>{});
-          sessionStorage.removeItem('pendingBooking');
-          setStep('expired');
-        } else { setTimeLeft(remaining); }
-      }, 500);
-      unsubRef.current = db.collection('bookings').doc(pending.bookingId).onSnapshot(snap=>{
-        if(!snap.exists) return;
-        const s = snap.data().status;
-        if(s==='accepted'||s==='admin_pending'||s==='confirmed'){
-          clearInterval(timerRef.current);
-          if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
-          sessionStorage.removeItem('pendingBooking');
-          playAlert('accept');
-          setStep('accepted');
-        } else if(s==='declined'){
-          clearInterval(timerRef.current);
-          if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
-          sessionStorage.removeItem('pendingBooking');
-          setStep('declined');
-        }
-      });
-    } catch(e){}
-  },[]);
 
   const getGPS = ()=>new Promise(resolve=>{
     if(!navigator.geolocation){ resolve(null); return; }
@@ -787,484 +747,307 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
     );
   });
 
-  // Submit "Book Now" after location is chosen
-  const submitBookNow = async (loc, lmk, mapsLink)=>{
+  // ── Step 1 validation ──
+  const nextFromDetails = ()=>{
+    const e={};
+    if(!form.name.trim()) e.name='Name is required';
+    if(!form.phone.trim()) e.phone='Mobile number is required';
+    else if(!/^\d{10}$/.test(form.phone.replace(/\s/g,''))) e.phone='Enter a valid 10-digit number';
+    if(Object.keys(e).length){ setErrors(e); return; }
+    setErrors({});
+    setStep('location');
+  };
+
+  // ── Step 2: GPS ──
+  const handleUseGPS = async ()=>{
+    setGpsLoad(true); setLocError('');
+    const loc = await getGPS();
+    setGpsLoad(false);
+    if(loc){
+      const mapsUrl = `https://maps.google.com?q=${loc.lat},${loc.lng}`;
+      setLocationData({lat:loc.lat, lng:loc.lng, mapsUrl});
+      setStep('appointment');
+    } else { setLocError('Could not get location. Please paste a Google Maps link.'); }
+  };
+
+  // ── Step 2: Maps link ──
+  const handleUseMapLink = ()=>{
+    if(!mapUrlInput.trim()){ setLocError('Please paste a Google Maps link.'); return; }
+    const parsed = parseGoogleMapsUrl(mapUrlInput.trim());
+    if(parsed){
+      setLocationData({lat:parsed.lat, lng:parsed.lng, mapsUrl:mapUrlInput.trim()});
+      setLocError('');
+      setStep('appointment');
+    } else { setLocError('Invalid link. Open Google Maps → Share → Copy link, then paste here.'); }
+  };
+
+  // ── Step 3 validation + submit ──
+  const handleSubmit = async ()=>{
+    const e={};
+    const svc = form.serviceType==='Other' ? form.otherService.trim() : form.serviceType;
+    if(!svc) e.serviceType='Select a service type';
+    if(!form.date) e.date='Date is required';
+    if(!form.time) e.time='Time is required';
+    if(Object.keys(e).length){ setErrors(e); return; }
+    setErrors({});
+    setSaving(true);
     setStep('loading');
     try {
-      // ── Duplicate guard: one active booking per client at a time ──
-      const dupSnap = await db.collection('bookings')
-        .where('clientPhone', '==', clientPhone)
-        .where('status', 'in', ['pending','accepted','admin_pending'])
-        .limit(1).get();
-      if(!dupSnap.empty){
-        const dup     = dupSnap.docs[0];
-        const dupData = dup.data();
-        const expiresMs = dupData.expiresAt?.toMillis?.() || 0;
-        if(expiresMs > Date.now()){
-          // An active booking already exists — resume it instead of creating another
-          bookingIdRef.current = dup.id;
-          const rem = Math.ceil((expiresMs - Date.now()) / 1000);
-          sessionStorage.setItem('pendingBooking', JSON.stringify({
-            bookingId: dup.id, endAt: expiresMs, therapistId: therapist.id,
-          }));
-          setTimeLeft(rem);
-          timerRef.current = setInterval(()=>{
-            const r2 = Math.ceil((expiresMs - Date.now()) / 1000);
-            if(r2 <= 0){
-              clearInterval(timerRef.current);
-              if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
-              db.collection('bookings').doc(dup.id).update({status:'expired'}).catch(()=>{});
-              sessionStorage.removeItem('pendingBooking');
-              setStep('expired');
-            } else { setTimeLeft(r2); }
-          }, 500);
-          unsubRef.current = db.collection('bookings').doc(dup.id).onSnapshot(snap=>{
-            if(!snap.exists) return;
-            const s = snap.data().status;
-            if(s==='accepted'||s==='admin_pending'||s==='confirmed'){
-              clearInterval(timerRef.current);
-              if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
-              sessionStorage.removeItem('pendingBooking');
-              playAlert('accept');
-              setStep('accepted');
-            } else if(s==='declined'){
-              clearInterval(timerRef.current);
-              if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
-              sessionStorage.removeItem('pendingBooking');
-              setStep('declined');
-            }
-          });
-          setStep('waiting');
-          return;
-        }
-      }
-
-      const expiresAt = new Date(Date.now() + SECS * 1000);
+      const finalService = form.serviceType==='Other' ? form.otherService.trim() : form.serviceType;
       const ref = await db.collection('bookings').add({
-        therapistDocId: therapist.id,
-        therapistId:    therapist.therapistId,
-        therapistName:  therapist.name || therapist.therapistId,
-        clientName,
-        clientPhone,          // stored for admin only — never shown to therapist
-        clientLocation: loc,
-        landmark:       lmk||'',
-        clientMapsLink: mapsLink||'',
-        bookingType:    'now',
-        status:         'pending',
-        createdAt:      FieldValue.serverTimestamp(),
-        expiresAt:      firebase.firestore.Timestamp.fromDate(expiresAt),
+        // ── Therapist info ──
+        therapistDocId:  therapist.id,
+        therapistId:     therapist.therapistId || therapist.id,
+        therapistName:   therapist.name || therapist.therapistId,
+        // ── Client info ──
+        clientName:      form.name.trim(),
+        clientPhone:     form.phone.trim(),   // ← stored only, NEVER shown to therapist UI
+        // ── Appointment ──
+        serviceType:     finalService,
+        appointmentDate: form.date,
+        appointmentTime: form.time,
+        notes:           form.notes.trim(),
+        // ── Location ──
+        clientLocation:  locationData ? {lat:locationData.lat, lng:locationData.lng} : null,
+        clientMapsLink:  locationData?.mapsUrl || '',
+        // ── Meta ──
+        bookingType:     'scheduled',
+        status:          'pending',
+        createdAt:       FieldValue.serverTimestamp(),
+        tokenId:         tokenData?.id || '',
       });
-
-      // Save booking to sessionStorage so refresh restores the timer
-      bookingIdRef.current = ref.id;
-      const endAt = Date.now() + SECS * 1000;
       sessionStorage.setItem('pendingBooking', JSON.stringify({
-        bookingId: ref.id,
-        endAt,
-        therapistId: therapist.id,
+        bookingId: ref.id, therapistId: therapist.id, endAt: Date.now() + 86400000,
       }));
-
-      // Countdown timer
-      timerRef.current = setInterval(()=>{
-        const rem = Math.ceil((endAt - Date.now()) / 1000);
-        if(rem <= 0){
-          clearInterval(timerRef.current);
-          if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
-          db.collection('bookings').doc(ref.id).update({status:'expired'}).catch(()=>{});
-          sessionStorage.removeItem('pendingBooking');
-          setStep('expired');
-        } else { setTimeLeft(rem); }
-      }, 500);
-
-      // Watch for therapist response
-      unsubRef.current = db.collection('bookings').doc(ref.id).onSnapshot(snap=>{
-        if(!snap.exists) return;
-        const s = snap.data().status;
-        if(s==='accepted'||s==='admin_pending'||s==='confirmed'){
-          clearInterval(timerRef.current);
-          if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
-          sessionStorage.removeItem('pendingBooking');
-          playAlert('accept');
-          setStep('accepted');
-        } else if(s==='declined'){
-          clearInterval(timerRef.current);
-          if(unsubRef.current){ unsubRef.current(); unsubRef.current=null; }
-          sessionStorage.removeItem('pendingBooking');
-          setStep('declined');
-        }
+      setBookingResult({
+        id: ref.id,
+        therapistName: therapist.name || therapist.therapistId,
+        service: finalService,
+        date: form.date,
+        time: form.time,
+        mapsUrl: locationData?.mapsUrl || '',
       });
-
-      setStep('waiting');
-    } catch(err){ alert(`Error: ${err.message}`); setStep('choose'); }
-  };
-
-  // "Book Now" button → show location step first
-  const handleBookNow = ()=>{ setLocError(''); setStep('location'); };
-
-  const handleUseGPS = async ()=>{
-    setGpsLoading(true); setLocError('');
-    const loc = await getGPS();
-    setGpsLoading(false);
-    if(loc){
-      const ml = `https://maps.google.com?q=${loc.lat},${loc.lng}`;
-      setClientMapsLink(ml);
-      submitBookNow(loc, form.landmark, ml);
-    } else { setLocError('Could not get location. Please enter a Google Maps link below.'); }
-  };
-
-  const handleUseMapUrl = ()=>{
-    if(!mapUrl.trim()){ setLocError('Please paste a Google Maps link.'); return; }
-    const parsed = parseGoogleMapsUrl(mapUrl.trim());
-    if(parsed){
-      const ml = mapUrl.trim();
-      setClientMapsLink(ml);
-      submitBookNow(parsed, form.landmark, ml);
-    } else { setLocError('Invalid link. Open Google Maps → Share → Copy Link, then paste here.'); }
-  };
-
-  const handleBookLater = async ()=>{
-    if(!form.date||!form.time) return;
-    setSaving(true);
-    try {
-      // Duplicate guard: check for existing scheduled booking same client+date+time
-      const dupSnap = await db.collection('bookings')
-        .where('clientPhone','==',clientPhone)
-        .where('status','in',['scheduled','confirmed'])
-        .where('scheduledDate','==',form.date)
-        .where('scheduledTime','==',form.time)
-        .limit(1).get();
-      if(!dupSnap.empty){ alert('You already have a booking for this date and time.'); setSaving(false); return; }
-      const loc = await Promise.race([getGPS(), new Promise(r=>setTimeout(()=>r(null),4000))]);
-      const ml = loc ? `https://maps.google.com?q=${loc.lat},${loc.lng}` : '';
-      setClientMapsLink(ml);
-      await db.collection('bookings').add({
-        therapistDocId: therapist.id,
-        therapistId:    therapist.therapistId,
-        therapistName:  therapist.name || therapist.therapistId,
-        clientName,
-        clientPhone,          // stored for admin only — never shown to therapist
-        clientLocation: loc,
-        landmark:       form.landmark.trim(),
-        clientMapsLink: ml,
-        bookingType:    'later',
-        scheduledDate:  form.date,
-        scheduledTime:  form.time,
-        notes:          form.notes.trim(),
-        status:         'scheduled',
-        createdAt:      FieldValue.serverTimestamp(),
-      });
-      setStep('later-done');
-    } catch(err){ alert(`Error: ${err.message}`); }
+      setStep('done');
+    } catch(err){ alert('Error: ' + err.message); setStep('appointment'); }
     finally{ setSaving(false); }
   };
 
-  // ── Expired option handlers ──
-  const handleBookWithAdmin = async ()=>{
-    if(!bookingIdRef.current) return;
-    setSaving(true);
-    try {
-      await db.collection('bookings').doc(bookingIdRef.current).update({
-        status: 'admin_pending',
-        needsTherapistAssignment: true,
-        adminRequestedAt: FieldValue.serverTimestamp(),
-      });
-      sessionStorage.removeItem('pendingBooking');
-      setStep('admin-sent');
-    } catch(e){ alert('Error: ' + e.message); }
-    finally{ setSaving(false); }
-  };
+  const handleChooseAnother = ()=>{ sessionStorage.removeItem('pendingBooking'); onClose(); };
 
-  const handleChooseAnother = ()=>{
-    sessionStorage.removeItem('pendingBooking');
-    onClose();
-  };
+  const tName = therapist.name || therapist.therapistId;
+  const today = new Date().toISOString().split('T')[0];
 
-  const fmtTime = s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
-  const urgent = timeLeft < 60;
+  const overlay  = {position:'fixed',inset:0,background:'rgba(0,0,0,0.95)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'16px',overflowY:'auto'};
+  const card     = {background:'#111008',border:'1px solid rgba(212,175,55,0.3)',borderRadius:'20px',padding:'24px 20px',width:'100%',maxWidth:'400px',position:'relative'};
+  const btnClose = {position:'absolute',top:'14px',right:'16px',background:'none',border:'none',color:'var(--muted)',fontSize:'1.3rem',cursor:'pointer',lineHeight:'1',zIndex:1};
+  const inp      = (err)=>({background:'rgba(255,255,255,0.05)',border:`1px solid ${err?'#e74c3c':'rgba(255,255,255,0.1)'}`,borderRadius:'10px',padding:'12px 14px',color:'var(--text)',fontSize:'0.9rem',width:'100%',outline:'none',fontFamily:'inherit'});
+  const lbl      = {color:'rgba(212,175,55,0.6)',fontSize:'0.65rem',letterSpacing:'1.2px',textTransform:'uppercase',display:'block',marginBottom:'5px',fontWeight:'700'};
+  const errTxt   = (msg)=>msg?<p style={{color:'#e74c3c',fontSize:'0.72rem',marginTop:'4px'}}>{msg}</p>:null;
+  const goldBtn  = {background:'linear-gradient(135deg,#7a5200,#d4af37)',color:'#080600',border:'none',borderRadius:'12px',padding:'14px',fontWeight:'800',fontSize:'0.9rem',cursor:'pointer',width:'100%',minHeight:'50px',letterSpacing:'0.3px'};
+  const ghostBtn = {background:'rgba(255,255,255,0.04)',color:'var(--muted)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'12px',padding:'12px',fontWeight:'600',fontSize:'0.85rem',cursor:'pointer',width:'100%',minHeight:'44px'};
 
-  // ── WhatsApp message helpers ──
-  const tName        = therapist.name||therapist.therapistId;
-  const lmk          = form.landmark?.trim()||'Not provided';
-  const mLoc         = clientMapsLink||'Not provided';
-  const therapistWa  = therapist.phone ? '91'+therapist.phone.replace(/\D/g,'').replace(/^91/,'') : null;
-  const adminMsgNow       = encodeURIComponent(`Hi, booking with ${tName} accepted!\nClient: ${clientName}\nAppointment: Immediate (Now)\nLandmark: ${lmk}\nLocation: ${mLoc}\nKindly confirm. — ${clientName}`);
-  const therapistMsgNow   = encodeURIComponent(`Hi ${tName}, new confirmed booking!\nClient: ${clientName}\nAppointment: Immediate (Now)\nLandmark: ${lmk}\nLocation: ${mLoc}\nPlease proceed. — Feel Free Spa`);
-  const adminMsgLater     = encodeURIComponent(`Hi, appointment scheduled with ${tName}!\nClient: ${clientName}\nDate: ${form.date}\nTime: ${form.time}\nLandmark: ${lmk}\nLocation: ${mLoc}\nPlease confirm. — ${clientName}`);
-  const therapistMsgLater = encodeURIComponent(`Hi ${tName}, upcoming booking confirmed!\nClient: ${clientName}\nDate: ${form.date}\nTime: ${form.time}\nLandmark: ${lmk}\nLocation: ${mLoc}\nPlease note. — Feel Free Spa`);
-
-  const overlay  = {position:'fixed',inset:0,background:'rgba(0,0,0,0.93)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'};
-  const card     = {background:'var(--surface)',border:'1px solid rgba(212,175,55,0.4)',borderRadius:'20px',padding:'28px 24px',width:'100%',maxWidth:'380px',position:'relative'};
-  const btnClose = {position:'absolute',top:'14px',right:'16px',background:'none',border:'none',color:'var(--muted)',fontSize:'1.3rem',cursor:'pointer',lineHeight:'1'};
-  const inp      = {background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'10px',padding:'12px 14px',color:'var(--text)',fontSize:'0.95rem',width:'100%',outline:'none'};
-  const lbl      = {color:'var(--muted)',fontSize:'0.7rem',letterSpacing:'1px',textTransform:'uppercase',display:'block',marginBottom:'5px'};
-  const goldBtn  = {background:'linear-gradient(135deg,#a07820,#d4af37)',color:'#000',border:'none',borderRadius:'10px',padding:'14px',fontWeight:'700',fontSize:'0.92rem',cursor:'pointer',width:'100%',minHeight:'48px'};
+  // ── Step indicator ──
+  const steps    = ['details','location','appointment'];
+  const stepIdx  = steps.indexOf(step);
 
   return (
     <div style={overlay}>
       <div className="fade-in" style={card}>
+        <button onClick={onClose} style={btnClose}>✕</button>
 
-        {/* Therapist avatar + name */}
-        <div style={{textAlign:'center',marginBottom:'20px'}}>
-          <div style={{width:'52px',height:'52px',borderRadius:'50%',overflow:'hidden',border:'2px solid rgba(212,175,55,0.4)',margin:'0 auto 8px'}}>
+        {/* Therapist header */}
+        <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'20px',paddingBottom:'16px',borderBottom:'1px solid rgba(212,175,55,0.1)'}}>
+          <div style={{width:'44px',height:'44px',borderRadius:'50%',overflow:'hidden',border:'1.5px solid rgba(212,175,55,0.35)',flexShrink:0}}>
             {therapist.imageUrl
               ? <img src={therapist.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-              : <div style={{width:'100%',height:'100%',background:'var(--elevated)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--gold)',fontSize:'1.4rem'}}>✦</div>
+              : <div style={{width:'100%',height:'100%',background:'rgba(212,175,55,0.08)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--gold)',fontSize:'1rem',fontWeight:'700'}}>{(tName[0]||'?').toUpperCase()}</div>
             }
           </div>
-          <p style={{color:'var(--gold)',fontWeight:'700',fontSize:'0.95rem'}}>{therapist.name||therapist.therapistId}</p>
-          {therapist.speciality&&<p style={{color:'var(--muted)',fontSize:'0.74rem',marginTop:'2px'}}>{therapist.speciality}</p>}
+          <div>
+            <p style={{color:'var(--gold)',fontWeight:'700',fontSize:'0.95rem',lineHeight:1.2}}>{tName}</p>
+            {therapist.speciality&&<p style={{color:'var(--muted)',fontSize:'0.72rem',marginTop:'2px'}}>{therapist.speciality}</p>}
+          </div>
         </div>
 
-        {/* ── Choose ── */}
-        {step==='choose'&&(<>
-          <button onClick={onClose} style={btnClose}>✕</button>
-          <h2 style={{textAlign:'center',color:'var(--text)',fontSize:'1rem',fontWeight:'600',marginBottom:'14px'}}>How would you like to book?</h2>
-          <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
-            <button onClick={handleBookNow} style={{...goldBtn,display:'flex',flexDirection:'column',alignItems:'center',gap:'3px',padding:'16px 12px'}}>
-              <span style={{fontSize:'1.5rem',lineHeight:'1'}}>⚡</span>
-              <span>Book Now</span>
-              <span style={{fontSize:'0.7rem',opacity:0.65,fontWeight:'400'}}>Request immediate appointment</span>
-            </button>
-            <button onClick={()=>setStep('later-form')} style={{background:'var(--elevated)',color:'var(--text)',border:'1px solid var(--border)',borderRadius:'10px',padding:'16px 12px',fontWeight:'600',fontSize:'0.9rem',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:'3px'}}>
-              <span style={{fontSize:'1.5rem',lineHeight:'1'}}>📅</span>
-              <span>Book Later</span>
-              <span style={{fontSize:'0.7rem',color:'var(--muted)',fontWeight:'400'}}>{lockedDate ? `Scheduled: ${lockedDate}` : 'Schedule a future appointment'}</span>
-            </button>
-          </div>
-        </>)}
-
-        {/* ── Location Step ── */}
-        {step==='location'&&(<>
-          <button onClick={()=>setStep('choose')} style={btnClose}>✕</button>
-          <h2 style={{textAlign:'center',color:'var(--text)',fontSize:'1rem',fontWeight:'600',marginBottom:'6px'}}>Where should the therapist come?</h2>
-          <p style={{textAlign:'center',color:'var(--muted)',fontSize:'0.78rem',marginBottom:'18px'}}>Share your location so the therapist can reach you</p>
-
-          {/* Landmark */}
-          <div style={{marginBottom:'14px'}}>
-            <label style={lbl}>Landmark <span style={{opacity:0.45}}>(optional)</span></label>
-            <input type="text" value={form.landmark}
-              onChange={e=>setForm(f=>({...f,landmark:e.target.value}))}
-              placeholder="e.g. Near City Mall, Opp. Reliance Fresh…"
-              style={inp}/>
-          </div>
-
-          {/* GPS option */}
-          <button onClick={handleUseGPS} disabled={gpsLoading}
-            style={{...goldBtn,display:'flex',alignItems:'center',justifyContent:'center',gap:'10px',marginBottom:'14px'}}>
-            {gpsLoading
-              ? <><span className="spin">✦</span> Getting location…</>
-              : <>📍 Use My Current Location</>
-            }
-          </button>
-
-          {/* Divider */}
-          <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'14px'}}>
-            <div style={{flex:1,height:'1px',background:'var(--border)'}}/>
-            <span style={{color:'var(--muted)',fontSize:'0.75rem'}}>OR</span>
-            <div style={{flex:1,height:'1px',background:'var(--border)'}}/>
-          </div>
-
-          {/* Maps URL option */}
-          <div style={{marginBottom:'10px'}}>
-            <label style={lbl}>Paste Google Maps Link</label>
-            <input
-              type="url"
-              value={mapUrl}
-              onChange={e=>{setMapUrl(e.target.value);setLocError('');}}
-              placeholder="https://maps.google.com/…"
-              style={{...inp,marginBottom:'10px'}}
-            />
-            <p style={{color:'var(--muted)',fontSize:'0.72rem',marginBottom:'10px'}}>
-              Open Google Maps → long-press your location → Share → Copy link
-            </p>
-            <button onClick={handleUseMapUrl}
-              style={{background:'var(--elevated)',color:'var(--text)',border:'1px solid var(--border-gold)',borderRadius:'10px',padding:'12px',fontWeight:'600',fontSize:'0.88rem',cursor:'pointer',width:'100%',minHeight:'44px'}}>
-              🗺️ Use This Location
-            </button>
-          </div>
-
-          {locError&&<p style={{color:'var(--danger)',fontSize:'0.78rem',marginTop:'8px',textAlign:'center'}}>{locError}</p>}
-        </>)}
-
-        {/* ── Loading ── */}
-        {step==='loading'&&(
-          <div style={{textAlign:'center',padding:'20px 0'}}>
-            <span className="spin" style={{fontSize:'2.2rem',color:'var(--gold)',display:'block',marginBottom:'12px'}}>✦</span>
-            <p style={{color:'var(--muted)',fontSize:'0.9rem'}}>Sending request…</p>
+        {/* Progress dots — only during form steps */}
+        {stepIdx>=0&&(
+          <div style={{display:'flex',alignItems:'center',gap:'6px',justifyContent:'center',marginBottom:'20px'}}>
+            {['Your Details','Location','Appointment'].map((label,i)=>(
+              <React.Fragment key={i}>
+                <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'4px'}}>
+                  <div style={{width:'28px',height:'28px',borderRadius:'50%',background:i<stepIdx?'var(--gold)':i===stepIdx?'rgba(212,175,55,0.2)':'rgba(255,255,255,0.05)',border:`2px solid ${i<=stepIdx?'var(--gold)':'rgba(255,255,255,0.08)'}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.7rem',fontWeight:'800',color:i<stepIdx?'#080600':i===stepIdx?'var(--gold)':'var(--muted)',transition:'all .2s'}}>
+                    {i<stepIdx?'✓':(i+1)}
+                  </div>
+                  <span style={{fontSize:'0.55rem',color:i===stepIdx?'var(--gold)':'var(--muted)',fontWeight:i===stepIdx?'700':'400',letterSpacing:'0.3px',whiteSpace:'nowrap'}}>{label}</span>
+                </div>
+                {i<2&&<div style={{flex:1,height:'1px',background:i<stepIdx?'rgba(212,175,55,0.4)':'rgba(255,255,255,0.07)',marginBottom:'16px'}}/>}
+              </React.Fragment>
+            ))}
           </div>
         )}
 
-        {/* ── Waiting ── */}
-        {step==='waiting'&&(
-          <div style={{textAlign:'center'}}>
-            <div style={{fontSize:'2.4rem',marginBottom:'8px'}}>⏳</div>
-            <h2 style={{color:'var(--text)',fontSize:'1.05rem',fontWeight:'700',marginBottom:'4px'}}>Request Sent!</h2>
-            <p style={{color:'var(--muted)',fontSize:'0.82rem',marginBottom:'18px'}}>Waiting for therapist to accept…</p>
-            <div style={{width:'90px',height:'90px',borderRadius:'50%',border:`3px solid ${urgent?'#e74c3c':'rgba(212,175,55,0.5)'}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',background:urgent?'rgba(231,76,60,.07)':'rgba(212,175,55,.04)',transition:'border-color .4s'}}>
-              <span style={{fontSize:'1.5rem',fontWeight:'700',color:urgent?'#e74c3c':'var(--gold)',fontFamily:'monospace'}}>{fmtTime(timeLeft)}</span>
-              <span style={{fontSize:'0.58rem',color:'var(--muted)',letterSpacing:'1px'}}>LEFT</span>
+        {/* ══ STEP 1: Your Details ══ */}
+        {step==='details'&&(
+          <div style={{display:'flex',flexDirection:'column',gap:'14px'}}>
+            <h2 style={{color:'var(--text)',fontSize:'1rem',fontWeight:'700',marginBottom:'2px'}}>Your Details</h2>
+            <div>
+              <label style={lbl}>Full Name *</label>
+              <input type="text" value={form.name} onChange={e=>{setForm(f=>({...f,name:e.target.value}));setErrors(x=>({...x,name:''}));}}
+                placeholder="Enter your name" style={inp(errors.name)}/>
+              {errTxt(errors.name)}
             </div>
-            <p style={{color:'var(--muted)',fontSize:'0.75rem'}}>Auto-cancels if not accepted within 3 mins</p>
-          </div>
-        )}
-
-        {/* ── Accepted ── */}
-        {step==='accepted'&&(
-          <div style={{textAlign:'center'}}>
-            <div style={{fontSize:'3rem',marginBottom:'10px'}}>✅</div>
-            <h2 style={{color:'#27ae60',fontSize:'1.15rem',fontWeight:'700',marginBottom:'8px'}}>Therapist Accepted!</h2>
-            <p style={{color:'var(--muted)',fontSize:'0.85rem',marginBottom:'12px'}}>
-              <strong style={{color:'var(--text)'}}>{tName}</strong> has accepted your request.
-            </p>
-            <div style={{background:'rgba(212,175,55,0.08)',border:'1px solid var(--border-gold)',borderRadius:'12px',padding:'14px',marginBottom:'16px',textAlign:'left'}}>
-              <p style={{color:'var(--gold)',fontSize:'0.85rem',fontWeight:'700',marginBottom:'5px'}}>⏳ Next: Admin Confirmation</p>
-              <p style={{color:'var(--muted)',fontSize:'0.8rem',lineHeight:'1.6'}}>Admin will verify and confirm your appointment.</p>
-              {form.landmark&&<p style={{color:'var(--muted)',fontSize:'0.78rem',marginTop:'6px'}}>📍 <strong style={{color:'var(--text)'}}>{form.landmark}</strong></p>}
-              {clientMapsLink&&<p style={{color:'var(--muted)',fontSize:'0.78rem',marginTop:'4px'}}>🗺️ <a href={clientMapsLink} target="_blank" rel="noopener noreferrer" style={{color:'var(--gold)',textDecoration:'none'}}>View on Google Maps</a></p>}
+            <div>
+              <label style={lbl}>Mobile Number *</label>
+              <input type="tel" value={form.phone} onChange={e=>{setForm(f=>({...f,phone:e.target.value}));setErrors(x=>({...x,phone:''}));}}
+                placeholder="10-digit mobile number" style={inp(errors.phone)} maxLength={10}/>
+              {errTxt(errors.phone)}
             </div>
-            <a href={`https://wa.me/${ADMIN_WHATSAPP}?text=${adminMsgNow}`}
-              target="_blank" rel="noopener noreferrer"
-              style={{display:'block',background:'#25D366',color:'#fff',borderRadius:'10px',padding:'13px',fontWeight:'700',textDecoration:'none',marginBottom:'10px',fontSize:'0.9rem',textAlign:'center'}}>
-              💬 Send Details to Admin
-            </a>
-            {therapistWa&&(
-              <a href={`https://wa.me/${therapistWa}?text=${therapistMsgNow}`}
-                target="_blank" rel="noopener noreferrer"
-                style={{display:'block',background:'#128C7E',color:'#fff',borderRadius:'10px',padding:'13px',fontWeight:'700',textDecoration:'none',marginBottom:'10px',fontSize:'0.9rem',textAlign:'center'}}>
-                💬 Send Location to Therapist
-              </a>
-            )}
-            <button onClick={onClose} style={{...goldBtn,background:'transparent',border:'1px solid var(--border)',color:'var(--muted)'}}>Close</button>
+            <button onClick={nextFromDetails} style={goldBtn}>Next →</button>
           </div>
         )}
 
-        {/* ── Declined ── */}
-        {step==='declined'&&(
-          <div style={{textAlign:'center'}}>
-            <div style={{fontSize:'3rem',marginBottom:'10px'}}>😔</div>
-            <h2 style={{color:'var(--text)',fontSize:'1.05rem',fontWeight:'700',marginBottom:'8px'}}>Therapist Unavailable</h2>
-            <p style={{color:'var(--muted)',fontSize:'0.85rem',marginBottom:'20px'}}>This therapist couldn't accept right now.</p>
-            <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
-              <button onClick={handleBookWithAdmin} disabled={saving}
-                style={{...goldBtn,display:'flex',flexDirection:'column',alignItems:'center',gap:'3px',padding:'16px 12px'}}>
-                {saving?<span className="spin">✦</span>:<>
-                  <span style={{fontSize:'1.4rem',lineHeight:'1'}}>👨‍💼</span>
-                  <span>Book with Admin</span>
-                  <span style={{fontSize:'0.7rem',opacity:0.65,fontWeight:'400'}}>We'll assign the best available therapist</span>
-                </>}
-              </button>
-              <button onClick={handleChooseAnother}
-                style={{background:'var(--elevated)',color:'var(--text)',border:'1px solid var(--border)',borderRadius:'10px',padding:'16px 12px',fontWeight:'600',fontSize:'0.9rem',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:'3px',width:'100%',minHeight:'48px'}}>
-                <span style={{fontSize:'1.4rem',lineHeight:'1'}}>🔄</span>
-                <span>Choose Another Therapist</span>
-                <span style={{fontSize:'0.7rem',color:'var(--muted)',fontWeight:'400'}}>Go back and select someone else</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ── Expired (timer ran out) ── */}
-        {step==='expired'&&(
-          <div style={{textAlign:'center'}}>
-            <div style={{fontSize:'2.8rem',marginBottom:'10px'}}>⏰</div>
-            <h2 style={{color:'var(--text)',fontSize:'1.05rem',fontWeight:'700',marginBottom:'6px'}}>Time's Up</h2>
-            <p style={{color:'var(--muted)',fontSize:'0.82rem',marginBottom:'22px',lineHeight:'1.5'}}>
-              <strong style={{color:'var(--text)'}}>{therapist.name||therapist.therapistId}</strong> didn't respond in time. What would you like to do?
-            </p>
-            <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
-              <button onClick={handleBookWithAdmin} disabled={saving}
-                style={{...goldBtn,display:'flex',flexDirection:'column',alignItems:'center',gap:'3px',padding:'16px 12px'}}>
-                {saving?<span className="spin">✦</span>:<>
-                  <span style={{fontSize:'1.4rem',lineHeight:'1'}}>👨‍💼</span>
-                  <span>Book with Admin</span>
-                  <span style={{fontSize:'0.7rem',opacity:0.65,fontWeight:'400'}}>We'll assign the best available therapist</span>
-                </>}
-              </button>
-              <button onClick={handleChooseAnother}
-                style={{background:'var(--elevated)',color:'var(--text)',border:'1px solid var(--border)',borderRadius:'10px',padding:'16px 12px',fontWeight:'600',fontSize:'0.9rem',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:'3px',width:'100%',minHeight:'48px'}}>
-                <span style={{fontSize:'1.4rem',lineHeight:'1'}}>🔄</span>
-                <span>Choose Another Therapist</span>
-                <span style={{fontSize:'0.7rem',color:'var(--muted)',fontWeight:'400'}}>Go back and select someone else</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ── Admin Sent ── */}
-        {step==='admin-sent'&&(
-          <div style={{textAlign:'center'}}>
-            <div style={{fontSize:'3rem',marginBottom:'10px'}}>✅</div>
-            <h2 style={{color:'#27ae60',fontSize:'1.1rem',fontWeight:'700',marginBottom:'8px'}}>Request Sent to Admin!</h2>
-            <p style={{color:'var(--muted)',fontSize:'0.83rem',marginBottom:'16px',lineHeight:'1.6'}}>
-              Our admin will assign the best available therapist and contact you on WhatsApp to confirm.
-            </p>
-            <button onClick={onClose} style={{...goldBtn,background:'transparent',border:'1px solid var(--border)',color:'var(--muted)'}}>Done ✓</button>
-          </div>
-        )}
-
-        {/* ── Book Later Form ── */}
-        {step==='later-form'&&(<>
-          <button onClick={()=>setStep('choose')} style={btnClose}>✕</button>
-          <h2 style={{textAlign:'center',color:'var(--text)',fontSize:'1rem',fontWeight:'600',marginBottom:'18px'}}>Schedule Appointment</h2>
+        {/* ══ STEP 2: Location ══ */}
+        {step==='location'&&(
           <div style={{display:'flex',flexDirection:'column',gap:'14px'}}>
             <div>
-              <label style={lbl}>Date {lockedDate && <span style={{opacity:0.55,fontStyle:'italic',textTransform:'none'}}>· set by admin</span>}</label>
-              <input type="date" value={form.date} min={new Date().toISOString().split('T')[0]}
-                onChange={e=>{ if(!lockedDate) setForm(f=>({...f,date:e.target.value})); }}
-                style={{...inp, opacity: lockedDate ? 0.65 : 1, cursor: lockedDate ? 'not-allowed' : 'auto'}}
-                readOnly={!!lockedDate}/>
+              <h2 style={{color:'var(--text)',fontSize:'1rem',fontWeight:'700',marginBottom:'2px'}}>Your Location</h2>
+              <p style={{color:'var(--muted)',fontSize:'0.75rem'}}>So the therapist can reach you</p>
             </div>
-            <div>
-              <label style={lbl}>Time</label>
-              <input type="time" value={form.time}
-                onChange={e=>setForm(f=>({...f,time:e.target.value}))} style={inp}/>
-            </div>
-            <div>
-              <label style={lbl}>Notes <span style={{opacity:0.45}}>(optional)</span></label>
-              <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}
-                rows={2} placeholder="Any special requests or preferences…"
-                style={{...inp,resize:'none',fontFamily:'inherit'}}/>
-            </div>
-            <div>
-              <label style={lbl}>Landmark <span style={{opacity:0.45}}>(optional)</span></label>
-              <input type="text" value={form.landmark}
-                onChange={e=>setForm(f=>({...f,landmark:e.target.value}))}
-                placeholder="e.g. Near City Mall, Opp. Reliance Fresh…"
-                style={inp}/>
-            </div>
-            <button onClick={handleBookLater} disabled={!form.date||!form.time||saving}
-              style={{...goldBtn,opacity:(!form.date||!form.time)?0.5:1}}>
-              {saving?<span className="spin">✦</span>:'Confirm Booking'}
-            </button>
-          </div>
-        </>)}
 
-        {/* ── Later Done ── */}
-        {step==='later-done'&&(
-          <div style={{textAlign:'center'}}>
-            <div style={{fontSize:'3rem',marginBottom:'10px'}}>🎉</div>
-            <h2 style={{color:'var(--gold)',fontSize:'1.15rem',fontWeight:'700',marginBottom:'8px'}}>Appointment Scheduled!</h2>
-            <p style={{color:'var(--muted)',fontSize:'0.83rem',marginBottom:'10px'}}>Booking with <strong style={{color:'var(--text)'}}>{tName}</strong> submitted.</p>
-            <div style={{background:'var(--elevated)',borderRadius:'10px',padding:'10px 16px',marginBottom:'14px',border:'1px solid rgba(212,175,55,0.3)',textAlign:'left'}}>
-              <p style={{color:'var(--gold)',fontSize:'0.88rem',fontWeight:'600'}}>📅 {form.date}</p>
-              <p style={{color:'var(--gold)',fontSize:'0.88rem',fontWeight:'600'}}>🕐 {form.time}</p>
-              {form.landmark&&<p style={{color:'var(--muted)',fontSize:'0.82rem',marginTop:'6px'}}>📍 {form.landmark}</p>}
-              {clientMapsLink&&<p style={{color:'var(--muted)',fontSize:'0.8rem',marginTop:'4px'}}>🗺️ <a href={clientMapsLink} target="_blank" rel="noopener noreferrer" style={{color:'var(--gold)',textDecoration:'none'}}>View on Google Maps</a></p>}
+            <button onClick={handleUseGPS} disabled={gpsLoading}
+              style={{...goldBtn,display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}>
+              {gpsLoading
+                ? <><div style={{width:'16px',height:'16px',border:'2px solid rgba(0,0,0,0.3)',borderTopColor:'#080600',borderRadius:'50%',animation:'spin .7s linear infinite'}}/> Getting location…</>
+                : <><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#080600" strokeWidth="2.5"><circle cx="12" cy="10" r="3"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg> Use My Current Location</>
+              }
+            </button>
+
+            <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+              <div style={{flex:1,height:'1px',background:'rgba(255,255,255,0.07)'}}/>
+              <span style={{color:'var(--muted)',fontSize:'0.72rem',fontWeight:'600'}}>OR</span>
+              <div style={{flex:1,height:'1px',background:'rgba(255,255,255,0.07)'}}/>
             </div>
-            <p style={{color:'var(--muted)',fontSize:'0.76rem',marginBottom:'14px'}}>Share these details with admin and therapist on WhatsApp.</p>
-            <a href={`https://wa.me/${ADMIN_WHATSAPP}?text=${adminMsgLater}`}
-              target="_blank" rel="noopener noreferrer"
-              style={{display:'block',background:'#25D366',color:'#fff',borderRadius:'10px',padding:'12px',fontWeight:'700',textDecoration:'none',marginBottom:'10px',fontSize:'0.88rem',textAlign:'center'}}>
-              💬 Send Details to Admin
-            </a>
-            {therapistWa&&(
-              <a href={`https://wa.me/${therapistWa}?text=${therapistMsgLater}`}
-                target="_blank" rel="noopener noreferrer"
-                style={{display:'block',background:'#128C7E',color:'#fff',borderRadius:'10px',padding:'12px',fontWeight:'700',textDecoration:'none',marginBottom:'10px',fontSize:'0.88rem',textAlign:'center'}}>
-                💬 Send Details to Therapist
-              </a>
+
+            <div>
+              <label style={lbl}>Paste Google Maps Link *</label>
+              <input type="url" value={mapUrlInput} onChange={e=>{setMapUrlInput(e.target.value);setLocError('');}}
+                placeholder="https://maps.google.com/…" style={inp(locError)}/>
+              <p style={{color:'var(--muted)',fontSize:'0.68rem',marginTop:'5px'}}>Open Google Maps → long-press your location → Share → Copy link</p>
+              {locError&&<p style={{color:'#e74c3c',fontSize:'0.72rem',marginTop:'4px'}}>{locError}</p>}
+            </div>
+
+            <div style={{display:'flex',gap:'8px'}}>
+              <button onClick={()=>setStep('details')} style={{...ghostBtn,flex:'0 0 auto',width:'auto',padding:'12px 16px'}}>← Back</button>
+              <button onClick={handleUseMapLink} style={{...ghostBtn,flex:1,border:'1px solid rgba(212,175,55,0.25)',color:'var(--gold)'}}>Use This Link</button>
+            </div>
+          </div>
+        )}
+
+        {/* ══ STEP 3: Appointment Details ══ */}
+        {step==='appointment'&&(
+          <div style={{display:'flex',flexDirection:'column',gap:'14px'}}>
+            <div>
+              <h2 style={{color:'var(--text)',fontSize:'1rem',fontWeight:'700',marginBottom:'2px'}}>Appointment Details</h2>
+              {locationData&&<p style={{color:'rgba(39,174,96,0.8)',fontSize:'0.72rem',display:'flex',alignItems:'center',gap:'4px'}}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#27ae60" strokeWidth="2.5"><circle cx="12" cy="10" r="3"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
+                Location captured
+              </p>}
+            </div>
+
+            {/* Service Type */}
+            <div>
+              <label style={lbl}>Service Type *</label>
+              <select value={form.serviceType} onChange={e=>{setForm(f=>({...f,serviceType:e.target.value}));setErrors(x=>({...x,serviceType:''}));}}
+                style={{...inp(errors.serviceType),appearance:'none',cursor:'pointer'}}>
+                <option value="">Select a service…</option>
+                {SERVICE_TYPES.map(s=><option key={s} value={s}>{s}</option>)}
+              </select>
+              {errTxt(errors.serviceType)}
+            </div>
+
+            {form.serviceType==='Other'&&(
+              <div>
+                <label style={lbl}>Describe Service *</label>
+                <input type="text" value={form.otherService} onChange={e=>setForm(f=>({...f,otherService:e.target.value}))}
+                  placeholder="Describe the service you need" style={inp(false)}/>
+              </div>
             )}
-            <button onClick={onClose} style={goldBtn}>Done ✓</button>
+
+            {/* Date + Time */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
+              <div>
+                <label style={lbl}>Date *</label>
+                <input type="date" value={form.date} min={today}
+                  onChange={e=>{setForm(f=>({...f,date:e.target.value}));setErrors(x=>({...x,date:''}));}}
+                  style={inp(errors.date)}/>
+                {errTxt(errors.date)}
+              </div>
+              <div>
+                <label style={lbl}>Time *</label>
+                <input type="time" value={form.time}
+                  onChange={e=>{setForm(f=>({...f,time:e.target.value}));setErrors(x=>({...x,time:''}));}}
+                  style={inp(errors.time)}/>
+                {errTxt(errors.time)}
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label style={lbl}>Special Notes <span style={{opacity:.5,textTransform:'none',letterSpacing:0,fontWeight:'400'}}>(optional)</span></label>
+              <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}
+                rows={2} placeholder="Allergies, preferences, special requests…"
+                style={{...inp(false),resize:'none'}}/>
+            </div>
+
+            <div style={{display:'flex',gap:'8px'}}>
+              <button onClick={()=>setStep('location')} style={{...ghostBtn,flex:'0 0 auto',width:'auto',padding:'12px 16px'}}>← Back</button>
+              <button onClick={handleSubmit} disabled={saving} style={{...goldBtn,flex:1}}>
+                {saving?<div style={{width:'18px',height:'18px',border:'2px solid rgba(0,0,0,0.3)',borderTopColor:'#080600',borderRadius:'50%',animation:'spin .7s linear infinite',margin:'0 auto'}}/>:'Confirm Booking'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ══ LOADING ══ */}
+        {step==='loading'&&(
+          <div style={{textAlign:'center',padding:'30px 0'}}>
+            <div style={{width:'44px',height:'44px',border:'3px solid rgba(212,175,55,.15)',borderTopColor:'var(--gold)',borderRadius:'50%',animation:'spin .9s linear infinite',margin:'0 auto 14px'}}/>
+            <p style={{color:'var(--muted)',fontSize:'0.85rem',letterSpacing:'0.5px'}}>Sending booking request…</p>
+          </div>
+        )}
+
+        {/* ══ DONE ══ */}
+        {step==='done'&&bookingResult&&(
+          <div style={{textAlign:'center'}}>
+            <div style={{width:'64px',height:'64px',borderRadius:'50%',background:'rgba(39,174,96,0.1)',border:'2px solid rgba(39,174,96,0.35)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 14px'}}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#27ae60" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <h2 style={{color:'#27ae60',fontSize:'1.15rem',fontWeight:'800',marginBottom:'6px'}}>Booking Sent!</h2>
+            <p style={{color:'var(--muted)',fontSize:'0.8rem',marginBottom:'18px',lineHeight:1.5}}>
+              Your appointment request has been sent to <strong style={{color:'var(--text)'}}>{bookingResult.therapistName}</strong> and admin. You'll be notified upon confirmation.
+            </p>
+
+            {/* Summary card */}
+            <div style={{background:'rgba(212,175,55,0.05)',border:'1px solid rgba(212,175,55,0.15)',borderRadius:'14px',padding:'14px 16px',marginBottom:'18px',textAlign:'left',display:'flex',flexDirection:'column',gap:'9px'}}>
+              <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(212,175,55,0.6)" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                <span style={{color:'rgba(255,255,255,0.7)',fontSize:'0.8rem'}}><span style={{color:'var(--muted)',fontSize:'0.68rem'}}>Service: </span>{bookingResult.service}</span>
+              </div>
+              <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(212,175,55,0.6)" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                <span style={{color:'rgba(255,255,255,0.7)',fontSize:'0.8rem'}}>{bookingResult.date}</span>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(212,175,55,0.6)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span style={{color:'rgba(255,255,255,0.7)',fontSize:'0.8rem'}}>{bookingResult.time}</span>
+              </div>
+              {bookingResult.mapsUrl&&(
+                <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(212,175,55,0.6)" strokeWidth="2"><circle cx="12" cy="10" r="3"/><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
+                  <a href={bookingResult.mapsUrl} target="_blank" rel="noopener noreferrer" style={{color:'var(--gold)',fontSize:'0.8rem',textDecoration:'none'}}>View location on Maps</a>
+                </div>
+              )}
+            </div>
+
+            <button onClick={()=>{ sessionStorage.removeItem('pendingBooking'); onClose(); }} style={goldBtn}>Done</button>
           </div>
         )}
 
