@@ -634,6 +634,42 @@ else if(markers.length>1){var g=L.featureGroup(markers);m.fitBounds(g.getBounds(
   return <iframe src={src} style={{width:'100%',height:'100%',border:'none',display:'block'}} title="All Therapists"/>;
 }
 
+function LiveMapSingle({ therapist: t }) {
+  const [src, setSrc] = React.useState('');
+  const urlRef = React.useRef('');
+  const depsKey = `${t.id}:${(t.location?.lat||0).toFixed(5)}:${(t.location?.lng||0).toFixed(5)}`;
+
+  React.useEffect(() => {
+    if (!t.location?.lat) return;
+    const name = (t.name||t.therapistId||'Therapist').replace(/['"<>&]/g,'_');
+    const ago  = (t._ago||'').replace(/['"<>&]/g,'_');
+    const lat  = t.location.lat;
+    const lng  = t.location.lng;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"><\/script>
+<style>*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%;overflow:hidden}#map{width:100%;height:100%}<\/style>
+</head><body><div id="map"></div>
+<script>
+var m=L.map('map').setView([${lat},${lng}],16);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:18}).addTo(m);
+L.marker([${lat},${lng}]).addTo(m).bindPopup('<b>${name}</b><br/><small>📍 ${ago}</small>').openPopup();
+<\/script></body></html>`;
+    const blob = new Blob([html],{type:'text/html'});
+    const newUrl = URL.createObjectURL(blob);
+    const old = urlRef.current;
+    urlRef.current = newUrl;
+    setSrc(newUrl);
+    if(old) setTimeout(()=>URL.revokeObjectURL(old),1000);
+  }, [depsKey]);
+
+  React.useEffect(()=>()=>{ if(urlRef.current) URL.revokeObjectURL(urlRef.current); },[]);
+
+  if(!src) return <div style={{height:'100%',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,0.4)'}}>Loading map…</div>;
+  return <iframe src={src} style={{width:'100%',height:'100%',border:'none',display:'block'}} title="Live Location"/>;
+}
+
 const FCM_SERVER_KEY = 'alwo_UykyXjQOLLt7xz55u76ZMaB0tYlRnSaGe7Z40U';
 
 async function sendFCMNotification(tokens, title, body) {
@@ -700,20 +736,6 @@ function LiveTracker() {
   const selId = selected && onDutyList.find(t=>t.id===selected) ? selected : (onDutyWithGPS[0]?.id || onDutyList[0]?.id || null);
   const selT  = onDutyList.find(t=>t.id===selId) || null;
 
-  // ── Google Maps URL builders ───────────────────────
-  const singleMapSrc = t => {
-    if(!t?._hasGPS) return '';
-    const ts = Math.floor((t.locationUpdatedAt?.toMillis?.()??0)/30000);
-    return `https://maps.google.com/maps?q=${t.location.lat},${t.location.lng}&z=16&output=embed&key=${ts}`;
-  };
-  const allMapSrc = () => {
-    if(onDutyWithGPS.length===0) return '';
-    if(onDutyWithGPS.length===1) return singleMapSrc(onDutyWithGPS[0]);
-    const avgLat = onDutyWithGPS.reduce((s,t)=>s+t.location.lat,0)/onDutyWithGPS.length;
-    const avgLng = onDutyWithGPS.reduce((s,t)=>s+t.location.lng,0)/onDutyWithGPS.length;
-    const ts = Math.floor(now/30000);
-    return `https://maps.google.com/maps?q=${avgLat.toFixed(4)},${avgLng.toFixed(4)}&z=14&output=embed&key=${ts}`;
-  };
 
   const btnSty = active => ({
     padding:'5px 14px',borderRadius:'20px',fontSize:'0.74rem',fontWeight:'700',
@@ -809,11 +831,9 @@ function LiveTracker() {
           {/* Map */}
           <div className="tracker-map">
             {view==='single' && selT && selT._hasGPS ? (
-              <iframe
+              <LiveMapSingle
                 key={`s-${selT.id}-${Math.floor((selT.locationUpdatedAt?.toMillis?.()??0)/30000)}`}
-                src={singleMapSrc(selT)}
-                style={{width:'100%',height:'100%',border:'none',display:'block'}}
-                allowFullScreen loading="lazy" title="Live Location"
+                therapist={selT}
               />
             ) : view==='single' && selT && !selT._hasGPS ? (
               <div style={{height:'100%',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:'12px'}}>
@@ -3716,9 +3736,20 @@ function BookingsPanel() {
                         </p>
                       </div>
 
-                      {/* Status badge + chevron */}
+                      {/* Status badge + delete + chevron */}
                       <div style={{display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
                         <span className="ma-badge" style={{background:c.bg,color:c.color,border:`1px solid ${c.color}35`}}>{c.label||b.status}</span>
+                        <button
+                          onClick={async e=>{
+                            e.stopPropagation();
+                            if(!confirm(`Delete booking for "${b.clientName||'this client'}"? This cannot be undone.`)) return;
+                            try{ await db.collection('bookings').doc(b.id).delete(); }
+                            catch(err){ alert('Error: '+err.message); }
+                          }}
+                          title="Delete booking"
+                          style={{width:'26px',height:'26px',borderRadius:'50%',background:'rgba(231,76,60,0.1)',border:'1px solid rgba(231,76,60,0.25)',color:'#e74c3c',fontSize:'11px',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontFamily:'inherit'}}>
+                          ✕
+                        </button>
                         <span style={{color:'var(--muted)',fontSize:'12px',display:'inline-block',transition:'transform .2s',transform:exp?'rotate(180deg)':'rotate(0deg)'}}>▼</span>
                       </div>
                     </div>
