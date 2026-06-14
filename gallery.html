@@ -1304,9 +1304,41 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
           {therapist.speciality && (
             <p style={{color:'var(--muted)',fontSize:'0.78rem',marginTop:'3px'}}>💆 {therapist.speciality}</p>
           )}
-          {therapist.workStart && therapist.workEnd && (
-            <p style={{color:'var(--muted)',fontSize:'0.76rem',marginTop:'2px'}}>🕐 {therapist.workStart} – {therapist.workEnd}</p>
-          )}
+
+          {/* ── Working days + hours visual ── */}
+          {(()=>{
+            const DAYS = [{k:'mon',l:'M'},{k:'tue',l:'T'},{k:'wed',l:'W'},{k:'thu',l:'T'},{k:'fri',l:'F'},{k:'sat',l:'S'},{k:'sun',l:'S'}];
+            const wh = therapist.workingHours;
+            const hasSchedule = wh && Object.values(wh).some(d=>d?.on);
+            if (!hasSchedule && !therapist.workStart) return null;
+            return (
+              <div style={{marginTop:'8px',padding:'10px 12px',background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.06)',borderRadius:'10px'}}>
+                {/* Day pills */}
+                {hasSchedule && (
+                  <div style={{display:'flex',gap:'4px',marginBottom: therapist.workStart ? '8px' : '0'}}>
+                    {DAYS.map(({k,l})=>{
+                      const on = wh[k]?.on === true;
+                      return (
+                        <div key={k} style={{flex:1,textAlign:'center',padding:'4px 2px',borderRadius:'6px',
+                          background: on ? 'linear-gradient(135deg,var(--gold-dark),var(--gold))' : 'rgba(255,255,255,0.04)',
+                          border: on ? 'none' : '1px solid rgba(255,255,255,0.07)'}}>
+                          <span style={{fontSize:'0.6rem',fontWeight:'700',color: on ? '#0a0a0a' : 'rgba(255,255,255,0.2)',letterSpacing:'0.2px'}}>{l}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {/* Time range */}
+                {therapist.workStart && therapist.workEnd && (
+                  <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                    <span style={{fontSize:'0.7rem',color:'var(--muted)'}}>🕐</span>
+                    <span style={{fontSize:'0.78rem',fontWeight:'600',color:'var(--text)',letterSpacing:'0.3px'}}>{therapist.workStart} – {therapist.workEnd}</span>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {therapist.bio && (
             <p style={{color:'var(--muted)',fontSize:'0.76rem',marginTop:'4px',lineHeight:'1.5',fontStyle:'italic'}}>{therapist.bio}</p>
           )}
