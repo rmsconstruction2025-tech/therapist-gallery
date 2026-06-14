@@ -751,8 +751,6 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
   const nextFromDetails = ()=>{
     const e={};
     if(!form.name.trim()) e.name='Name is required';
-    if(!form.phone.trim()) e.phone='Mobile number is required';
-    else if(!/^\d{10}$/.test(form.phone.replace(/\s/g,''))) e.phone='Enter a valid 10-digit number';
     if(Object.keys(e).length){ setErrors(e); return; }
     setErrors({});
     setStep('location');
@@ -897,10 +895,9 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
               {errTxt(errors.name)}
             </div>
             <div>
-              <label style={lbl}>Mobile Number *</label>
-              <input type="tel" value={form.phone} onChange={e=>{setForm(f=>({...f,phone:e.target.value}));setErrors(x=>({...x,phone:''}));}}
-                placeholder="10-digit mobile number" style={inp(errors.phone)} maxLength={10}/>
-              {errTxt(errors.phone)}
+              <label style={lbl}>Mobile Number</label>
+              <input type="tel" value={form.phone} readOnly
+                style={{...inp(false),opacity:0.6,cursor:'not-allowed',userSelect:'none'}}/>
             </div>
             <button onClick={nextFromDetails} style={goldBtn}>Next →</button>
           </div>

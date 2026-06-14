@@ -143,18 +143,14 @@ function getACtx() {
 });
 
 function _playTones(ctx, type) {
-  if (navigator.vibrate) navigator.vibrate(type==='new' ? [200,100,200,100,200] : [150,80,150]);
-  const seqs = {
-    new:    [[1000,0.00,0.18],[1400,0.20,0.18],[1000,0.40,0.18],[1400,0.60,0.18],[1000,0.80,0.18]],
-    accept: [[660,0.00,0.25],[880,0.28,0.25],[1100,0.56,0.25]],
-  };
-  (seqs[type]||seqs.new).forEach(([freq,t,dur])=>{
+  if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
+  // Short 2-tone message notification ping
+  [[880,0.00,0.09],[1200,0.11,0.09]].forEach(([freq,t,dur])=>{
     const o=ctx.createOscillator(), g=ctx.createGain();
     o.connect(g); g.connect(ctx.destination);
-    o.frequency.value=freq;
-    o.type = type==='new' ? 'sawtooth' : 'square';
+    o.frequency.value=freq; o.type='sine';
     g.gain.setValueAtTime(0, ctx.currentTime+t);
-    g.gain.linearRampToValueAtTime(0.6, ctx.currentTime+t+0.01);
+    g.gain.linearRampToValueAtTime(0.45, ctx.currentTime+t+0.01);
     g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+t+dur);
     o.start(ctx.currentTime+t); o.stop(ctx.currentTime+t+dur+0.02);
   });
@@ -539,16 +535,9 @@ function TherapistPortal({ session, onLogout }) {
     return ()=>navigator.geolocation.clearWatch(watch);
   },[]);
 
-  // Repeating alert — plays every 1s while pending booking exists
+  // Single notification ping when a new booking arrives
   useEffect(()=>{
-    if(hasNewPending){
-      playAlert('new');
-      alertIntervalRef.current = setInterval(()=>playAlert('new'), 1000);
-    } else {
-      clearInterval(alertIntervalRef.current);
-      alertIntervalRef.current = null;
-    }
-    return ()=>{ clearInterval(alertIntervalRef.current); alertIntervalRef.current=null; };
+    if(hasNewPending) playAlert('new');
   },[hasNewPending]);
 
   // Stop repeating alert when no more pending bookings
@@ -1936,7 +1925,7 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
       {/* Incoming booking request */}
       {firstPending&&(
         <div style={{padding:'14px 16px 0'}}>
-          <BookingRequestCard booking={firstPending} myGPS={myGPS} onAccept={onAccept} onDecline={onDecline}/>
+          <BookingRequestCard booking={firstPending} myGPS={myGPS}/>
         </div>
       )}
 
@@ -2173,68 +2162,58 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
 // ══════════════════════════════════════════════════════
 //  BOOKING REQUEST CARD (with countdown timer)
 // ══════════════════════════════════════════════════════
-function BookingRequestCard({ booking: b, myGPS, onAccept, onDecline }) {
-  const [secs, setSecs] = useState(()=>{
-    const elapsed = b.createdAt?.toDate ? Math.floor((Date.now()-b.createdAt.toDate())/1000) : 0;
-    return Math.max(0, 180-elapsed);
-  });
+function BookingRequestCard({ booking: b, myGPS }) {
+  const initial = (b.clientName||'?')[0].toUpperCase();
+  const dist = (myGPS&&b.clientLocation?.lat) ? haversineKm(myGPS.lat,myGPS.lng,b.clientLocation.lat,b.clientLocation.lng) : null;
 
-  useEffect(()=>{
-    if(secs<=0) return;
-    const t=setInterval(()=>setSecs(s=>Math.max(0,s-1)),1000);
-    return ()=>clearInterval(t);
-  },[]);
+  // Build Maps URL — prefer stored link, fall back to coords
+  const mapsUrl = b.clientMapsLink ||
+    (b.clientLocation?.lat ? `https://maps.google.com?q=${b.clientLocation.lat},${b.clientLocation.lng}` : null);
 
-  const mins=Math.floor(secs/60), ss=secs%60;
-  const timerStr=`${mins}:${String(ss).padStart(2,'0')}`;
-  const timerColor=secs<30?'#e74c3c':secs<60?'#f39c12':'#e74c3c';
-  const initial=(b.clientName||'?')[0].toUpperCase();
-  const dist=(myGPS&&b.clientLocation&&b.clientLocation.lat)?haversineKm(myGPS.lat,myGPS.lng,b.clientLocation.lat,b.clientLocation.lng):null;
+  // Format appointment date/time
+  const apptLine = [b.appointmentDate, b.appointmentTime].filter(Boolean).join(' · ');
+
+  const row = (icon, content, isLink)=>(
+    <div style={{display:'flex',alignItems:'flex-start',gap:'8px',padding:'7px 0',borderBottom:'1px solid rgba(255,255,255,0.05)'}}>
+      <span style={{fontSize:'0.85rem',flexShrink:0,marginTop:'1px'}}>{icon}</span>
+      {isLink
+        ? <a href={content.href} target="_blank" rel="noopener noreferrer"
+            style={{color:'var(--gold)',fontSize:'0.82rem',textDecoration:'none',fontWeight:'600',lineHeight:1.4}}>
+            {content.label}
+          </a>
+        : <span style={{color:'var(--text)',fontSize:'0.82rem',lineHeight:1.4}}>{content}</span>
+      }
+    </div>
+  );
 
   return (
-    <div className="booking-alert" style={{background:'rgba(231,76,60,0.06)',border:'2px solid rgba(231,76,60,0.45)',borderRadius:'16px',padding:'16px'}}>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'14px'}}>
-        <div style={{display:'flex',alignItems:'center',gap:'7px'}}>
-          <div style={{width:'8px',height:'8px',borderRadius:'50%',background:'#e74c3c',boxShadow:'0 0 6px #e74c3c'}}/>
-          <span style={{fontSize:'0.7rem',fontWeight:'700',color:'#e74c3c',letterSpacing:'1.5px',textTransform:'uppercase'}}>New Request</span>
-        </div>
-        <span style={{fontSize:'1rem',fontWeight:'700',color:timerColor,fontFamily:'monospace',letterSpacing:'1px'}}>{timerStr}</span>
+    <div className="booking-alert" style={{background:'rgba(212,175,55,0.05)',border:'1px solid rgba(212,175,55,0.25)',borderRadius:'16px',padding:'16px',marginBottom:'12px'}}>
+      {/* Header */}
+      <div style={{display:'flex',alignItems:'center',gap:'7px',marginBottom:'14px'}}>
+        <div style={{width:'8px',height:'8px',borderRadius:'50%',background:'var(--gold)',boxShadow:'0 0 6px rgba(212,175,55,0.6)',flexShrink:0}}/>
+        <span style={{fontSize:'0.68rem',fontWeight:'800',color:'var(--gold)',letterSpacing:'1.5px',textTransform:'uppercase'}}>New Booking</span>
       </div>
-      <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'10px'}}>
-        <div style={{width:'40px',height:'40px',borderRadius:'50%',background:'rgba(212,175,55,0.12)',border:'1px solid rgba(212,175,55,0.25)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:'700',color:'var(--gold)',fontSize:'1.05rem',flexShrink:0}}>
+
+      {/* Client name + distance */}
+      <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'12px'}}>
+        <div style={{width:'42px',height:'42px',borderRadius:'50%',background:'rgba(212,175,55,0.1)',border:'1px solid rgba(212,175,55,0.25)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:'800',color:'var(--gold)',fontSize:'1.1rem',flexShrink:0}}>
           {initial}
         </div>
-        <div style={{minWidth:0}}>
-          <p style={{fontWeight:'700',fontSize:'0.95rem',color:'var(--text)',marginBottom:'2px'}}>{b.clientName||'Client'}</p>
-          <p style={{fontSize:'0.74rem',color:'var(--muted)',display:'flex',alignItems:'center',gap:'4px',flexWrap:'wrap'}}>
-            <span style={{color:'var(--gold)'}}>⚡</span><span>Immediate</span>
-            {dist!==null&&<><span>·</span><span>{fmtDist(dist)}</span></>}
-          </p>
+        <div>
+          <p style={{fontWeight:'700',fontSize:'0.97rem',color:'var(--text)',marginBottom:'2px'}}>{b.clientName||'Client'}</p>
+          {dist!==null&&<p style={{fontSize:'0.72rem',color:'var(--muted)'}}>{fmtDist(dist)} away</p>}
         </div>
       </div>
-      {(b.serviceType||b.notes||b.duration)&&(
-        <p style={{fontSize:'0.82rem',color:'var(--muted)',marginBottom:'14px',display:'flex',alignItems:'center',gap:'5px'}}>
-          <span>📋</span><span>{[b.serviceType,b.duration].filter(Boolean).join(', ')||b.notes||''}</span>
-        </p>
-      )}
-      {b.clientLocation&&b.clientLocation.lat&&(
-        <a href={`https://maps.google.com?q=${b.clientLocation.lat},${b.clientLocation.lng}`} target="_blank" rel="noopener noreferrer"
-          style={{color:'var(--gold)',fontSize:'0.78rem',textDecoration:'none',display:'inline-flex',alignItems:'center',gap:'4px',marginBottom:'14px'}}>
-          📍 Open in Maps
-        </a>
-      )}
-      {b.clientLocation&&b.clientLocation.address&&!b.clientLocation.lat&&(
-        <p style={{fontSize:'0.78rem',color:'var(--muted)',marginBottom:'14px',display:'flex',alignItems:'center',gap:'4px'}}>
-          📍 {b.clientLocation.address}
-        </p>
-      )}
-      <div style={{display:'flex',gap:'10px'}}>
-        <button onClick={()=>onDecline(b)} style={{flex:1,background:'rgba(231,76,60,0.1)',color:'var(--danger)',border:'1px solid rgba(231,76,60,0.3)',borderRadius:'12px',padding:'14px',fontWeight:'700',fontSize:'0.9rem',cursor:'pointer',minHeight:'50px',fontFamily:'inherit'}}>
-          ✕ Decline
-        </button>
-        <button onClick={()=>onAccept(b)} style={{flex:2,background:'#27ae60',color:'#fff',border:'none',borderRadius:'12px',padding:'14px',fontWeight:'700',fontSize:'0.9rem',cursor:'pointer',minHeight:'50px',fontFamily:'inherit'}}>
-          ✓ Accept
-        </button>
+
+      {/* Detail rows */}
+      <div style={{borderTop:'1px solid rgba(255,255,255,0.05)'}}>
+        {b.serviceType && row('💆', b.serviceType)}
+        {apptLine      && row('📅', apptLine)}
+        {mapsUrl
+          ? row('📍', {href: mapsUrl, label: 'Open Client Location in Maps'}, true)
+          : b.clientLocation?.address && row('📍', b.clientLocation.address)
+        }
+        {b.notes       && row('📝', b.notes)}
       </div>
     </div>
   );
