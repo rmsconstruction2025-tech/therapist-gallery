@@ -1494,7 +1494,7 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
 
     {/* BookingModal OUTSIDE .t-card so card's CSS transform doesn't trap fixed positioning */}
     {showBooking && <BookingModal
-      therapist={therapist}
+         therapist={therapist}
       clientName={clientName}
       clientPhone={clientPhone}
       tokenData={tokenData}
@@ -1508,26 +1508,28 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
 //  PAGE WATERMARK (fixed over entire page)
 // ══════════════════════════════════════════════════════
 function PageWatermark({ name, phone }) {
-  const text = `${name} · ${phone}`;
+  const text = `${name||''}${phone?' · '+phone.slice(-4):''}`;
+  if (!text.trim()) return null;
+  const lines = 8, cols = 4;
   return (
-    <div style={{position:'fixed',inset:0,overflow:'hidden',pointerEvents:'none',zIndex:1000}}>
-      {Array.from({length:40},(_,i)=>(
-        <span key={i} style={{position:'absolute',left:`${(i%4)*28}%`,top:`${Math.floor(i/4)*14}%`,transform:'rotate(-22deg)',whiteSpace:'nowrap',fontSize:'11px',color:'rgba(255,255,255,.04)',fontWeight:'700',letterSpacing:'1px',fontFamily:'monospace',pointerEvents:'none'}}>
-          {text}
-        </span>
-      ))}
+    <div style={{position:'fixed',inset:0,pointerEvents:'none',zIndex:8888,overflow:'hidden',userSelect:'none'}}>
+      {Array.from({length:lines*cols},(_,i)=>{
+        const row=Math.floor(i/cols), col=i%cols;
+        return (
+          <div key={i} style={{
+            position:'absolute',
+            top:`${(row+0.5)*(100/lines)}%`,
+            left:`${(col+0.5)*(100/cols)}%`,
+            transform:'translate(-50%,-50%) rotate(-30deg)',
+            fontSize:'0.72rem',fontWeight:'700',
+            color:'rgba(212,175,55,0.10)',
+            whiteSpace:'nowrap',letterSpacing:'1px',
+          }}>{text}</div>
+        );
+      })}
     </div>
   );
 }
-
-// ── Shared ──────────────────────────────────────────────
-function FullScreen({children}) {
-  return <div style={{minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'radial-gradient(ellipse at 50% 0%,#1a1000,var(--bg) 65%)',padding:'40px 20px',textAlign:'center'}}>{children}</div>;
-}
-const msgTitle={fontSize:'1.5rem',color:'var(--gold)',fontWeight:'700',letterSpacing:'1px',marginBottom:'12px'};
-const msgSub={color:'var(--muted)',fontSize:'0.95rem',maxWidth:'360px',lineHeight:'1.6'};
-const labelSt={color:'var(--muted)',fontSize:'0.76rem',letterSpacing:'1.2px',textTransform:'uppercase'};
-const inputSt={background:'var(--elevated)',border:'1px solid',borderRadius:'10px',padding:'13px 16px',color:'var(--text)',fontSize:'1rem',outline:'none',width:'100%'};
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
