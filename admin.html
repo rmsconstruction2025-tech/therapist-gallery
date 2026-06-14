@@ -1501,6 +1501,7 @@ function Dashboard({ user }) {
     { id:'links',      icon:'🔗', label:'Gallery Links' },
     { id:'accounts',   icon:'👤', label:'Accounts' },
     { id:'bookings',   icon:'📋', label:'Bookings' },
+    { id:'earnings',   icon:'💰', label:'Earnings' },
     { id:'tracker',    icon:'📍', label:'Live Tracker' },
     { id:'chat',       icon:'💬', label:'Chat' },
   ];
@@ -1515,6 +1516,7 @@ function Dashboard({ user }) {
   // Extra tabs accessible via "More"
   const moreTabs = [
     { id:'links',      icon:'🔗', label:'Gallery Links',     desc:'Create & share booking gallery links' },
+    { id:'earnings',   icon:'💰', label:'Earnings',          desc:'View completed session revenue by therapist' },
     { id:'tracker',    icon:'📍', label:'Live Tracker',      desc:'Track therapist GPS locations in real time' },
   ];
   // Is the current tab one of the "more" extras (highlight More in bottom nav)?
@@ -1605,6 +1607,7 @@ function Dashboard({ user }) {
           {tab==='links'      && <MobileSubPage title="Gallery Links" onBack={()=>setTab('more')}><LinkCreator/></MobileSubPage>}
           {tab==='accounts'   && <TherapistAccounts/>}
           {tab==='bookings'   && <BookingsPanel/>}
+          {tab==='earnings'   && <MobileSubPage title="Earnings" onBack={()=>setTab('more')}><EarningsTab/></MobileSubPage>}
           {tab==='tracker'    && <MobileSubPage title="Live Tracker"  onBack={()=>setTab('more')}><LiveTracker/></MobileSubPage>}
           {tab==='chat'       && <ChatAdmin/>}
           {tab==='more'       && <MobileMoreMenu moreTabs={moreTabs} onNavigate={setTab} user={user} onSignOut={()=>auth.signOut()} onTheme={toggleTheme} dark={dark}/>}
@@ -2660,6 +2663,7 @@ function AttendanceAdmin() {
   const [records,     setRecords]     = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [selTherapist,setSelTherapist]= useState(null);
+  const [saving,      setSaving]      = useState(false);
 
   const now         = new Date();
   const yr          = now.getFullYear();
@@ -2714,6 +2718,32 @@ function AttendanceAdmin() {
   const fmtTime = ts=>{ if(!ts?.toDate) return '—'; return ts.toDate().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true}); };
   const fmtHrs  = h=>{ if(!h) return '—'; const hr=Math.floor(h),min=Math.round((h-hr)*60); return min>0?`${hr}h ${min}m`:`${hr}h`; };
 
+  const clickDay = async (docId, day) => {
+    const ds   = `${yr}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const date = new Date(yr, mo, day);
+    if (ds > todayStr) return;       // no future
+    if (date.getDay() === 0) return; // no Sunday
+    if (saving) return;
+    const cur = getStatus(docId, day);
+    // cycle: no-data / absent → present → half-day → absent
+    const next = cur === 'present' ? 'half-day' : cur === 'half-day' ? 'absent' : 'present';
+    setSaving(true);
+    try {
+      const existing = records.find(r => r.therapistDocId === docId && r.date === ds);
+      if (existing) {
+        await db.collection('attendance').doc(existing.id).update({ status: next });
+        setRecords(prev => prev.map(r => r.id === existing.id ? {...r, status: next} : r));
+      } else {
+        const ref = await db.collection('attendance').add({
+          therapistDocId: docId, date: ds, status: next,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+        setRecords(prev => [...prev, {id: ref.id, therapistDocId: docId, date: ds, status: next}]);
+      }
+    } catch(err) { alert('Error: ' + err.message); }
+    setSaving(false);
+  };
+
   if (loading) return <div style={{padding:'60px',textAlign:'center',color:'var(--muted)'}}>Loading…</div>;
 
   // ── Detail view ──────────────────────────────────────
@@ -2766,23 +2796,37 @@ function AttendanceAdmin() {
             {Array.from({length:firstDow},(_,i)=><div key={'e'+i}/>)}
             {Array.from({length:daysInMonth},(_,i)=>{
               const day=i+1, s=getStatus(t.id,day), isToday=day===now.getDate();
+              const ds=`${yr}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+              const date=new Date(yr,mo,day);
+              const canClick = ds<=todayStr && date.getDay()!==0;
               return(
-                <div key={day} style={{aspectRatio:'1',borderRadius:'6px',background:S_COLOR[s],
-                  border:isToday?`2px solid var(--gold)`:'2px solid transparent',
-                  opacity:(s==='future'||s==='no-data')?0.25:1,
-                  display:'flex',alignItems:'center',justifyContent:'center'}}>
-                  <span style={{fontSize:'0.65rem',fontWeight:'700',color:s==='present'?'#9be09b':s==='half-day'?'#f5c86f':s==='absent'?'#f1a8a8':'#444'}}>{day}</span>
+                <div key={day}
+                  onClick={canClick ? ()=>clickDay(t.id,day) : undefined}
+                  title={canClick ? `${day}: ${S_LABEL[s]||s||'—'} (tap to change)` : undefined}
+                  style={{aspectRatio:'1',borderRadius:'6px',background:S_COLOR[s],
+                    border:isToday?`2px solid var(--gold)`:'2px solid transparent',
+                    opacity:(s==='future'||s==='no-data')?0.25:1,
+                    cursor:canClick?'pointer':'default',
+                    display:'flex',alignItems:'center',justifyContent:'center',
+                    transition:'transform .1s, opacity .1s',
+                  }}
+                  onMouseEnter={canClick?e=>{e.currentTarget.style.transform='scale(1.15)';e.currentTarget.style.opacity='1';}:undefined}
+                  onMouseLeave={canClick?e=>{e.currentTarget.style.transform='scale(1)';e.currentTarget.style.opacity=(s==='future'||s==='no-data')?'0.25':'1';}:undefined}
+                >
+                  <span style={{fontSize:'0.65rem',fontWeight:'700',color:s==='present'?'#9be09b':s==='half-day'?'#f5c86f':s==='absent'?'#f1a8a8':'#444',pointerEvents:'none'}}>{day}</span>
                 </div>
               );
             })}
           </div>
-          <div style={{display:'flex',gap:'12px',flexWrap:'wrap',marginTop:'14px',justifyContent:'center'}}>
+          <div style={{display:'flex',gap:'12px',flexWrap:'wrap',marginTop:'14px',justifyContent:'center',alignItems:'center'}}>
             {[['#27ae60','Present'],['#f39c12','Half day'],['#e74c3c','Absent']].map(([c,l])=>(
               <div key={l} style={{display:'flex',alignItems:'center',gap:'4px'}}>
                 <div style={{width:'10px',height:'10px',borderRadius:'3px',background:c}}/>
                 <span style={{fontSize:'0.65rem',color:'var(--muted)'}}>{l}</span>
               </div>
             ))}
+            {saving && <span style={{fontSize:'0.65rem',color:'var(--gold)'}}>Saving…</span>}
+            {!saving && <span style={{fontSize:'0.6rem',color:'var(--muted)',opacity:0.5}}>Tap a day to change</span>}
           </div>
         </div>
         {/* Log */}
@@ -2889,6 +2933,140 @@ function AttendanceAdmin() {
             );
           })}
         </div>
+      }
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+//  EARNINGS TAB
+// ══════════════════════════════════════════════════════
+function EarningsTab() {
+  const [bookings,   setBookings]   = useState([]);
+  const [therapists, setTherapists] = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [selMonth,   setSelMonth]   = useState(()=>{ const n=new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`; });
+
+  useEffect(()=>{
+    Promise.all([
+      db.collection('bookings').get(),
+      db.collection('therapists').get(),
+    ]).then(([bSnap,tSnap])=>{
+      setBookings(bSnap.docs.map(d=>({id:d.id,...d.data()})));
+      setTherapists(tSnap.docs.map(d=>({id:d.id,...d.data()})));
+      setLoading(false);
+    }).catch(()=>setLoading(false));
+  },[]);
+
+  const PRICE = {'60':2500,'90':3500,'120':5500};
+  const priceForBooking = b => {
+    if(b.duration && PRICE[String(b.duration)]) return PRICE[String(b.duration)];
+    // Try to parse from durationLabel "60 mins (₹2500 + TA)"
+    const m = (b.durationLabel||'').match(/₹(\d+)/);
+    if(m) return parseInt(m[1]);
+    return 0;
+  };
+
+  const completedInMonth = bookings.filter(b=>{
+    if(b.status !== 'completed') return false;
+    const date = b.appointmentDate || b.scheduledDate || (b.createdAt?.toDate?.()?.toISOString?.()?.split?.('T')?.[0])||'';
+    return date.startsWith(selMonth);
+  });
+
+  const totalRevenue = completedInMonth.reduce((s,b)=>s+priceForBooking(b),0);
+  const totalBookings = completedInMonth.length;
+
+  // Group by therapist
+  const byTherapist = {};
+  completedInMonth.forEach(b=>{
+    const tid = b.therapistDocId || b.therapistId || 'unknown';
+    if(!byTherapist[tid]) byTherapist[tid]={ bookings:[], total:0 };
+    byTherapist[tid].bookings.push(b);
+    byTherapist[tid].total += priceForBooking(b);
+  });
+
+  // Build month options (last 6 months)
+  const monthOptions = [];
+  for(let i=0;i<6;i++){
+    const d=new Date(); d.setMonth(d.getMonth()-i);
+    const val=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const lbl=d.toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+    monthOptions.push({val,lbl});
+  }
+
+  const therapistName = id => therapists.find(t=>t.id===id)?.name || id || 'Unknown';
+  const therapistImg  = id => therapists.find(t=>t.id===id)?.imageUrl || '';
+
+  if(loading) return <div style={{padding:'60px',textAlign:'center',color:'var(--muted)'}}>Loading…</div>;
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'20px',flexWrap:'wrap',gap:'12px'}}>
+        <div>
+          <h2 style={{fontWeight:'700',fontSize:'1rem',color:'var(--text)',margin:0}}>Earnings</h2>
+          <p style={{fontSize:'0.75rem',color:'var(--muted)',marginTop:'2px'}}>Completed bookings revenue</p>
+        </div>
+        <select value={selMonth} onChange={e=>setSelMonth(e.target.value)}
+          style={{background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'9px',padding:'8px 12px',color:'var(--text)',fontSize:'0.82rem',cursor:'pointer',outline:'none'}}>
+          {monthOptions.map(o=><option key={o.val} value={o.val}>{o.lbl}</option>)}
+        </select>
+      </div>
+
+      {/* Summary cards */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'10px',marginBottom:'24px'}}>
+        {[
+          ['₹'+totalRevenue.toLocaleString('en-IN'),'Total Revenue','var(--gold)','rgba(212,175,55,0.08)'],
+          [String(totalBookings),'Completed','#27ae60','rgba(39,174,96,0.08)'],
+          [totalBookings?'₹'+Math.round(totalRevenue/totalBookings).toLocaleString('en-IN'):'—','Avg / Booking','var(--text)','var(--elevated)'],
+        ].map(([v,l,c,bg])=>(
+          <div key={l} style={{background:bg,border:'1px solid var(--border)',borderRadius:'14px',padding:'16px 12px',textAlign:'center'}}>
+            <p style={{fontSize:'1.4rem',fontWeight:'700',color:c,margin:0}}>{v}</p>
+            <p style={{fontSize:'0.62rem',color:'var(--muted)',marginTop:'5px',textTransform:'uppercase',letterSpacing:'0.5px'}}>{l}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Per-therapist breakdown */}
+      {Object.keys(byTherapist).length===0
+        ? <div style={{textAlign:'center',padding:'48px',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'14px',color:'var(--muted)',fontSize:'0.85rem'}}>No completed bookings this month</div>
+        : <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
+            {Object.entries(byTherapist).sort((a,b)=>b[1].total-a[1].total).map(([tid,data])=>{
+              const img = therapistImg(tid);
+              const name = therapistName(tid);
+              const pct  = totalRevenue>0 ? Math.round(data.total/totalRevenue*100) : 0;
+              return (
+                <div key={tid} style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'14px',padding:'16px 18px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'12px'}}>
+                    {img
+                      ?<img src={img} style={{width:'40px',height:'40px',borderRadius:'50%',objectFit:'cover',flexShrink:0}}/>
+                      :<div style={{width:'40px',height:'40px',borderRadius:'50%',background:'rgba(212,175,55,0.1)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:'700',color:'var(--gold)',flexShrink:0}}>{(name||'?')[0]}</div>
+                    }
+                    <div style={{flex:1,minWidth:0}}>
+                      <p style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--text)',margin:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{name}</p>
+                      <p style={{fontSize:'0.72rem',color:'var(--muted)',marginTop:'2px'}}>{data.bookings.length} session{data.bookings.length!==1?'s':''}</p>
+                    </div>
+                    <p style={{fontWeight:'700',fontSize:'1.05rem',color:'var(--gold)',flexShrink:0}}>₹{data.total.toLocaleString('en-IN')}</p>
+                  </div>
+                  {/* Progress bar */}
+                  <div style={{background:'var(--elevated)',borderRadius:'4px',height:'5px',overflow:'hidden'}}>
+                    <div style={{width:`${pct}%`,height:'100%',background:'linear-gradient(90deg,var(--gold-dark),var(--gold))',borderRadius:'4px',transition:'width .4s'}}/>
+                  </div>
+                  <p style={{fontSize:'0.62rem',color:'var(--muted)',marginTop:'4px',textAlign:'right'}}>{pct}% of month revenue</p>
+                  {/* Booking list */}
+                  <div style={{display:'flex',flexDirection:'column',gap:'5px',marginTop:'10px'}}>
+                    {data.bookings.sort((a,b)=>(b.appointmentDate||'').localeCompare(a.appointmentDate||'')).map(b=>(
+                      <div key={b.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'7px 10px',background:'var(--elevated)',borderRadius:'8px',gap:'8px'}}>
+                        <span style={{fontSize:'0.75rem',color:'var(--text)',fontWeight:'600',flexShrink:0}}>{b.appointmentDate||b.scheduledDate||'—'}</span>
+                        <span style={{fontSize:'0.72rem',color:'var(--muted)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{b.clientName||'Client'} · {b.serviceType||'—'}</span>
+                        <span style={{fontSize:'0.75rem',color:'var(--gold)',fontWeight:'700',flexShrink:0}}>₹{priceForBooking(b).toLocaleString('en-IN')}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
       }
     </div>
   );
