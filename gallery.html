@@ -369,6 +369,7 @@ function TherapistGallery({ tokenData, clientName, clientPhone, clientLoc, isBlu
   const [loading,    setLoading]    = useState(true);
 
   const filterInfo = getFilterInfo(tokenData);
+  const hasPinnedTherapists = Array.isArray(tokenData?.selectedTherapistIds) && tokenData.selectedTherapistIds.length > 0;
 
   // Compute display list — sort by distance when client location is known
   const displayList = React.useMemo(() => {
@@ -394,33 +395,40 @@ function TherapistGallery({ tokenData, clientName, clientPhone, clientLoc, isBlu
   useEffect(()=>{
     (async()=>{
       try {
-        // Book Later: fetch all therapists (offline status doesn't matter for future dates)
-        // Book Now: only fetch therapists currently online
-        const isBookLater = tokenData?.bookType === 'later';
-        const query = isBookLater
-          ? db.collection('therapists').get()
-          : db.collection('therapists').where('available','==',true).get();
-        const snap = await query;
-        const all = snap.docs.map(d=>({id:d.id,...d.data()}));
-        // Also query active bookings to catch therapists on_way/in_session
-        let busyDocIds = new Set();
-        try {
-          const activeSnap = await db.collection('bookings')
-            .where('status','in',['on_way','in_session']).get();
-          activeSnap.docs.forEach(d => {
-            const tid = d.data().therapistDocId;
-            if (tid) busyDocIds.add(tid);
+        const pinnedIds = tokenData?.selectedTherapistIds;
+        const hasPinned = Array.isArray(pinnedIds) && pinnedIds.length > 0;
+        let filtered;
+
+        if (hasPinned) {
+          // Admin pinned specific therapists — show regardless of status/hours/photo
+          const results = await Promise.allSettled(pinnedIds.map(id=>db.collection('therapists').doc(id).get()));
+          filtered = results
+            .filter(r=>r.status==='fulfilled' && r.value.exists)
+            .map(r=>({id:r.value.id,...r.value.data()}));
+        } else {
+          // Default: only fetch therapists currently online
+          const snap = await db.collection('therapists').where('available','==',true).get();
+          const all = snap.docs.map(d=>({id:d.id,...d.data()}));
+          // Also query active bookings to catch therapists on_way/in_session
+          let busyDocIds = new Set();
+          try {
+            const activeSnap = await db.collection('bookings')
+              .where('status','in',['on_way','in_session']).get();
+            activeSnap.docs.forEach(d => {
+              const tid = d.data().therapistDocId;
+              if (tid) busyDocIds.add(tid);
+            });
+          } catch(e) { /* ignore if rules block */ }
+          // Filter by working hours; hide therapists currently in an active session or without a photo
+          filtered = all.filter(t => {
+            if (!t.imageUrl) return false;              // no photo → hidden from gallery
+            if (t.sessionActive === true) return false; // busy (flag set)
+            if (busyDocIds.has(t.id)) return false;    // busy (active booking)
+            const wh = t.workingHours;
+            if (!wh) return true; // no hours configured → always show
+            return wh[filterInfo.dayKey]?.on === true;
           });
-        } catch(e) { /* ignore if rules block */ }
-        // Filter by working hours; hide therapists currently in an active session or without a photo
-        const filtered = all.filter(t => {
-          if (!t.imageUrl) return false;              // no photo → hidden from gallery
-          if (t.sessionActive === true) return false; // busy (flag set)
-          if (busyDocIds.has(t.id)) return false;    // busy (active booking)
-          const wh = t.workingHours;
-          if (!wh) return true; // no hours configured → always show
-          return wh[filterInfo.dayKey]?.on === true;
-        });
+        }
 
         // Sort: Online first → recently seen → older (priority + lastActiveAt desc)
         const statusPriority = t => {
@@ -447,9 +455,11 @@ function TherapistGallery({ tokenData, clientName, clientPhone, clientLoc, isBlu
         <div style={{fontSize:'1.8rem',color:'var(--gold)',marginBottom:'10px'}}>✦</div>
         <h1 style={{fontSize:'1.8rem',fontWeight:'700',color:'var(--gold)',letterSpacing:'3px',marginBottom:'8px'}}>Our Therapists</h1>
         <p style={{color:'var(--muted)',fontSize:'0.9rem'}}>Welcome, <span style={{color:'var(--gold)'}}>{clientName}</span></p>
-        <div style={{marginTop:'12px',display:'inline-flex',alignItems:'center',gap:'6px',background:'rgba(212,175,55,0.1)',border:'1px solid rgba(212,175,55,0.25)',borderRadius:'20px',padding:'5px 16px',fontSize:'0.8rem',color:'var(--muted)'}}>
-          📅 Showing therapists available on <strong style={{color:'var(--gold)',marginLeft:'4px'}}>{filterInfo.label}</strong>
-        </div>
+        {!hasPinnedTherapists && (
+          <div style={{marginTop:'12px',display:'inline-flex',alignItems:'center',gap:'6px',background:'rgba(212,175,55,0.1)',border:'1px solid rgba(212,175,55,0.25)',borderRadius:'20px',padding:'5px 16px',fontSize:'0.8rem',color:'var(--muted)'}}>
+            📅 Showing therapists available on <strong style={{color:'var(--gold)',marginLeft:'4px'}}>{filterInfo.label}</strong>
+          </div>
+        )}
         {hasDistances&&(
           <div style={{marginTop:'8px',display:'inline-flex',alignItems:'center',gap:'5px',background:'rgba(39,174,96,0.09)',border:'1px solid rgba(39,174,96,0.25)',borderRadius:'20px',padding:'4px 14px',fontSize:'0.76rem',color:'#27ae60'}}>
             📍 Sorted by distance from your location
@@ -1214,6 +1224,15 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
     <div style={{background:'var(--surface)',border:`1px solid ${isNearest&&therapist._dist!=null?'rgba(39,174,96,0.5)':therapist.available?'rgba(39,174,96,0.25)':'var(--border)'}`,borderRadius:'16px',overflow:'hidden',boxShadow:isNearest&&therapist._dist!=null?'0 4px 24px rgba(37,162,64,.15)':'0 4px 24px rgba(0,0,0,.4)'}}>
       <canvas ref={canvasRef} style={{display:'none'}}/>
       <div style={{position:'relative',aspectRatio:'3/4',background:'#0d0d0d',overflow:'hidden'}}>
+        {/* No photo placeholder */}
+        {!therapist.imageUrl&&(
+          <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:'10px',background:'linear-gradient(160deg,#1a1a1a,#111)'}}>
+            <div style={{width:'72px',height:'72px',borderRadius:'50%',background:'rgba(212,175,55,0.12)',border:'2px solid rgba(212,175,55,0.3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.6rem',fontWeight:'700',color:'var(--gold)',letterSpacing:'-1px'}}>
+              {(therapist.name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)||'?'}
+            </div>
+            <p style={{color:'var(--muted)',fontSize:'0.78rem',margin:0}}>No photo uploaded</p>
+          </div>
+        )}
 
         {/* Solid black background — no blurred preview to screenshot */}
         <div style={{position:'absolute',inset:0,background:'#0a0a0a'}}/>
@@ -1246,8 +1265,8 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
           </div>
         )}
 
-        {/* Hidden overlay */}
-        {!isVisible&&(
+        {/* Hidden overlay — only when photo exists */}
+        {therapist.imageUrl&&!isVisible&&(
           <div style={{position:'absolute',inset:0,zIndex:6,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,.5)',backdropFilter:'blur(2px)'}}>
             {limitReached
               ? <div style={{textAlign:'center',padding:'20px'}}>
