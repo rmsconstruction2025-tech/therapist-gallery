@@ -395,7 +395,7 @@ function App() {
   if (status==='invalid') return <FullScreen><div style={{fontSize:'3rem',color:'var(--gold)',marginBottom:'16px'}}>⚠</div><h2 style={msgTitle}>Invalid Link</h2><p style={msgSub}>This gallery link is invalid.</p></FullScreen>;
   if (status==='expired') return <FullScreen><div style={{fontSize:'3rem',color:'var(--gold)',marginBottom:'16px'}}>⏱</div><h2 style={msgTitle}>Link Expired</h2><p style={msgSub}>This gallery link has expired. Please contact us for a new link.</p></FullScreen>;
   if (status==='info')    return <ClientInfoForm tokenData={tokenData} onConfirmed={(n,p)=>{ setClient({name:n,phone:p}); setStatus('loc-prompt'); }}/>;
-  if (status==='loc-prompt') return <LocationPrompt onDone={loc=>{ if(loc){ setClientLoc(loc); setStatus('gallery'); } }}/>;
+  if (status==='loc-prompt') return <LocationPrompt onDone={async loc=>{ if(loc){ setClientLoc(loc); setStatus('gallery'); try{ await db.collection('clientVisits').add({ clientName:client.name, clientPhone:client.phone, tokenId:tokenData?.id||'', visitedAt:FieldValue.serverTimestamp(), clientLocation:{lat:loc.lat,lng:loc.lng}, hasBooked:false, bookingId:null, source:tokenData?.bookType||'direct', }); }catch(e){ console.warn('Visit log:',e); } } }}/>;
 
   return (
     <div style={{position:'relative'}}>
@@ -888,6 +888,8 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
       sessionStorage.setItem('pendingBooking', JSON.stringify({
         bookingId: ref.id, therapistId: therapist.id, endAt: Date.now() + 86400000,
       }));
+      // Update visit record — mark as booked
+      if(tokenData?.id){ db.collection('clientVisits').where('tokenId','==',tokenData.id).get().then(snap=>{ if(!snap.empty) snap.docs[0].ref.update({hasBooked:true,bookingId:ref.id,bookedAt:FieldValue.serverTimestamp()}); }).catch(()=>{}); }
       setBookingResult({
         id: ref.id,
         therapistName: therapist.name || therapist.therapistId,
