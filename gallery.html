@@ -400,6 +400,9 @@ function App() {
     })();
   }, [tokenStr]);
 
+  const msgTitle = {fontSize:'1.4rem',fontWeight:'700',color:'var(--gold)',marginBottom:'8px'};
+  const msgSub   = {color:'var(--muted)',fontSize:'0.9rem',lineHeight:'1.6',maxWidth:'320px'};
+
   // Block duplicate tab/window
   if (isDuplicate) return (
     <FullScreen>
