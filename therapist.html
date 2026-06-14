@@ -1777,7 +1777,7 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
     :apptDate(a).localeCompare(apptDate(b)));
 
   const historyBookings = allBookings.filter(b=>
-    b.status==='completed'||b.status==='declined'
+    (b.status==='completed'||b.status==='declined') && !b.therapistHidden
   ).sort((a,b)=>(b.createdAt?.toMillis?.()??0)-(a.createdAt?.toMillis?.()??0));
 
   const firstPending = pendingBookings[0]||null;
@@ -2078,7 +2078,8 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
                     <div style={{flex:1,minWidth:0}}>
                       <p style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--text)',marginBottom:'3px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{b.clientName||'—'}</p>
                       <p style={{fontSize:'0.72rem',color:'var(--muted)',display:'flex',alignItems:'center',gap:'4px'}}>
-                        <span>📅</span><span>{fmtDate(b.scheduledDate)}{b.scheduledTime?` · ${b.scheduledTime}`:''}</span>
+                        <span>📅</span>
+                        <span>{(b.appointmentDate||b.scheduledDate)||'—'}{(b.appointmentTime||b.scheduledTime)?` · ${b.appointmentTime||b.scheduledTime}`:''}</span>
                       </p>
                     </div>
                     <div style={{display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
@@ -2088,46 +2089,29 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
                   </div>
                   {isOpen&&(
                     <div style={{marginTop:'12px',paddingTop:'12px',borderTop:'1px solid var(--border)',display:'flex',flexDirection:'column',gap:'8px'}}>
-                      {[['Service',b.serviceType||'—'],['Duration',b.duration||'—'],['Date',fmtDate(b.scheduledDate)],['Time',b.scheduledTime||'—'],['Notes',b.notes||'None']].map(([k,v])=>(
+                      {[
+                        ['Service',  b.serviceType||'—'],
+                        ['Duration', b.durationLabel || (b.duration ? b.duration+' mins' : '—')],
+                        ['Date',     b.appointmentDate||b.scheduledDate||'—'],
+                        ['Time',     b.appointmentTime||b.scheduledTime||'—'],
+                      ].map(([k,v])=>(
                         <div key={k} style={{display:'flex',justifyContent:'space-between',fontSize:'0.78rem'}}>
                           <span style={{color:'var(--muted)'}}>{k}</span>
-                          <span style={{color:'var(--text)',fontWeight:'600',maxWidth:'60%',textAlign:'right',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v}</span>
+                          <span style={{color:'var(--text)',fontWeight:'600',maxWidth:'60%',textAlign:'right'}}>{v}</span>
                         </div>
                       ))}
-                      {/* Location row with copy + maps buttons */}
+                      {/* Location — clickable Maps link */}
                       {(()=>{
-                        const loc = b.clientLocation;
-                        if(!loc) return null;
-                        const addr = loc.address || (loc.lat!=null?`${Number(loc.lat).toFixed(5)}, ${Number(loc.lng).toFixed(5)}`:null);
-                        const mapsUrl = loc.lat!=null
-                          ? `https://www.google.com/maps?q=${loc.lat},${loc.lng}`
-                          : `https://www.google.com/maps/search/${encodeURIComponent(loc.address||'')}`;
-                        const copyText = loc.lat!=null ? `${loc.lat}, ${loc.lng}` : (loc.address||'');
+                        const mapsUrl = b.clientMapsLink ||
+                          (b.clientLocation?.lat ? `https://www.google.com/maps?q=${b.clientLocation.lat},${b.clientLocation.lng}` : null);
+                        if(!mapsUrl) return null;
                         return (
-                          <div style={{display:'flex',flexDirection:'column',gap:'6px',marginTop:'2px'}}>
-                            <div style={{display:'flex',justifyContent:'space-between',fontSize:'0.78rem'}}>
-                              <span style={{color:'var(--muted)'}}>Location</span>
-                              <span style={{color:'var(--text)',fontWeight:'600',maxWidth:'60%',textAlign:'right',fontSize:'0.75rem',wordBreak:'break-word'}}>{addr}</span>
-                            </div>
-                            <div style={{display:'flex',gap:'8px'}} onClick={e=>e.stopPropagation()}>
-                              <button
-                                onClick={()=>navigator.clipboard?.writeText(copyText).then(()=>showMsg('Location copied!'))}
-                                style={{flex:1,background:'rgba(255,255,255,0.06)',border:'1px solid var(--border)',borderRadius:'8px',padding:'7px 0',fontSize:'0.72rem',color:'var(--text)',cursor:'pointer',fontFamily:'inherit',fontWeight:'600'}}>
-                                📋 Copy
-                              </button>
-                              <a href={mapsUrl} target="_blank" rel="noreferrer"
-                                style={{flex:1,background:'rgba(74,158,255,0.1)',border:'1px solid rgba(74,158,255,0.3)',borderRadius:'8px',padding:'7px 0',fontSize:'0.72rem',color:'#4a9eff',cursor:'pointer',fontFamily:'inherit',fontWeight:'600',textDecoration:'none',textAlign:'center',display:'block'}}>
-                                🗺️ Maps
-                              </a>
-                              <button
-                                onClick={()=>{
-                                  const whatsappText = `📍 Client location: ${copyText}\n🗺️ ${mapsUrl}`;
-                                  window.open(`https://wa.me/?text=${encodeURIComponent(whatsappText)}`,'_blank');
-                                }}
-                                style={{flex:1,background:'rgba(37,211,102,0.1)',border:'1px solid rgba(37,211,102,0.3)',borderRadius:'8px',padding:'7px 0',fontSize:'0.72rem',color:'#25d366',cursor:'pointer',fontFamily:'inherit',fontWeight:'600'}}>
-                                💬 Share
-                              </button>
-                            </div>
+                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:'0.78rem'}} onClick={e=>e.stopPropagation()}>
+                            <span style={{color:'var(--muted)'}}>Location</span>
+                            <a href={mapsUrl} target="_blank" rel="noreferrer"
+                              style={{color:'#4a9eff',fontWeight:'600',textDecoration:'none',display:'flex',alignItems:'center',gap:'4px',fontSize:'0.78rem'}}>
+                              🗺️ Open in Maps
+                            </a>
                           </div>
                         );
                       })()}
@@ -2163,6 +2147,17 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
                     ?<span style={{fontWeight:'700',fontSize:'0.85rem',color:'#27ae60',flexShrink:0}}>{earnEntry?`₹${fmtMoney(earnEntry.amount)}`:'—'}</span>
                     :<span style={{fontSize:'0.62rem',fontWeight:'700',padding:'3px 8px',borderRadius:'10px',background:'rgba(231,76,60,0.08)',color:'#e74c3c',border:'1px solid rgba(231,76,60,0.15)',flexShrink:0}}>Declined</span>
                   }
+                  <button
+                    onClick={async e=>{
+                      e.stopPropagation();
+                      if(!confirm('Remove this entry from history?')) return;
+                      try{ await db.collection('bookings').doc(b.id).update({therapistHidden:true}); }
+                      catch(err){ alert('Error: '+err.message); }
+                    }}
+                    style={{width:'28px',height:'28px',borderRadius:'50%',background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',color:'var(--muted)',fontSize:'0.75rem',cursor:'pointer',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'inherit'}}
+                    title="Remove from history">
+                    ✕
+                  </button>
                 </div>
               );
             })
