@@ -597,8 +597,17 @@ function TherapistPortal({ session, onLogout }) {
     } catch(err){ alert(`Error: ${err.message}`); }
   };
 
-  const declineBooking = async (b)=>{
-    try { await db.collection('bookings').doc(b.id).update({status:'declined'}); }
+  const declineBooking = async (b, reason)=>{
+    try {
+      await db.collection('bookings').doc(b.id).update({
+        status:         'declined',
+        declinedAt:     FieldValue.serverTimestamp(),
+        declineReason:  reason||'',
+        therapistName:  data?.name||session.name||'',
+        therapistDocId: session.docId,
+        notifyAdmin:    true,
+      });
+    }
     catch(err){ alert(`Error: ${err.message}`); }
   };
 
@@ -1735,31 +1744,37 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
   const todayStr  = now.toLocaleDateString('en-CA');
   const todayStart= new Date(now); todayStart.setHours(0,0,0,0);
 
+  // Helper: get appointment date/time from either new or old field names
+  const apptDate = b => b.appointmentDate || b.scheduledDate || '';
+  const apptTime = b => b.appointmentTime || b.scheduledTime || '';
+
+  const confirmedStatuses = ['confirmed','accepted','admin_pending','on_way','in_session'];
+
   const todayBookings = allBookings.filter(b=>{
-    if(['confirmed','accepted','admin_pending','on_way','in_session','completed'].includes(b.status)){
-      const d=b.createdAt?.toDate?.(); return d&&d>=todayStart;
+    const d = apptDate(b);
+    if(confirmedStatuses.includes(b.status)){
+      if(d) return d === todayStr;                          // has appointment date → match today
+      const cd = b.createdAt?.toDate?.(); return cd && cd >= todayStart; // old immediate bookings
     }
-    // Scheduled for today: only show in TODAY if within 2 hours of appointment time
-    if(b.status==='scheduled'&&b.scheduledDate===todayStr){
-      if(!b.scheduledTime) return true; // no time = treat as immediate
-      const msLeft = new Date(`${b.scheduledDate}T${b.scheduledTime}`) - new Date();
-      return msLeft <= 2*60*60*1000; // ≤2h away → show in TODAY
+    if(b.status==='completed'){
+      const cd = b.createdAt?.toDate?.(); return cd && cd >= todayStart;
     }
     return false;
-  }).sort((a,b)=>(a.scheduledTime||'').localeCompare(b.scheduledTime||''));
+  }).sort((a,b)=>(apptTime(a)||'').localeCompare(apptTime(b)||''));
 
   const upcomingBookings = allBookings.filter(b=>{
-    if(b.status!=='scheduled') return false;
-    if(b.scheduledDate>todayStr) return true; // future date
-    // Today's scheduled booking >2h away goes to UPCOMING
-    if(b.scheduledDate===todayStr&&b.scheduledTime){
-      const msLeft = new Date(`${b.scheduledDate}T${b.scheduledTime}`) - new Date();
-      return msLeft > 2*60*60*1000;
+    if(!confirmedStatuses.includes(b.status) && b.status !== 'pending') return false;
+    const d = apptDate(b), t = apptTime(b);
+    if(!d) return false;
+    if(d > todayStr) return true; // future date → always upcoming
+    if(d === todayStr && t){
+      const msLeft = new Date(`${d}T${t}`) - new Date();
+      return msLeft > 2*60*60*1000; // >2h away → upcoming
     }
     return false;
-  }).sort((a,b)=>a.scheduledDate===b.scheduledDate
-    ?(a.scheduledTime||'').localeCompare(b.scheduledTime||'')
-    :a.scheduledDate.localeCompare(b.scheduledDate));
+  }).sort((a,b)=>apptDate(a)===apptDate(b)
+    ?(apptTime(a)||'').localeCompare(apptTime(b)||'')
+    :apptDate(a).localeCompare(apptDate(b)));
 
   const historyBookings = allBookings.filter(b=>
     b.status==='completed'||b.status==='declined'
@@ -1925,7 +1940,7 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
       {/* Incoming booking request */}
       {firstPending&&(
         <div style={{padding:'14px 16px 0'}}>
-          <BookingRequestCard booking={firstPending} myGPS={myGPS}/>
+          <BookingRequestCard booking={firstPending} myGPS={myGPS} onAccept={onAccept} onDecline={onDecline}/>
         </div>
       )}
 
@@ -2162,16 +2177,32 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
 // ══════════════════════════════════════════════════════
 //  BOOKING REQUEST CARD (with countdown timer)
 // ══════════════════════════════════════════════════════
-function BookingRequestCard({ booking: b, myGPS }) {
-  const initial = (b.clientName||'?')[0].toUpperCase();
-  const dist = (myGPS&&b.clientLocation?.lat) ? haversineKm(myGPS.lat,myGPS.lng,b.clientLocation.lat,b.clientLocation.lng) : null;
+function BookingRequestCard({ booking: b, myGPS, onAccept, onDecline }) {
+  const [mode,       setMode]   = useState('view');  // 'view' | 'reject'
+  const [reason,     setReason] = useState('');
+  const [customReason, setCustom] = useState('');
+  const [accepting,  setAccepting] = useState(false);
+  const [submitting, setSub]    = useState(false);
 
-  // Build Maps URL — prefer stored link, fall back to coords
-  const mapsUrl = b.clientMapsLink ||
-    (b.clientLocation?.lat ? `https://maps.google.com?q=${b.clientLocation.lat},${b.clientLocation.lng}` : null);
+  const initial  = (b.clientName||'?')[0].toUpperCase();
+  const dist     = (myGPS&&b.clientLocation?.lat) ? haversineKm(myGPS.lat,myGPS.lng,b.clientLocation.lat,b.clientLocation.lng) : null;
+  const mapsUrl  = b.clientMapsLink || (b.clientLocation?.lat ? `https://maps.google.com?q=${b.clientLocation.lat},${b.clientLocation.lng}` : null);
+  const apptLine = [b.appointmentDate||b.scheduledDate, b.appointmentTime||b.scheduledTime].filter(Boolean).join(' · ');
 
-  // Format appointment date/time
-  const apptLine = [b.appointmentDate, b.appointmentTime].filter(Boolean).join(' · ');
+  const REASONS = ['Not available at this time','Already have an appointment','Location too far','Health / personal reason','Other'];
+
+  const handleAccept = async ()=>{
+    setAccepting(true);
+    try { await onAccept(b); } finally { setAccepting(false); }
+  };
+
+  const handleReject = async ()=>{
+    const finalReason = reason==='Other' ? customReason.trim() : reason;
+    if(!finalReason) return;
+    setSub(true);
+    try { await onDecline(b, finalReason); }
+    finally { setSub(false); }
+  };
 
   const row = (icon, content, isLink)=>(
     <div style={{display:'flex',alignItems:'flex-start',gap:'8px',padding:'7px 0',borderBottom:'1px solid rgba(255,255,255,0.05)'}}>
@@ -2187,14 +2218,15 @@ function BookingRequestCard({ booking: b, myGPS }) {
   );
 
   return (
-    <div className="booking-alert" style={{background:'rgba(212,175,55,0.05)',border:'1px solid rgba(212,175,55,0.25)',borderRadius:'16px',padding:'16px',marginBottom:'12px'}}>
+    <div className="booking-alert" style={{background:'rgba(212,175,55,0.05)',border:'1px solid rgba(212,175,55,0.3)',borderRadius:'16px',padding:'16px',marginBottom:'12px'}}>
+
       {/* Header */}
       <div style={{display:'flex',alignItems:'center',gap:'7px',marginBottom:'14px'}}>
-        <div style={{width:'8px',height:'8px',borderRadius:'50%',background:'var(--gold)',boxShadow:'0 0 6px rgba(212,175,55,0.6)',flexShrink:0}}/>
+        <div style={{width:'8px',height:'8px',borderRadius:'50%',background:'var(--gold)',boxShadow:'0 0 6px rgba(212,175,55,0.6)',flexShrink:0,animation:'pulse 1.5s ease-in-out infinite'}}/>
         <span style={{fontSize:'0.68rem',fontWeight:'800',color:'var(--gold)',letterSpacing:'1.5px',textTransform:'uppercase'}}>New Booking</span>
       </div>
 
-      {/* Client name + distance */}
+      {/* Client + distance */}
       <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'12px'}}>
         <div style={{width:'42px',height:'42px',borderRadius:'50%',background:'rgba(212,175,55,0.1)',border:'1px solid rgba(212,175,55,0.25)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:'800',color:'var(--gold)',fontSize:'1.1rem',flexShrink:0}}>
           {initial}
@@ -2205,16 +2237,68 @@ function BookingRequestCard({ booking: b, myGPS }) {
         </div>
       </div>
 
-      {/* Detail rows */}
-      <div style={{borderTop:'1px solid rgba(255,255,255,0.05)'}}>
+      {/* Details */}
+      <div style={{borderTop:'1px solid rgba(255,255,255,0.05)',marginBottom:'14px'}}>
         {b.serviceType && row('💆', b.serviceType)}
         {apptLine      && row('📅', apptLine)}
         {mapsUrl
           ? row('📍', {href: mapsUrl, label: 'Open Client Location in Maps'}, true)
           : b.clientLocation?.address && row('📍', b.clientLocation.address)
         }
-        {b.notes       && row('📝', b.notes)}
+        {b.notes && row('📝', b.notes)}
       </div>
+
+      {/* ── REJECT REASON PANEL ── */}
+      {mode==='reject' ? (
+        <div style={{background:'rgba(231,76,60,0.07)',border:'1px solid rgba(231,76,60,0.3)',borderRadius:'12px',padding:'14px'}}>
+          <p style={{fontSize:'0.78rem',fontWeight:'700',color:'#e74c3c',marginBottom:'12px',letterSpacing:'0.3px'}}>
+            Why are you rejecting this booking?
+          </p>
+          <div style={{display:'flex',flexDirection:'column',gap:'8px',marginBottom:'12px'}}>
+            {REASONS.map(r=>(
+              <label key={r} style={{display:'flex',alignItems:'center',gap:'9px',cursor:'pointer',padding:'6px 8px',borderRadius:'8px',background:reason===r?'rgba(231,76,60,0.12)':'transparent',transition:'background .15s'}}>
+                <input type="radio" name={`rr_${b.id}`} value={r}
+                  checked={reason===r} onChange={()=>setReason(r)}
+                  style={{accentColor:'#e74c3c',width:'15px',height:'15px',flexShrink:0}}/>
+                <span style={{fontSize:'0.82rem',color:'var(--text)'}}>{r}</span>
+              </label>
+            ))}
+          </div>
+          {reason==='Other'&&(
+            <textarea value={customReason} onChange={e=>setCustom(e.target.value)}
+              placeholder="Describe the reason…" rows={2}
+              style={{width:'100%',background:'rgba(255,255,255,0.05)',border:'1px solid rgba(231,76,60,0.3)',borderRadius:'8px',padding:'9px 11px',color:'var(--text)',fontSize:'0.82rem',resize:'none',fontFamily:'inherit',outline:'none',marginBottom:'10px',boxSizing:'border-box'}}
+            />
+          )}
+          <div style={{display:'flex',gap:'8px',marginTop:'4px'}}>
+            <button onClick={()=>{setMode('view');setReason('');setCustom('');}}
+              style={{flex:1,background:'rgba(255,255,255,0.05)',color:'var(--muted)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:'10px',padding:'11px',fontWeight:'600',fontSize:'0.82rem',cursor:'pointer',fontFamily:'inherit'}}>
+              Cancel
+            </button>
+            <button onClick={handleReject}
+              disabled={submitting || !reason || (reason==='Other' && !customReason.trim())}
+              style={{flex:2,background:'#e74c3c',color:'#fff',border:'none',borderRadius:'10px',padding:'11px',fontWeight:'700',fontSize:'0.82rem',cursor:'pointer',fontFamily:'inherit',
+                opacity:(submitting||!reason||(reason==='Other'&&!customReason.trim()))?0.45:1}}>
+              {submitting ? 'Sending…' : 'Reject & Notify Admin'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* ── ACCEPT / REJECT BUTTONS ── */
+        <div style={{display:'flex',gap:'10px'}}>
+          <button onClick={()=>setMode('reject')}
+            style={{flex:1,background:'rgba(231,76,60,0.08)',color:'#e74c3c',border:'1px solid rgba(231,76,60,0.3)',borderRadius:'12px',padding:'13px',fontWeight:'700',fontSize:'0.88rem',cursor:'pointer',fontFamily:'inherit',minHeight:'48px'}}>
+            ✕ Reject
+          </button>
+          <button onClick={handleAccept} disabled={accepting}
+            style={{flex:2,background:'#27ae60',color:'#fff',border:'none',borderRadius:'12px',padding:'13px',fontWeight:'700',fontSize:'0.88rem',cursor:accepting?'not-allowed':'pointer',fontFamily:'inherit',minHeight:'48px',opacity:accepting?0.7:1,display:'flex',alignItems:'center',justifyContent:'center',gap:'7px'}}>
+            {accepting
+              ? <><div style={{width:'14px',height:'14px',border:'2px solid rgba(255,255,255,0.3)',borderTopColor:'#fff',borderRadius:'50%',animation:'spin .7s linear infinite'}}/> Accepting…</>
+              : '✓ Accept'
+            }
+          </button>
+        </div>
+      )}
     </div>
   );
 }
