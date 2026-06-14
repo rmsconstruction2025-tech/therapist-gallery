@@ -72,5 +72,15 @@ service cloud.firestore {
       allow read:             if true;
       allow create, update:   if isAdmin();
     }
+
+    // Chat: admin ↔ therapist real-time messaging
+    // Metadata doc (chats/{therapistDocId}): last message, unread counts
+    match /chats/{therapistDocId} {
+      allow read, write: if true;
+      // Messages subcollection
+      match /messages/{messageId} {
+        allow read, write: if true;
+      }
+    }
   }
 }
