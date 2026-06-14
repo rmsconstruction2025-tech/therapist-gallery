@@ -2090,9 +2090,10 @@ function TherapistManager() {
 //  LINK CREATOR
 // ══════════════════════════════════════════════════════
 function LinkCreator() {
-  const [form, setForm] = useState({bookType:'now',scheduledDate:'',clientName:'',clientPhone:'',serviceType:'',expiryMinutes:60,maxViewsPerImage:2,viewDurationSeconds:3});
+  const [form, setForm] = useState({bookType:'now',scheduledDate:'',clientName:'',clientPhone:'',serviceType:'',selectedTherapistId:'',expiryMinutes:60,maxViewsPerImage:2,viewDurationSeconds:3});
   const [links,    setLinks]    = useState([]);
   const [creating, setCreating] = useState(false);
+  const [allTherps, setAllTherps] = useState([]);
   const [newLink,  setNewLink]  = useState('');
   const [loading,  setLoading]  = useState(true);
   const [copied,   setCopied]   = useState('');
@@ -2100,7 +2101,12 @@ function LinkCreator() {
   const [editVals, setEditVals] = useState({});   // {maxViewsPerImage, viewDurationSeconds}
   const [saving,   setSaving]   = useState(false);
 
-  useEffect(()=>{ fetchLinks(); },[]);
+  useEffect(()=>{
+    fetchLinks();
+    db.collection('therapists').orderBy('name').get().then(snap=>{
+      setAllTherps(snap.docs.map(d=>({id:d.id,...d.data()})));
+    }).catch(()=>{});
+  },[]);
 
   const galleryUrl = (token) => {
     return `${window.location.origin}/gallery.html?token=${token}`;
@@ -2127,6 +2133,7 @@ function LinkCreator() {
         clientName: form.clientName.trim(), clientPhone: form.clientPhone.trim(),
         serviceType: form.serviceType || '',
         bookType: 'now',
+        selectedTherapistId: form.selectedTherapistId || '',
         used: false, createdAt: FieldValue.serverTimestamp(),
       };
       await db.collection('galleryTokens').add(doc);
@@ -2199,6 +2206,24 @@ function LinkCreator() {
                 <option value=''>— Select Service —</option>
                 {SPA_SERVICES.map(s=><option key={s} value={s}>{s}</option>)}
               </select>
+            </div>
+
+            {/* Therapist selection */}
+            <div style={{gridColumn:'1/-1'}}>
+              <label className="form-label">Choose Therapist <span style={{color:'var(--muted)',fontWeight:'400'}}>(optional — leave blank to show all online)</span></label>
+              <select value={form.selectedTherapistId} onChange={e=>setForm(p=>({...p,selectedTherapistId:e.target.value}))} className="form-input">
+                <option value=''>— All Available Therapists —</option>
+                {allTherps.map(t=>(
+                  <option key={t.id} value={t.id}>
+                    {t.name||t.therapistId||t.id}{t.available?' ✓ Online':' ○ Offline'}
+                  </option>
+                ))}
+              </select>
+              {form.selectedTherapistId && (
+                <p style={{fontSize:'0.73rem',color:'#f59e0b',marginTop:'5px'}}>
+                  ⚡ This therapist will appear in the gallery regardless of online status or working hours
+                </p>
+              )}
             </div>
 
             {/* Link settings */}
