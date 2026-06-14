@@ -710,10 +710,12 @@ function parseGoogleMapsUrl(url) {
   return null;
 }
 
-const SERVICE_TYPES = [
-  'Swedish Massage','Deep Tissue Massage','Thai Massage',
-  'Hot Stone Massage','Aromatherapy','Reflexology',
-  'Head & Shoulder Massage','Full Body Massage','Other',
+const SERVICE_TYPES = ['Wet Massage','Oil Massage','Dry Massage'];
+
+const DURATION_OPTIONS = [
+  { label:'60 mins', price:'₹2500 + TA', value:'60' },
+  { label:'90 mins', price:'₹3500 + TA', value:'90' },
+  { label:'120 mins',price:'₹5500 + TA', value:'120' },
 ];
 
 function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }) {
@@ -727,10 +729,10 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
     name:        clientName || '',
     phone:       clientPhone || '',
     serviceType: '',
-    otherService:'',
+    duration:    '',
     date:        '',
     time:        '',
-    notes:       '',
+    adminNotes:  '',
   });
   const [locationData, setLocationData] = useState(null); // {lat,lng,mapsUrl}
   const [mapUrlInput,  setMapUrlInput]  = useState('');
@@ -782,33 +784,30 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
   // ── Step 3 validation + submit ──
   const handleSubmit = async ()=>{
     const e={};
-    const svc = form.serviceType==='Other' ? form.otherService.trim() : form.serviceType;
-    if(!svc) e.serviceType='Select a service type';
-    if(!form.date) e.date='Date is required';
-    if(!form.time) e.time='Time is required';
+    if(!form.serviceType) e.serviceType='Select a massage type';
+    if(!form.duration)    e.duration='Select a duration';
+    if(!form.date)        e.date='Date is required';
+    if(!form.time)        e.time='Time is required';
     if(Object.keys(e).length){ setErrors(e); return; }
     setErrors({});
     setSaving(true);
     setStep('loading');
     try {
-      const finalService = form.serviceType==='Other' ? form.otherService.trim() : form.serviceType;
+      const durOpt = DURATION_OPTIONS.find(d=>d.value===form.duration);
       const ref = await db.collection('bookings').add({
-        // ── Therapist info ──
         therapistDocId:  therapist.id,
         therapistId:     therapist.therapistId || therapist.id,
         therapistName:   therapist.name || therapist.therapistId,
-        // ── Client info ──
         clientName:      form.name.trim(),
-        clientPhone:     form.phone.trim(),   // ← stored only, NEVER shown to therapist UI
-        // ── Appointment ──
-        serviceType:     finalService,
+        clientPhone:     form.phone.trim(),   // stored only — NEVER shown to therapist UI
+        serviceType:     form.serviceType,
+        duration:        form.duration,
+        durationLabel:   durOpt ? `${durOpt.label} (${durOpt.price})` : '',
         appointmentDate: form.date,
         appointmentTime: form.time,
-        notes:           form.notes.trim(),
-        // ── Location ──
+        adminNotes:      form.adminNotes.trim(), // admin-only, NOT sent to therapist
         clientLocation:  locationData ? {lat:locationData.lat, lng:locationData.lng} : null,
         clientMapsLink:  locationData?.mapsUrl || '',
-        // ── Meta ──
         bookingType:     'scheduled',
         status:          'pending',
         createdAt:       FieldValue.serverTimestamp(),
@@ -820,12 +819,13 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
       setBookingResult({
         id: ref.id,
         therapistName: therapist.name || therapist.therapistId,
-        service: finalService,
+        service: form.serviceType,
+        duration: durOpt ? `${durOpt.label} – ${durOpt.price}` : '',
         date: form.date,
         time: form.time,
         mapsUrl: locationData?.mapsUrl || '',
       });
-      setStep('done');
+      setStep('extras');   // show extras info before done
     } catch(err){ alert('Error: ' + err.message); setStep('appointment'); }
     finally{ setSaving(false); }
   };
@@ -951,26 +951,53 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
               </p>}
             </div>
 
-            {/* Service Type */}
+            {/* ── Massage Type ── */}
             <div>
-              <label style={lbl}>Service Type *</label>
-              <select value={form.serviceType} onChange={e=>{setForm(f=>({...f,serviceType:e.target.value}));setErrors(x=>({...x,serviceType:''}));}}
-                style={{...inp(errors.serviceType),appearance:'none',cursor:'pointer'}}>
-                <option value="">Select a service…</option>
-                {SERVICE_TYPES.map(s=><option key={s} value={s}>{s}</option>)}
-              </select>
+              <label style={lbl}>Massage Type *</label>
+              <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+                {SERVICE_TYPES.map(s=>{
+                  const active = form.serviceType===s;
+                  const colors = {
+                    'Wet Massage':  {bg:'rgba(52,152,219,0.15)', border:'rgba(52,152,219,0.5)',  active:'rgba(52,152,219,0.3)',  text:'#5dade2'},
+                    'Oil Massage':  {bg:'rgba(212,175,55,0.12)', border:'rgba(212,175,55,0.45)', active:'rgba(212,175,55,0.25)', text:'#d4af37'},
+                    'Dry Massage':  {bg:'rgba(231,76,60,0.1)',   border:'rgba(231,76,60,0.4)',   active:'rgba(231,76,60,0.2)',   text:'#e74c3c'},
+                  };
+                  const c = colors[s];
+                  return (
+                    <button key={s} onClick={()=>{setForm(f=>({...f,serviceType:s}));setErrors(x=>({...x,serviceType:''}));}}
+                      style={{flex:'1 1 auto',padding:'10px 8px',borderRadius:'10px',border:`1.5px solid ${active?c.border:'rgba(255,255,255,0.1)'}`,
+                        background:active?c.active:c.bg,color:active?c.text:'rgba(255,255,255,0.5)',
+                        fontWeight:active?'800':'500',fontSize:'0.8rem',cursor:'pointer',transition:'all .15s',fontFamily:'inherit'}}>
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
               {errTxt(errors.serviceType)}
             </div>
 
-            {form.serviceType==='Other'&&(
-              <div>
-                <label style={lbl}>Describe Service *</label>
-                <input type="text" value={form.otherService} onChange={e=>setForm(f=>({...f,otherService:e.target.value}))}
-                  placeholder="Describe the service you need" style={inp(false)}/>
+            {/* ── Duration ── */}
+            <div>
+              <label style={lbl}>Duration *</label>
+              <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                {DURATION_OPTIONS.map(d=>{
+                  const active = form.duration===d.value;
+                  return (
+                    <button key={d.value} onClick={()=>{setForm(f=>({...f,duration:d.value}));setErrors(x=>({...x,duration:''}));}}
+                      style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 14px',
+                        borderRadius:'10px',border:`1.5px solid ${active?'rgba(212,175,55,0.6)':'rgba(255,255,255,0.08)'}`,
+                        background:active?'rgba(212,175,55,0.12)':'rgba(255,255,255,0.03)',
+                        cursor:'pointer',transition:'all .15s',fontFamily:'inherit'}}>
+                      <span style={{fontWeight:active?'700':'500',fontSize:'0.88rem',color:active?'var(--gold)':'rgba(255,255,255,0.6)'}}>{d.label}</span>
+                      <span style={{fontWeight:'700',fontSize:'0.88rem',color:active?'var(--gold)':'rgba(255,255,255,0.35)'}}>{d.price}</span>
+                    </button>
+                  );
+                })}
               </div>
-            )}
+              {errTxt(errors.duration)}
+            </div>
 
-            {/* Date + Time */}
+            {/* ── Date + Time ── */}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
               <div>
                 <label style={lbl}>Date *</label>
@@ -988,11 +1015,14 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
               </div>
             </div>
 
-            {/* Notes */}
+            {/* ── Admin Notes ── */}
             <div>
-              <label style={lbl}>Special Notes <span style={{opacity:.5,textTransform:'none',letterSpacing:0,fontWeight:'400'}}>(optional)</span></label>
-              <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}
-                rows={2} placeholder="Allergies, preferences, special requests…"
+              <label style={{...lbl,display:'flex',alignItems:'center',gap:'5px'}}>
+                Special Notes
+                <span style={{background:'rgba(212,175,55,0.12)',color:'rgba(212,175,55,0.7)',fontSize:'0.6rem',padding:'2px 6px',borderRadius:'4px',fontWeight:'700',letterSpacing:'0.5px',textTransform:'uppercase'}}>Admin only</span>
+              </label>
+              <textarea value={form.adminNotes} onChange={e=>setForm(f=>({...f,adminNotes:e.target.value}))}
+                rows={2} placeholder="Visible to admin only, not shared with therapist…"
                 style={{...inp(false),resize:'none'}}/>
             </div>
 
@@ -1002,6 +1032,33 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
                 {saving?<div style={{width:'18px',height:'18px',border:'2px solid rgba(0,0,0,0.3)',borderTopColor:'#080600',borderRadius:'50%',animation:'spin .7s linear infinite',margin:'0 auto'}}/>:'Confirm Booking'}
               </button>
             </div>
+          </div>
+        )}
+
+        {/* ══ EXTRAS INFO ══ */}
+        {step==='extras'&&(
+          <div style={{textAlign:'center'}}>
+            <div style={{fontSize:'2.5rem',marginBottom:'14px'}}>✨</div>
+            <h2 style={{color:'var(--gold)',fontSize:'1.05rem',fontWeight:'800',marginBottom:'10px',letterSpacing:'0.3px'}}>Extras Available!</h2>
+            <div style={{background:'rgba(212,175,55,0.07)',border:'1px solid rgba(212,175,55,0.2)',borderRadius:'14px',padding:'18px 16px',marginBottom:'20px',textAlign:'left',display:'flex',flexDirection:'column',gap:'12px'}}>
+              <div style={{display:'flex',gap:'12px',alignItems:'flex-start'}}>
+                <span style={{fontSize:'1.2rem',flexShrink:0}}>💬</span>
+                <p style={{color:'var(--text)',fontSize:'0.85rem',lineHeight:1.6}}>
+                  You can ask your therapist about <strong style={{color:'var(--gold)'}}>extra services</strong> directly during your session.
+                </p>
+              </div>
+              <div style={{height:'1px',background:'rgba(212,175,55,0.1)'}}/>
+              <div style={{display:'flex',gap:'12px',alignItems:'flex-start'}}>
+                <span style={{fontSize:'1.2rem',flexShrink:0}}>💵</span>
+                <p style={{color:'var(--text)',fontSize:'0.85rem',lineHeight:1.6}}>
+                  Extra charges are <strong style={{color:'var(--gold)'}}>paid directly to the therapist</strong> inside the service — not included in your booking amount.
+                </p>
+              </div>
+            </div>
+            <button onClick={()=>setStep('done')}
+              style={{...goldBtn,fontSize:'1rem',padding:'15px',letterSpacing:'0.5px'}}>
+              OK, Got It!
+            </button>
           </div>
         )}
 
@@ -1028,7 +1085,7 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
             <div style={{background:'rgba(212,175,55,0.05)',border:'1px solid rgba(212,175,55,0.15)',borderRadius:'14px',padding:'14px 16px',marginBottom:'18px',textAlign:'left',display:'flex',flexDirection:'column',gap:'9px'}}>
               <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(212,175,55,0.6)" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-                <span style={{color:'rgba(255,255,255,0.7)',fontSize:'0.8rem'}}><span style={{color:'var(--muted)',fontSize:'0.68rem'}}>Service: </span>{bookingResult.service}</span>
+                <span style={{color:'rgba(255,255,255,0.7)',fontSize:'0.8rem'}}><span style={{color:'var(--muted)',fontSize:'0.68rem'}}>Service: </span>{bookingResult.service}{bookingResult.duration&&<span style={{color:'var(--gold)',marginLeft:'6px'}}>· {bookingResult.duration}</span>}</span>
               </div>
               <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(212,175,55,0.6)" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>

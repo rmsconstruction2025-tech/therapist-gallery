@@ -2239,13 +2239,14 @@ function BookingRequestCard({ booking: b, myGPS, onAccept, onDecline }) {
 
       {/* Details */}
       <div style={{borderTop:'1px solid rgba(255,255,255,0.05)',marginBottom:'14px'}}>
-        {b.serviceType && row('💆', b.serviceType)}
-        {apptLine      && row('📅', apptLine)}
+        {b.serviceType   && row('💆', b.serviceType)}
+        {b.durationLabel && row('⏱️', b.durationLabel)}
+        {apptLine        && row('📅', apptLine)}
         {mapsUrl
           ? row('📍', {href: mapsUrl, label: 'Open Client Location in Maps'}, true)
           : b.clientLocation?.address && row('📍', b.clientLocation.address)
         }
-        {b.notes && row('📝', b.notes)}
+        {/* adminNotes intentionally not shown to therapist */}
       </div>
 
       {/* ── REJECT REASON PANEL ── */}
