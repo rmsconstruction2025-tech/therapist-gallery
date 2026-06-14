@@ -2090,7 +2090,7 @@ function TherapistManager() {
 //  LINK CREATOR
 // ══════════════════════════════════════════════════════
 function LinkCreator() {
-  const [form, setForm] = useState({bookType:'now',scheduledDate:'',clientName:'',clientPhone:'',serviceType:'',expiryMinutes:60,maxViewsPerImage:2,viewDurationSeconds:3});
+  const [form, setForm] = useState({bookType:'now',scheduledDate:'',clientName:'',clientPhone:'',serviceType:'',expiryMinutes:60,maxViewsPerImage:2,viewDurationSeconds:3,showPhotos:true});
   const [links,    setLinks]    = useState([]);
   const [creating, setCreating] = useState(false);
   const [newLink,  setNewLink]  = useState('');
@@ -2116,7 +2116,6 @@ function LinkCreator() {
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!form.clientName.trim() || !form.clientPhone.trim()) return;
-    if (form.bookType === 'later' && !form.scheduledDate) return;
     setCreating(true);
     try {
       const token     = genToken();
@@ -2127,10 +2126,10 @@ function LinkCreator() {
         viewDurationSeconds: Number(form.viewDurationSeconds),
         clientName: form.clientName.trim(), clientPhone: form.clientPhone.trim(),
         serviceType: form.serviceType || '',
-        bookType: form.bookType,
+        bookType: 'now',
+        showPhotos: form.showPhotos,
         used: false, createdAt: FieldValue.serverTimestamp(),
       };
-      if (form.bookType === 'later') doc.scheduledDate = form.scheduledDate;
       await db.collection('galleryTokens').add(doc);
       setNewLink(galleryUrl(token));
       setForm(f=>({...f,clientName:'',clientPhone:'',scheduledDate:''}));
@@ -2176,44 +2175,23 @@ function LinkCreator() {
         </div>
         <form onSubmit={handleCreate}>
 
-          {/* ── Book type toggle ── */}
-          <div style={{marginBottom:'18px'}}>
-            <label className="form-label">Booking Type</label>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px'}}>
-              {[['now','⚡ Book Now'],['later','📅 Book Later']].map(([bt,lbl])=>(
-                <button type="button" key={bt}
-                  onClick={()=>setForm(f=>({...f,bookType:bt,scheduledDate:''}))}
-                  className="btn btn-md"
-                  style={{width:'100%',
-                    background: form.bookType===bt ? 'linear-gradient(135deg,var(--gold-dark),var(--gold))' : 'var(--elevated)',
-                    color: form.bookType===bt ? '#0a0a0a' : 'var(--text)',
-                    border: form.bookType===bt ? 'none' : '1px solid var(--border)',
-                  }}>
-                  {lbl}
-                </button>
-              ))}
+          {/* ── Show Photos toggle ── */}
+          <div style={{marginBottom:'18px',display:'flex',alignItems:'center',justifyContent:'space-between',background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'12px',padding:'14px 16px'}}>
+            <div>
+              <p style={{margin:0,fontWeight:'600',fontSize:'0.88rem',color:'var(--text)'}}>Show Therapist Photos</p>
+              <p style={{margin:'3px 0 0',fontSize:'0.75rem',color:'var(--muted)'}}>
+                {form.showPhotos ? 'Client will see therapist profile photos in gallery' : 'Gallery shows names only — photos hidden from client'}
+              </p>
             </div>
+            <button type="button"
+              onClick={()=>setForm(f=>({...f,showPhotos:!f.showPhotos}))}
+              style={{flexShrink:0,width:'52px',height:'28px',borderRadius:'14px',border:'none',cursor:'pointer',position:'relative',transition:'background .2s',
+                background:form.showPhotos?'linear-gradient(135deg,var(--gold-dark),var(--gold))':'var(--card)'}}>
+              <span style={{position:'absolute',top:'3px',left:form.showPhotos?'26px':'3px',width:'22px',height:'22px',borderRadius:'50%',background:'#fff',transition:'left .2s',boxShadow:'0 1px 4px rgba(0,0,0,0.3)'}}/>
+            </button>
           </div>
 
           <div className="form-grid" style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(min(200px,100%),1fr))',gap:'16px',marginBottom:'20px'}}>
-
-            {/* Date picker — Book Later only */}
-            {form.bookType==='later' && (
-              <div style={{gridColumn:'1/-1'}}>
-                <label className="form-label">Scheduled Date <span style={{color:'var(--danger)'}}>*</span></label>
-                <input type="date" value={form.scheduledDate} min={new Date().toISOString().split('T')[0]}
-                  onChange={e=>setForm(p=>({...p,scheduledDate:e.target.value}))} className="form-input" required/>
-                {form.scheduledDate && (
-                  <p style={{fontSize:'0.74rem',color:'var(--muted)',marginTop:'5px'}}>
-                    {(()=>{
-                      const [y,m,d]=form.scheduledDate.split('-').map(Number);
-                      const days=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-                      return `📅 ${days[new Date(y,m-1,d).getDay()]} — only therapists working this day will appear in the gallery`;
-                    })()}
-                  </p>
-                )}
-              </div>
-            )}
 
             {/* Client name — required */}
             <div>
