@@ -730,7 +730,11 @@ function LiveTracker() {
 
   const onDutyList = therapists
     .filter(t => t.onDuty)
-    .map(t => ({...t, _hasGPS: t.location?.lat != null, _ago: timeAgo(t.locationUpdatedAt), _activeAgo: timeAgo(t.lastActiveAt)}));
+    .map(t => {
+      const locMs = t.locationUpdatedAt?.toMillis?.() ?? 0;
+      const locStale = t.location?.lat != null && (Date.now() - locMs) > 10 * 60 * 1000;
+      return {...t, _hasGPS: t.location?.lat != null, _ago: timeAgo(t.locationUpdatedAt), _activeAgo: timeAgo(t.lastActiveAt), _locStale: locStale};
+    });
   const onDutyWithGPS = onDutyList.filter(t => t._hasGPS);
 
   const selId = selected && onDutyList.find(t=>t.id===selected) ? selected : (onDutyWithGPS[0]?.id || onDutyList[0]?.id || null);
@@ -813,7 +817,10 @@ function LiveTracker() {
                           {t.name||t.therapistId||'Therapist'}
                         </p>
                         {t._hasGPS
-                          ? <p style={{fontSize:'0.67rem',color:'var(--muted)',margin:'2px 0 0'}}>📍 {t._ago} · 🟢 {t._activeAgo}</p>
+                          ? <p style={{fontSize:'0.67rem',color:t._locStale?'#e67e22':'var(--muted)',margin:'2px 0 0'}}>
+                              {t._locStale?'⚠️':'📍'} {t._ago} · 🟢 {t._activeAgo}
+                              {t._locStale && <span style={{marginLeft:'4px',color:'#e67e22'}}>(GPS stale)</span>}
+                            </p>
                           : <p style={{fontSize:'0.67rem',color:'#f39c12',margin:'2px 0 0'}}>⚠️ No GPS — waiting for phone</p>
                         }
                       </div>
@@ -862,7 +869,10 @@ function LiveTracker() {
                 <div style={{width:'7px',height:'7px',borderRadius:'50%',background:'#27ae60',animation:'pulse 2s infinite'}}/>
                 <div>
                   <p style={{margin:0,fontWeight:'700',fontSize:'0.8rem',color:'#fff'}}>{selT.name||selT.therapistId||'Therapist'}</p>
-                  <p style={{margin:0,fontSize:'0.63rem',color:'rgba(255,255,255,0.5)'}}>📍 Location {selT._ago} · 🟢 Active {selT._activeAgo}</p>
+                  <p style={{margin:0,fontSize:'0.63rem',color:selT._locStale?'#e67e22':'rgba(255,255,255,0.5)'}}>
+                    {selT._locStale?'⚠️':'📍'} Location {selT._ago} · 🟢 Active {selT._activeAgo}
+                    {selT._locStale && ' — GPS stale'}
+                  </p>
                 </div>
               </div>
             )}

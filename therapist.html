@@ -699,10 +699,10 @@ function TherapistPortal({ session, onLogout }) {
             locationUpdatedAt: FieldValue.serverTimestamp(),
           }).catch(()=>{});
         },
-        ()=>{},
+        ()=>{ showMsg('⚠️ GPS unavailable — enable location in browser settings.', 'error'); },
         {enableHighAccuracy:true, maximumAge:10000}
       );
-      // Heartbeat: force location update every 5 min even when stationary
+      // Heartbeat: force location update every 2 min even when stationary
       if(locHeartbeatRef.current) clearInterval(locHeartbeatRef.current);
       locHeartbeatRef.current = setInterval(() => {
         navigator.geolocation.getCurrentPosition(p => {
@@ -711,8 +711,10 @@ function TherapistPortal({ session, onLogout }) {
             location: {lat: p.coords.latitude, lng: p.coords.longitude},
             locationUpdatedAt: FieldValue.serverTimestamp(),
           }).catch(()=>{});
-        }, ()=>{}, {enableHighAccuracy:false, maximumAge:0, timeout:8000});
-      }, 5 * 60 * 1000);
+        }, ()=>{
+          showMsg('⚠️ GPS signal lost — location not updating. Check browser location permission.', 'error');
+        }, {enableHighAccuracy:false, maximumAge:0, timeout:8000});
+      }, 2 * 60 * 1000);
     } catch(err) {
       showMsg(`StartDuty: ${err.message}`, 'error');
     }
