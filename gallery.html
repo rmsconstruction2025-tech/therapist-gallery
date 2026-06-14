@@ -395,7 +395,7 @@ function App() {
   if (status==='invalid') return <FullScreen><div style={{fontSize:'3rem',color:'var(--gold)',marginBottom:'16px'}}>⚠</div><h2 style={msgTitle}>Invalid Link</h2><p style={msgSub}>This gallery link is invalid.</p></FullScreen>;
   if (status==='expired') return <FullScreen><div style={{fontSize:'3rem',color:'var(--gold)',marginBottom:'16px'}}>⏱</div><h2 style={msgTitle}>Link Expired</h2><p style={msgSub}>This gallery link has expired. Please contact us for a new link.</p></FullScreen>;
   if (status==='info')    return <ClientInfoForm tokenData={tokenData} onConfirmed={(n,p)=>{ setClient({name:n,phone:p}); setStatus('loc-prompt'); }}/>;
-  if (status==='loc-prompt') return <LocationPrompt onDone={loc=>{ setClientLoc(loc); setStatus('gallery'); }}/>;
+  if (status==='loc-prompt') return <LocationPrompt onDone={loc=>{ if(loc){ setClientLoc(loc); setStatus('gallery'); } }}/>;
 
   return (
     <div style={{position:'relative'}}>
@@ -477,40 +477,112 @@ function ClientInfoForm({ tokenData, onConfirmed }) {
 // ══════════════════════════════════════════════════════
 //  LOCATION PROMPT
 // ══════════════════════════════════════════════════════
+// Chennai centre + service radius
+const CHENNAI = { lat: 13.0827, lng: 80.2707, radiusKm: 50 };
+
+function distKm(lat1, lng1, lat2, lng2) {
+  const R = 6371, dLat = (lat2-lat1)*Math.PI/180, dLng = (lng2-lng1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
 function LocationPrompt({ onDone }) {
-  const [loading, setLoading] = useState(false);
-  const [err,     setErr]     = useState('');
+  const [phase,   setPhase]   = useState('idle'); // idle | loading | denied | outside | ok
+  const [distKmVal, setDistKmVal] = useState(null);
 
   const ask = () => {
-    setLoading(true); setErr('');
-    if (!navigator.geolocation) { setErr('GPS not available on this device.'); setLoading(false); return; }
+    setPhase('loading');
+    if (!navigator.geolocation) { setPhase('denied'); return; }
     navigator.geolocation.getCurrentPosition(
-      p  => { setLoading(false); onDone({ lat: p.coords.latitude, lng: p.coords.longitude }); },
-      () => { setLoading(false); setErr('Location access denied. Tap Skip to continue.'); },
-      { timeout: 8000, maximumAge: 60000 }
+      p => {
+        const { latitude: lat, longitude: lng } = p.coords;
+        const d = distKm(lat, lng, CHENNAI.lat, CHENNAI.lng);
+        setDistKmVal(Math.round(d));
+        if (d <= CHENNAI.radiusKm) {
+          setPhase('ok');
+          setTimeout(() => onDone({ lat, lng }), 800);
+        } else {
+          setPhase('outside');
+        }
+      },
+      () => setPhase('denied'),
+      { timeout: 10000, maximumAge: 0, enableHighAccuracy: true }
     );
   };
 
-  return (
+  const wrap = (children) => (
     <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'radial-gradient(ellipse at 50% 0%,#1a1000,var(--bg) 65%)',padding:'24px'}}>
       <div className="fade-in" style={{background:'var(--surface)',border:'1px solid var(--border-gold)',borderRadius:'20px',padding:'40px 32px',maxWidth:'380px',width:'100%',textAlign:'center',boxShadow:'0 0 30px rgba(212,175,55,.1)'}}>
-        <div style={{fontSize:'3.5rem',marginBottom:'12px'}}>📍</div>
-        <h2 style={{color:'var(--gold)',fontSize:'1.3rem',fontWeight:'700',letterSpacing:'1px',marginBottom:'10px'}}>Find Your Nearest Therapist</h2>
-        <p style={{color:'var(--muted)',fontSize:'0.85rem',lineHeight:'1.65',marginBottom:'28px'}}>
-          Share your location so we can show therapists sorted by distance — find who can reach you fastest.
-        </p>
-        {err&&<p style={{color:'var(--danger)',fontSize:'0.8rem',marginBottom:'14px'}}>{err}</p>}
-        <button onClick={ask} disabled={loading}
-          style={{background:'linear-gradient(135deg,#a07820,#d4af37)',color:'#000',border:'none',borderRadius:'12px',padding:'15px',width:'100%',fontWeight:'700',fontSize:'0.95rem',cursor:'pointer',marginBottom:'12px',minHeight:'50px',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}>
-          {loading?<><span className="spin">✦</span> Locating…</>:<>📍 Share My Location</>}
-        </button>
-        <button onClick={()=>onDone(null)}
-          style={{background:'transparent',color:'var(--muted)',border:'none',fontSize:'0.82rem',cursor:'pointer',padding:'8px',width:'100%',textDecoration:'underline',letterSpacing:'0.3px'}}>
-          Skip — show all therapists
-        </button>
+        {children}
       </div>
     </div>
   );
+
+  // ── Location denied ──
+  if (phase === 'denied') return wrap(<>
+    <div style={{fontSize:'3rem',marginBottom:'14px'}}>🚫</div>
+    <h2 style={{color:'var(--danger)',fontSize:'1.2rem',fontWeight:'700',marginBottom:'10px'}}>Location Access Required</h2>
+    <p style={{color:'var(--muted)',fontSize:'0.85rem',lineHeight:'1.7',marginBottom:'24px'}}>
+      Location permission was denied. You must allow location access to use this service.<br/><br/>
+      Please enable it in your browser settings and try again.
+    </p>
+    <div style={{background:'rgba(231,76,60,0.08)',border:'1px solid rgba(231,76,60,0.2)',borderRadius:'12px',padding:'14px',marginBottom:'20px',textAlign:'left'}}>
+      <p style={{color:'var(--muted)',fontSize:'0.78rem',lineHeight:'1.6'}}>
+        <strong style={{color:'var(--text)'}}>How to enable:</strong><br/>
+        Tap the 🔒 or ℹ️ icon in your browser address bar → Site Settings → Location → Allow
+      </p>
+    </div>
+    <button onClick={()=>setPhase('idle')}
+      style={{background:'linear-gradient(135deg,#a07820,#d4af37)',color:'#000',border:'none',borderRadius:'12px',padding:'14px',width:'100%',fontWeight:'700',fontSize:'0.9rem',cursor:'pointer'}}>
+      Try Again
+    </button>
+  </>);
+
+  // ── Outside Chennai ──
+  if (phase === 'outside') return wrap(<>
+    <div style={{fontSize:'3rem',marginBottom:'14px'}}>🗺️</div>
+    <h2 style={{color:'var(--danger)',fontSize:'1.15rem',fontWeight:'700',marginBottom:'10px'}}>Service Not Available</h2>
+    <p style={{color:'var(--muted)',fontSize:'0.85rem',lineHeight:'1.7',marginBottom:'20px'}}>
+      Our service is currently available only within <strong style={{color:'var(--gold)'}}>Chennai</strong>.
+    </p>
+    <div style={{background:'rgba(212,175,55,0.06)',border:'1px solid rgba(212,175,55,0.15)',borderRadius:'12px',padding:'14px',marginBottom:'24px'}}>
+      <p style={{color:'var(--muted)',fontSize:'0.82rem'}}>
+        Your detected location is <strong style={{color:'var(--text)'}}>~{distKmVal} km</strong> from Chennai.
+      </p>
+    </div>
+    <p style={{color:'var(--muted)',fontSize:'0.78rem',opacity:0.7}}>Contact us if you believe this is an error.</p>
+  </>);
+
+  // ── Verified ──
+  if (phase === 'ok') return wrap(<>
+    <div style={{width:'64px',height:'64px',borderRadius:'50%',background:'rgba(39,174,96,0.12)',border:'2px solid rgba(39,174,96,0.35)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px'}}>
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#27ae60" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <h2 style={{color:'#27ae60',fontSize:'1.15rem',fontWeight:'700',marginBottom:'8px'}}>Location Verified</h2>
+    <p style={{color:'var(--muted)',fontSize:'0.85rem'}}>Chennai confirmed. Opening gallery…</p>
+  </>);
+
+  // ── Idle / Loading ──
+  return wrap(<>
+    <div style={{fontSize:'3.5rem',marginBottom:'14px'}}>📍</div>
+    <h2 style={{color:'var(--gold)',fontSize:'1.3rem',fontWeight:'700',letterSpacing:'1px',marginBottom:'10px'}}>Location Required</h2>
+    <p style={{color:'var(--muted)',fontSize:'0.85rem',lineHeight:'1.65',marginBottom:'8px'}}>
+      This service is available <strong style={{color:'var(--gold)'}}>only in Chennai</strong>.
+    </p>
+    <p style={{color:'var(--muted)',fontSize:'0.82rem',lineHeight:'1.6',marginBottom:'28px'}}>
+      We need your location to verify you are in our service area and to show you the nearest available therapist.
+    </p>
+    <button onClick={ask} disabled={phase==='loading'}
+      style={{background:'linear-gradient(135deg,#a07820,#d4af37)',color:'#000',border:'none',borderRadius:'12px',padding:'15px',width:'100%',fontWeight:'700',fontSize:'0.95rem',cursor:'pointer',minHeight:'52px',display:'flex',alignItems:'center',justifyContent:'center',gap:'10px'}}>
+      {phase==='loading'
+        ? <><div style={{width:'18px',height:'18px',border:'2px solid rgba(0,0,0,0.2)',borderTopColor:'#000',borderRadius:'50%',animation:'spin .7s linear infinite'}}/> Verifying location…</>
+        : <>📍 Allow Location &amp; Continue</>
+      }
+    </button>
+    <p style={{color:'var(--muted)',fontSize:'0.72rem',marginTop:'16px',opacity:0.6,lineHeight:1.6}}>
+      Location is used only to verify service area and sort therapists by distance. It is not stored without your booking.
+    </p>
+  </>);
 }
 
 // ══════════════════════════════════════════════════════
