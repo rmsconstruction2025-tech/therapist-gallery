@@ -399,35 +399,44 @@ function TherapistGallery({ tokenData, clientName, clientPhone, clientLoc, isBlu
         const hasPinned = Array.isArray(pinnedIds) && pinnedIds.length > 0;
         let filtered;
 
+        // Always fetch online therapists
+        const onlineSnap = await db.collection('therapists').where('available','==',true).get();
+        const onlineAll = onlineSnap.docs.map(d=>({id:d.id,...d.data()}));
+
+        // Also query active bookings to catch busy therapists
+        let busyDocIds = new Set();
+        try {
+          const activeSnap = await db.collection('bookings')
+            .where('status','in',['on_way','in_session']).get();
+          activeSnap.docs.forEach(d => {
+            const tid = d.data().therapistDocId;
+            if (tid) busyDocIds.add(tid);
+          });
+        } catch(e) { /* ignore if rules block */ }
+
+        // Filter online therapists normally
+        const onlineFiltered = onlineAll.filter(t => {
+          if (!t.imageUrl) return false;
+          if (t.sessionActive === true) return false;
+          if (busyDocIds.has(t.id)) return false;
+          const wh = t.workingHours;
+          if (!wh) return true;
+          return wh[filterInfo.dayKey]?.on === true;
+        });
+
         if (hasPinned) {
-          // Admin pinned specific therapists — show regardless of status/hours/photo
+          // Fetch pinned therapists directly (bypass online/hours/photo filters)
           const results = await Promise.allSettled(pinnedIds.map(id=>db.collection('therapists').doc(id).get()));
-          filtered = results
+          const pinnedList = results
             .filter(r=>r.status==='fulfilled' && r.value.exists)
             .map(r=>({id:r.value.id,...r.value.data()}));
+
+          // Merge: pinned first, then online therapists not already in pinned list
+          const pinnedIdSet = new Set(pinnedList.map(t=>t.id));
+          const onlineOnly = onlineFiltered.filter(t=>!pinnedIdSet.has(t.id));
+          filtered = [...pinnedList, ...onlineOnly];
         } else {
-          // Default: only fetch therapists currently online
-          const snap = await db.collection('therapists').where('available','==',true).get();
-          const all = snap.docs.map(d=>({id:d.id,...d.data()}));
-          // Also query active bookings to catch therapists on_way/in_session
-          let busyDocIds = new Set();
-          try {
-            const activeSnap = await db.collection('bookings')
-              .where('status','in',['on_way','in_session']).get();
-            activeSnap.docs.forEach(d => {
-              const tid = d.data().therapistDocId;
-              if (tid) busyDocIds.add(tid);
-            });
-          } catch(e) { /* ignore if rules block */ }
-          // Filter by working hours; hide therapists currently in an active session or without a photo
-          filtered = all.filter(t => {
-            if (!t.imageUrl) return false;              // no photo → hidden from gallery
-            if (t.sessionActive === true) return false; // busy (flag set)
-            if (busyDocIds.has(t.id)) return false;    // busy (active booking)
-            const wh = t.workingHours;
-            if (!wh) return true; // no hours configured → always show
-            return wh[filterInfo.dayKey]?.on === true;
-          });
+          filtered = onlineFiltered;
         }
 
         // Sort: Online first → recently seen → older (priority + lastActiveAt desc)
