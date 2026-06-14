@@ -1642,10 +1642,10 @@ function DashboardTab({ onNavigate = ()=>{} }) {
   const confirmedCount         = bookings.filter(b=>b.status==='confirmed').length;
   const therapistAcceptedCount = bookings.filter(b=>b.status==='confirmed'&&b.therapistAccepted===true).length;
   const onlineCount            = therapists.filter(t=>t.available).length;
-  const noGPSCount             = therapists.filter(t=>t.available&&!t.lat&&!t.latitude&&!t.lastLocation).length;
+  const noGPSCount             = therapists.filter(t=>t.available&&!t.location?.lat).length;
   const ratedTherps            = therapists.filter(t=>t.rating!=null&&parseFloat(t.rating)>0);
   const avgRating              = ratedTherps.length>0?(ratedTherps.reduce((s,t)=>s+parseFloat(t.rating||0),0)/ratedTherps.length).toFixed(1):'—';
-  const activeTherps           = therapists.filter(t=>t.available).slice(0,5);
+  const activeTherps           = therapists.filter(t=>t.available).slice(0,5).map(t=>({...t,_hasGPS:t.location?.lat!=null}));
   const hour                   = new Date().getHours();
   const greeting               = hour<12?'Morning':hour<17?'Afternoon':'Evening';
 
@@ -1781,24 +1781,34 @@ function DashboardTab({ onNavigate = ()=>{} }) {
               ? <p style={{padding:'24px',textAlign:'center',color:'var(--muted)',fontSize:'14px',margin:0}}>No therapists on duty right now</p>
               : activeTherps.map(t=>{
                   const initials=(t.name||'?').split(' ').map(w=>w[0]||'').slice(0,2).join('').toUpperCase()||'?';
-                  const ls=lastSeen(t);
-                  const hasGPS=!!(t.lat||t.latitude||t.lastLocation);
+                  const ls = lastSeen(t);
+                  const ago = ls.text || 'Active';
                   return (
-                    <div key={t.id} className="ma-row">
+                    <div key={t.id} className="ma-row" style={{alignItems:'center',gap:'12px'}}>
+                      {/* Avatar with live dot */}
                       <div style={{position:'relative',flexShrink:0}}>
-                        <div className="ma-av-ci" style={{background:'rgba(212,175,55,0.1)',border:'1.5px solid rgba(212,175,55,0.3)',color:'var(--gold)'}}>
+                        <div className="ma-av-ci" style={{background:'rgba(212,175,55,0.1)',border:`1.5px solid ${t._hasGPS?'rgba(39,174,96,0.4)':'rgba(212,175,55,0.3)'}`,color:'var(--gold)'}}>
                           {t.imageUrl
                             ? <img src={t.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>
                             : initials}
-                          <div className="ma-av-dot"/>
                         </div>
+                        <div style={{position:'absolute',bottom:0,right:0,width:'10px',height:'10px',borderRadius:'50%',background:t._hasGPS?'#16a34a':'#f59e0b',border:'2px solid var(--card)',animation:t._hasGPS?'pulse 2s infinite':'none'}}/>
                       </div>
-                      <div className="ma-row-body">
-                        <p className="ma-row-title">{t.name||t.therapistId||'—'}</p>
-                        <p className="ma-row-sub" style={{color:ls.color||'var(--muted)'}}>{hasGPS?'📍':'⚠️'} {ls.text||'Currently online'}</p>
+                      {/* Name + location info */}
+                      <div className="ma-row-body" style={{minWidth:0}}>
+                        <p className="ma-row-title" style={{margin:'0 0 2px'}}>{t.name||t.therapistId||'—'}</p>
+                        {t._hasGPS
+                          ? <p className="ma-row-sub" style={{margin:0,color:'#16a34a',fontSize:'11px',fontFamily:'monospace'}}>
+                              📍 {t.location.lat.toFixed(4)}, {t.location.lng.toFixed(4)}
+                            </p>
+                          : <p className="ma-row-sub" style={{margin:0,color:'var(--muted)',fontSize:'11px'}}>
+                              ⚠️ No GPS · last seen {ago}
+                            </p>
+                        }
                       </div>
-                      <span className="ma-badge" style={{background:hasGPS?'rgba(22,163,74,0.1)':'rgba(245,158,11,0.1)',color:hasGPS?'#16a34a':'#f59e0b',border:`1px solid ${hasGPS?'rgba(22,163,74,0.25)':'rgba(245,158,11,0.25)'}`}}>
-                        {hasGPS?'On Duty':'No GPS'}
+                      {/* Badge */}
+                      <span className="ma-badge" style={{flexShrink:0,background:t._hasGPS?'rgba(22,163,74,0.1)':'rgba(245,158,11,0.1)',color:t._hasGPS?'#16a34a':'#f59e0b',border:`1px solid ${t._hasGPS?'rgba(22,163,74,0.3)':'rgba(245,158,11,0.3)'}`}}>
+                        {t._hasGPS?'GPS ✓':'No GPS'}
                       </span>
                     </div>
                   );
