@@ -953,16 +953,24 @@ function ChatAdmin() {
     setSending(false);
   };
 
-  /* ── Send media (image / audio / video) ── */
+  /* ── Send media (image / audio / video) — optimistic UI: bubble appears immediately ── */
   const sendMedia = async (file, mediaType) => {
     if (!file || !activeId) return;
+    const preview = mediaType==='image' ? '📷 Photo' : mediaType==='audio' ? '🎵 Voice note' : '🎬 Video';
+    // Show bubble instantly using local blob URL
+    const localUrl = URL.createObjectURL(file);
+    const tempId   = '_tmp_' + Date.now();
+    setMessages(prev => [...prev, {
+      id: tempId, text: '', mediaUrl: localUrl, mediaType,
+      sender: 'admin', _pending: true,
+      sentAt: { toMillis: () => Date.now(), toDate: () => new Date() },
+    }]);
     setUploading(true);
     try {
-      const ext = file.name.split('.').pop() || 'bin';
+      const ext  = file.name.split('.').pop() || 'bin';
       const path = `chats/${activeId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
       const snap = await storage.ref(path).put(file);
-      const url = await snap.ref.getDownloadURL();
-      const preview = mediaType==='image' ? '📷 Photo' : mediaType==='audio' ? '🎵 Audio' : '🎬 Video';
+      const url  = await snap.ref.getDownloadURL();
       await db.collection('chats').doc(activeId).collection('messages').add({
         text: '', mediaUrl: url, mediaType, fileName: file.name,
         sender: 'admin', sentAt: FieldValue.serverTimestamp(),
@@ -973,7 +981,14 @@ function ChatAdmin() {
         therapistDocId: activeId, therapistName: activeTherapist?.name || '',
         unreadTherapist: firebase.firestore.FieldValue.increment(1),
       }, { merge: true });
-    } catch (e) { alert('Upload failed: ' + e.message); }
+      // onSnapshot will deliver the real message; remove temp bubble
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      URL.revokeObjectURL(localUrl);
+    } catch (e) {
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      URL.revokeObjectURL(localUrl);
+      alert('Upload failed: ' + e.message);
+    }
     setUploading(false);
   };
 

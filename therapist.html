@@ -1387,16 +1387,24 @@ function ChatTab({ session }) {
     setSending(false);
   };
 
-  /* ── Send media ── */
+  /* ── Send media — optimistic UI: bubble appears instantly, upload in background ── */
   const sendMedia = async (file, mediaType) => {
     if (!file) return;
+    const preview = mediaType==='image'?'📷 Photo':mediaType==='audio'?'🎵 Voice note':'🎬 Video';
+    // Show bubble instantly using local blob URL
+    const localUrl = URL.createObjectURL(file);
+    const tempId   = '_tmp_' + Date.now();
+    setMessages(prev => [...prev, {
+      id: tempId, text: '', mediaUrl: localUrl, mediaType,
+      sender: 'therapist', _pending: true,
+      sentAt: { toMillis: () => Date.now(), toDate: () => new Date() },
+    }]);
     setUploading(true);
     try {
-      const ext = file.name.split('.').pop() || 'bin';
+      const ext  = file.name.split('.').pop() || 'bin';
       const path = `chats/${session.docId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
       const snap = await storage.ref(path).put(file);
-      const url = await snap.ref.getDownloadURL();
-      const preview = mediaType==='image'?'📷 Photo':mediaType==='audio'?'🎵 Audio':'🎬 Video';
+      const url  = await snap.ref.getDownloadURL();
       await db.collection('chats').doc(session.docId).collection('messages').add({
         text: '', mediaUrl: url, mediaType, fileName: file.name,
         sender: 'therapist', sentAt: FieldValue.serverTimestamp(),
@@ -1407,7 +1415,14 @@ function ChatTab({ session }) {
         therapistDocId: session.docId, therapistName: session.name || '',
         unreadAdmin: FieldValue.increment(1),
       }, { merge: true });
-    } catch (e) { alert('Upload failed: ' + e.message); }
+      // onSnapshot will deliver the real message; remove temp bubble
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      URL.revokeObjectURL(localUrl);
+    } catch (e) {
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      URL.revokeObjectURL(localUrl);
+      alert('Upload failed: ' + e.message);
+    }
     setUploading(false);
   };
 
