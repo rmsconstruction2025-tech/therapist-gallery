@@ -18,14 +18,20 @@ service cloud.firestore {
              .hasOnly(['available','name','bio','speciality','workStart','workEnd','workingHours','imageUrl','updatedAt','phone','fcmToken','sessionActive','lastActiveAt','onDuty','dutyStartedAt','locationUpdatedAt','location','emergencyContacts']);
     }
 
-    // Gallery tokens: admin full control; clients can read to validate & update name/phone
+    // Gallery tokens: admin full control; clients can read & update tracking fields
     match /galleryTokens/{tokenId} {
       allow read: if true;
       allow create, delete: if isAdmin();
       allow update: if isAdmin()
         || request.resource.data.diff(resource.data)
              .affectedKeys()
-             .hasOnly(['clientName', 'clientPhone', 'used']);
+             .hasOnly([
+               'clientName', 'clientPhone', 'used',
+               'visited', 'visitedAt', 'visitCount',
+               'clientLocation', 'hasBooked',
+               'device', 'ipGeo', 'referrer', 'pageUrl',
+               'interestedInTherapist', 'interestedAt'
+             ]);
     }
 
     // View counts per (tokenId_therapistId): clients read/write for tracking
