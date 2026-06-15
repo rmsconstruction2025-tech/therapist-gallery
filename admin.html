@@ -907,7 +907,7 @@ function VoicePlayer({ src, sent }) {
         </div>
       </div>
 
-      <audio ref={audioRef} src={src} preload="metadata" playsInline
+      <audio ref={audioRef} src={src} preload="auto" playsInline
         onPlay={function(){setPlaying(true);}} onPause={function(){setPlaying(false);}}
         onEnded={function(){setPlaying(false);setProgress(0);setCurrent(0);if(audioRef.current)audioRef.current.currentTime=0;}}
         onLoadedMetadata={function(e){setDuration(e.target.duration);}}
@@ -1044,8 +1044,8 @@ function ChatAdmin() {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
       const mimeType =
-        MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' :
         MediaRecorder.isTypeSupported('audio/mp4')              ? 'audio/mp4' :
+        MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' :
         MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')  ? 'audio/ogg;codecs=opus' : 'audio/webm';
       const mr = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mr;
