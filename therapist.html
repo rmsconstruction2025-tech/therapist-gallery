@@ -1377,7 +1377,7 @@ function VoicePlayer({ src, sent }) {
         </div>
       </div>
 
-      <audio ref={audioRef} src={src} preload="auto" playsInline
+      <audio ref={audioRef} src={src} preload="none" playsInline
         onPlay={function(){playingRef.current=true;setPlaying(true);setHasError(false);}}
         onPause={function(){playingRef.current=false;setPlaying(false);}}
         onEnded={function(){playingRef.current=false;setPlaying(false);setProgress(0);setCurrent(0);if(audioRef.current)audioRef.current.currentTime=0;}}
