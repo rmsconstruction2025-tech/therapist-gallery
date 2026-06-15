@@ -3283,7 +3283,7 @@ function EarningsTab() {
                               background:isExpand?'rgba(212,175,55,0.06)':'var(--elevated)',
                               border:`1px solid ${missing?'rgba(243,156,18,0.3)':isExpand?'rgba(212,175,55,0.25)':'transparent'}`,
                               borderRadius:'9px',gap:'8px',cursor:'pointer',transition:'all .15s'}}>
-                            <span style={{fontSize:'0.75rem',color:'var(--text)',fontWeight:'600',flexShrink:0,minWidth:'80px'}}>{b.appointmentDate||b.scheduledDate||'—'}</span>
+                            <span style={{fontSize:'0.75rem',color:'var(--text)',fontWeight:'600',flexShrink:0,minWidth:'80px'}}>{b.appointmentDate||b.scheduledDate||(b.createdAt?.toDate?.()?.toISOString?.()?.split?.('T')?.[0])||'—'}</span>
                             <span style={{fontSize:'0.72rem',color:'var(--muted)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{b.clientName||'Client'} · {b.serviceType||b.durationLabel||'—'}</span>
                             <span style={{fontSize:'0.75rem',fontWeight:'700',flexShrink:0,color:missing?'#f39c12':'var(--gold)'}}>
                               {missing ? '₹ ?' : '₹'+price.toLocaleString('en-IN')}
