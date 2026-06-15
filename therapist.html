@@ -1322,73 +1322,13 @@ function TherapistPortal({ session, onLogout }) {
 }
 
 // ══════════════════════════════════════════════════════
-//  VOICE PLAYER — custom waveform audio player
+//  VOICE PLAYER — native audio (reliable cross-platform)
 // ══════════════════════════════════════════════════════
-const VOICE_BARS = [40,55,70,45,60,80,50,65,40,75,55,42,68,58,45,72,48,62,50,78,44,66,52,60,47,73,56,43];
 function VoicePlayer({ src, sent }) {
-  var audioRef = React.useRef(null);
-  var playingRef = React.useRef(false);
-  var _s = React.useState(false); var playing = _s[0]; var setPlaying = _s[1];
-  var _p = React.useState(0);    var progress = _p[0]; var setProgress = _p[1];
-  var _d = React.useState(0);    var duration = _d[0]; var setDuration = _d[1];
-  var _c = React.useState(0);    var current  = _c[0]; var setCurrent  = _c[1];
-  var _b = React.useState(false); var buffering= _b[0]; var setBuffering= _b[1];
-  var _e = React.useState(false); var hasError = _e[0]; var setHasError = _e[1];
-  var gold = 'var(--gold)';
-
-  function fmt(s) { return (isFinite(s)&&s>0) ? (Math.floor(s/60)+':'+('0'+Math.floor(s%60)).slice(-2)) : '0:00'; }
-
-  function toggle(e) {
-    e.stopPropagation();
-    var a = audioRef.current; if(!a) return;
-    if(playingRef.current){ a.pause(); }
-    else { a.play().catch(function(err){ setHasError(true); setBuffering(false); }); }
-  }
-  function onBarClick(e) {
-    e.stopPropagation();
-    var a = audioRef.current; if(!a||!duration) return;
-    var r = e.currentTarget.getBoundingClientRect();
-    var ratio = (e.clientX-r.left)/r.width;
-    a.currentTime = Math.max(0,Math.min(1,ratio)) * duration;
-  }
-
   return (
-    <div style={{display:'flex',alignItems:'center',gap:'10px',minWidth:'200px',width:'100%'}}>
-      <button onClick={toggle} style={{
-        width:'42px',height:'42px',borderRadius:'50%',border:'none',cursor:'pointer',flexShrink:0,
-        background:sent?gold:'var(--elevated)', color:sent?'#1a1200':'var(--text)',
-        display:'flex',alignItems:'center',justifyContent:'center',fontSize:'16px',
-        WebkitTapHighlightColor:'transparent', touchAction:'manipulation',
-      }}>{hasError?'⚠':buffering?'◌':playing?'⏸':'▶'}</button>
-
-      <div style={{flex:1,minWidth:0}}>
-        <div onClick={onBarClick} style={{height:'36px',display:'flex',alignItems:'center',gap:'2px',cursor:'pointer',userSelect:'none',touchAction:'manipulation'}}>
-          {VOICE_BARS.map(function(h,i){
-            return <div key={i} style={{
-              flex:1,height:h+'%',borderRadius:'3px',
-              background:(progress*28)>i?(sent?gold:'#38bdf8'):(hasError?'rgba(255,80,80,0.25)':'rgba(128,128,128,0.25)'),
-              transition:'background 0.08s',
-            }}/>;
-          })}
-        </div>
-        <div style={{fontSize:'10px',color:hasError?'#f87171':'var(--muted)',marginTop:'1px',display:'flex',justifyContent:'space-between'}}>
-          <span>{hasError?'Cannot play on this device':fmt(current)}</span>
-          <span>{(!hasError&&duration)?fmt(duration):'—'}</span>
-        </div>
-      </div>
-
-      <audio ref={audioRef} src={src} preload="none" playsInline
-        onPlay={function(){playingRef.current=true;setPlaying(true);setHasError(false);}}
-        onPause={function(){playingRef.current=false;setPlaying(false);}}
-        onEnded={function(){playingRef.current=false;setPlaying(false);setProgress(0);setCurrent(0);if(audioRef.current)audioRef.current.currentTime=0;}}
-        onLoadedMetadata={function(e){setDuration(e.target.duration);}}
-        onTimeUpdate={function(e){var a=e.target;setCurrent(a.currentTime);setProgress(a.duration?a.currentTime/a.duration:0);}}
-        onWaiting={function(){setBuffering(true);}}
-        onCanPlay={function(){setBuffering(false);}}
-        onPlaying={function(){setBuffering(false);}}
-        onError={function(){setHasError(true);setBuffering(false);playingRef.current=false;setPlaying(false);}}
-      />
-    </div>
+    <audio controls playsInline preload="none" src={src}
+      style={{width:'100%',minWidth:'200px',maxWidth:'280px',height:'36px',display:'block',accentColor:'var(--gold)'}}
+    />
   );
 }
 
