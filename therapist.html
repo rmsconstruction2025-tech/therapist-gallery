@@ -447,7 +447,8 @@ function TherapistPortal({ session, onLogout }) {
   const watchRef         = useRef(null);
   const dutyTimerRef     = useRef(null);
   const lastLocUpdateRef = useRef(0);
-  const locHeartbeatRef  = useRef(null); // 5-min forced location update when stationary
+  const locHeartbeatRef  = useRef(null);
+  const lastKnownPosRef  = useRef(null); // cached {lat,lng} — re-written every 10s without GPS call
 
   useEffect(() => {
     fetchProfile();
@@ -689,31 +690,39 @@ function TherapistPortal({ session, onLogout }) {
       setDutySeconds(0);
       dutyTimerRef.current = setInterval(() => setDutySeconds(s => s + 1), 1000);
       lastLocUpdateRef.current = Date.now();
+      // watchPosition: update cached position whenever GPS fires
       watchRef.current = navigator.geolocation.watchPosition(
         p => {
-          const now = Date.now();
-          if(now - lastLocUpdateRef.current < 10000) return;
-          lastLocUpdateRef.current = now;
+          lastKnownPosRef.current = {lat: p.coords.latitude, lng: p.coords.longitude};
+          lastLocUpdateRef.current = Date.now();
           db.collection('therapists').doc(session.docId).update({
-            location: {lat: p.coords.latitude, lng: p.coords.longitude},
+            location: lastKnownPosRef.current,
             locationUpdatedAt: FieldValue.serverTimestamp(),
           }).catch(()=>{});
         },
         ()=>{ showMsg('⚠️ GPS unavailable — enable location in browser settings.', 'error'); },
-        {enableHighAccuracy:true, maximumAge:10000}
+        {enableHighAccuracy:false, maximumAge:5000, timeout:10000}
       );
-      // Heartbeat: force location update every 10 seconds even when stationary
+      // Heartbeat: every 10s re-write the CACHED position — no GPS call needed
+      // This keeps locationUpdatedAt fresh even when the device is stationary
       if(locHeartbeatRef.current) clearInterval(locHeartbeatRef.current);
       locHeartbeatRef.current = setInterval(() => {
-        navigator.geolocation.getCurrentPosition(p => {
-          lastLocUpdateRef.current = Date.now();
+        if(lastKnownPosRef.current) {
           db.collection('therapists').doc(session.docId).update({
-            location: {lat: p.coords.latitude, lng: p.coords.longitude},
+            location: lastKnownPosRef.current,
             locationUpdatedAt: FieldValue.serverTimestamp(),
           }).catch(()=>{});
-        }, ()=>{
-          showMsg('⚠️ GPS signal lost — location not updating. Check browser location permission.', 'error');
-        }, {enableHighAccuracy:false, maximumAge:0, timeout:8000});
+        } else {
+          // No cached position yet — try GPS once
+          navigator.geolocation.getCurrentPosition(p => {
+            lastKnownPosRef.current = {lat: p.coords.latitude, lng: p.coords.longitude};
+            db.collection('therapists').doc(session.docId).update({
+              location: lastKnownPosRef.current,
+              locationUpdatedAt: FieldValue.serverTimestamp(),
+            }).catch(()=>{});
+          }, ()=>{ showMsg('⚠️ GPS signal lost — check browser location permission.', 'error'); },
+          {enableHighAccuracy:false, maximumAge:10000, timeout:8000});
+        }
       }, 10 * 1000);
     } catch(err) {
       showMsg(`StartDuty: ${err.message}`, 'error');
@@ -727,6 +736,7 @@ function TherapistPortal({ session, onLogout }) {
     if(watchRef.current !== null){ navigator.geolocation.clearWatch(watchRef.current); watchRef.current = null; }
     if(dutyTimerRef.current){ clearInterval(dutyTimerRef.current); dutyTimerRef.current = null; }
     if(locHeartbeatRef.current){ clearInterval(locHeartbeatRef.current); locHeartbeatRef.current = null; }
+    lastKnownPosRef.current = null;
     try {
       await db.collection('therapists').doc(session.docId).update({ onDuty: false, available: false, location: null, locationUpdatedAt: FieldValue.serverTimestamp() });
       setOnDuty(false);
