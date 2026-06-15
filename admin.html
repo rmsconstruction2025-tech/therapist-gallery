@@ -610,15 +610,15 @@ function LiveMapAll({ onDutyList }) {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css">
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"><\/script>
-<style>*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%;overflow:hidden}#map{width:100%;height:100%}<\/style>
+<style>*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%;overflow:hidden}#map{width:100%;height:100%}.gm-pin{background:#e74c3c;color:#fff;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4)}<\/style>
 </head><body><div id="map"></div>
 <script>
-var m=L.map('map');
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:18}).addTo(m);
+var m=L.map('map',{zoomControl:true});
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{attribution:'© CartoDB',maxZoom:20}).addTo(m);
 var markers=[];
 ${pins}
-if(markers.length===1){m.setView(markers[0].getLatLng(),15);}
-else if(markers.length>1){var g=L.featureGroup(markers);m.fitBounds(g.getBounds().pad(0.25));}
+if(markers.length===1){m.setView(markers[0].getLatLng(),16);}
+else if(markers.length>1){var g=L.featureGroup(markers);m.fitBounds(g.getBounds().pad(0.3));}
 <\/script></body></html>`;
     const blob = new Blob([html],{type:'text/html'});
     const newUrl = URL.createObjectURL(blob);
@@ -635,39 +635,9 @@ else if(markers.length>1){var g=L.featureGroup(markers);m.fitBounds(g.getBounds(
 }
 
 function LiveMapSingle({ therapist: t }) {
-  const [src, setSrc] = React.useState('');
-  const urlRef = React.useRef('');
-  const depsKey = `${t.id}:${(t.location?.lat||0).toFixed(5)}:${(t.location?.lng||0).toFixed(5)}`;
-
-  React.useEffect(() => {
-    if (!t.location?.lat) return;
-    const name = (t.name||t.therapistId||'Therapist').replace(/['"<>&]/g,'_');
-    const ago  = (t._ago||'').replace(/['"<>&]/g,'_');
-    const lat  = t.location.lat;
-    const lng  = t.location.lng;
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css">
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"><\/script>
-<style>*{margin:0;padding:0;box-sizing:border-box}html,body{width:100%;height:100%;overflow:hidden}#map{width:100%;height:100%}<\/style>
-</head><body><div id="map"></div>
-<script>
-var m=L.map('map').setView([${lat},${lng}],16);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:18}).addTo(m);
-L.marker([${lat},${lng}]).addTo(m).bindPopup('<b>${name}</b><br/><small>📍 ${ago}</small>').openPopup();
-<\/script></body></html>`;
-    const blob = new Blob([html],{type:'text/html'});
-    const newUrl = URL.createObjectURL(blob);
-    const old = urlRef.current;
-    urlRef.current = newUrl;
-    setSrc(newUrl);
-    if(old) setTimeout(()=>URL.revokeObjectURL(old),1000);
-  }, [depsKey]);
-
-  React.useEffect(()=>()=>{ if(urlRef.current) URL.revokeObjectURL(urlRef.current); },[]);
-
-  if(!src) return <div style={{height:'100%',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,0.4)'}}>Loading map…</div>;
-  return <iframe src={src} style={{width:'100%',height:'100%',border:'none',display:'block'}} title="Live Location"/>;
+  if (!t.location?.lat) return <div style={{height:'100%',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,0.4)'}}>No GPS data</div>;
+  const src = `https://maps.google.com/maps?q=${t.location.lat},${t.location.lng}&z=16&output=embed`;
+  return <iframe src={src} style={{width:'100%',height:'100%',border:'none',display:'block'}} title="Live Location" allowFullScreen loading="lazy"/>;
 }
 
 const FCM_SERVER_KEY = 'alwo_UykyXjQOLLt7xz55u76ZMaB0tYlRnSaGe7Z40U';
