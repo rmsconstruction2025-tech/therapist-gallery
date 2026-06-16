@@ -1272,6 +1272,16 @@ function ChatAdmin() {
             {activeTherapist?.available ? 'Online' : 'Offline'}
           </p>
         </div>
+        <button onClick={()=>{
+          const phone = (activeTherapist?.phone||'').replace(/\D/g,'');
+          if (!phone) { alert('No phone number on file for this therapist.'); return; }
+          if (!window.confirm(`Call ${activeTherapist?.name||'therapist'} at +91 ${phone}?`)) return;
+          window.location.href = `tel:+91${phone}`;
+        }} title="Call therapist" style={{ background:'none', border:'none', cursor:'pointer',
+          color:'#25d366', fontSize:'18px', padding:'6px', borderRadius:'8px',
+          lineHeight:1, flexShrink:0, transition:'opacity .15s' }}>
+          📞
+        </button>
         <button onClick={async()=>{
           if(!window.confirm('Clear all messages in this chat?')) return;
           try {
@@ -4201,24 +4211,45 @@ function BookingsPanel() {
                     {exp&&(
                       <div style={{padding:'10px 16px 14px 34px',borderTop:'1px solid rgba(212,175,55,0.1)',background:'rgba(212,175,55,0.02)'}}>
 
-                        {/* Detail chips */}
+                        {/* Booking details — clearly labeled fields, not bare icon chips */}
+                        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',gap:'10px 18px',marginBottom:'12px',padding:'12px',background:'rgba(255,255,255,0.02)',border:'1px solid var(--border)',borderRadius:'10px'}}>
+                          {[
+                            ['Client',    b.clientName  || '—'],
+                            ['Phone',     b.clientPhone || '—'],
+                            ['Service',   b.serviceType || '—'],
+                            ['Duration',  b.durationLabel || b.duration || '—'],
+                            ['Date',      b.appointmentDate || b.scheduledDate || (b.bookingType==='now' ? 'Immediate' : '—')],
+                            ['Time',      b.appointmentTime || b.scheduledTime || '—'],
+                            ['Location',  b.clientLocation ? (b.clientLocation.address || `${b.clientLocation.lat?.toFixed(4)}, ${b.clientLocation.lng?.toFixed(4)}`) : '—'],
+                            ['Therapist', therapistName],
+                            ['Booked',    timeAgo(b)],
+                          ].map(([label,val])=>(
+                            <div key={label}>
+                              <p style={{fontSize:'0.62rem',color:'var(--muted)',textTransform:'uppercase',letterSpacing:'0.5px',fontWeight:'700',margin:'0 0 3px'}}>{label}</p>
+                              <p style={{fontSize:'0.82rem',color:'var(--text)',margin:0,fontWeight:'600',wordBreak:'break-word'}}>{val}</p>
+                            </div>
+                          ))}
+                        </div>
+
+                        {b.notes&&(
+                          <p style={{fontSize:'0.78rem',color:'var(--muted)',fontStyle:'italic',margin:'0 0 12px',padding:'8px 10px',background:'rgba(212,175,55,0.05)',borderLeft:'2px solid var(--gold)',borderRadius:'4px'}}>📝 "{b.notes}"</p>
+                        )}
+
+                        {/* Quick actions */}
                         <div style={{display:'flex',gap:'10px',flexWrap:'wrap',marginBottom:'12px'}}>
                           {clientWaPhone&&(
                             <a href={`https://wa.me/${clientWaPhone}?text=${encodeURIComponent('Hello '+b.clientName+', regarding your Feel Free Spa booking…')}`}
                               target="_blank" rel="noopener noreferrer"
                               style={{display:'inline-flex',alignItems:'center',gap:'5px',background:'rgba(37,211,102,0.12)',color:'#25D366',border:'1px solid rgba(37,211,102,0.3)',borderRadius:'7px',padding:'5px 11px',fontSize:'0.75rem',fontWeight:'600',textDecoration:'none'}}>
-                              💬 {b.clientPhone}
+                              💬 WhatsApp Client
                             </a>
                           )}
-                          {b.clientLocation&&(
+                          {b.clientLocation?.lat!=null&&b.clientLocation?.lng!=null&&(
                             <a href={`https://maps.google.com?q=${b.clientLocation.lat},${b.clientLocation.lng}`}
                               target="_blank" rel="noopener noreferrer"
                               style={{display:'inline-flex',alignItems:'center',gap:'5px',background:'rgba(212,175,55,0.1)',color:'var(--gold)',border:'1px solid rgba(212,175,55,0.3)',borderRadius:'7px',padding:'5px 11px',fontSize:'0.75rem',fontWeight:'600',textDecoration:'none'}}>
                               📍 View Location
                             </a>
-                          )}
-                          {b.notes&&(
-                            <span style={{fontSize:'0.75rem',color:'var(--muted)',fontStyle:'italic',alignSelf:'center'}}>📝 "{b.notes}"</span>
                           )}
                         </div>
 
