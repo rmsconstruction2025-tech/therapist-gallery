@@ -4544,6 +4544,8 @@ function FeelFreeSpaBot() {
   const [stLoad, setStLoad] = React.useState(true);
   const [links,  setLinks]  = React.useState([]);
   const [lLoad,  setLLoad]  = React.useState(true);
+  const [clearing, setClearing] = React.useState(false);
+  const [clearMsg, setClearMsg] = React.useState('');
 
   const fetchStatus = React.useCallback(async () => {
     setStLoad(true); setStErr(false);
@@ -4788,8 +4790,6 @@ function FeelFreeSpaBot() {
 
           {/* Bot Queue cleanup */}
           {(() => {
-            const [clearing, setClearing] = React.useState(false);
-            const [clearMsg, setClearMsg] = React.useState('');
             const clearQueue = async () => {
               if (!window.confirm('Delete all botQueue documents? This cannot be undone.')) return;
               setClearing(true); setClearMsg('');
