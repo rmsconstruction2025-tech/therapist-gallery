@@ -3875,14 +3875,17 @@ function TherapistDetail({ acc, onBack, onDelete, onResetPin, onToggleDuty, togg
       </div>
 
       {/* Location */}
-      {acc.location && (
-        <div className="ma-card" style={{padding:'16px 20px'}}>
-          <p style={{fontSize:'13px',fontWeight:'700',color:'var(--text)',margin:'0 0 8px'}}>📍 Location</p>
-          <p style={{fontSize:'12px',color:'var(--muted)',margin:'0 0 8px',fontFamily:'monospace'}}>{acc.location.lat?.toFixed(5)}, {acc.location.lng?.toFixed(5)}</p>
-          <a href={`https://maps.google.com/?q=${acc.location.lat},${acc.location.lng}`} target="_blank" rel="noreferrer"
-            style={{fontSize:'12px',color:'var(--gold)',textDecoration:'none'}}>🗺 View on Google Maps</a>
-        </div>
-      )}
+      <div className="ma-card" style={{padding:'16px 20px'}}>
+        <p style={{fontSize:'13px',fontWeight:'700',color:'var(--text)',margin:'0 0 8px'}}>📍 Location</p>
+        {acc.location?.lat
+          ? <>
+              <p style={{fontSize:'12px',color:'var(--muted)',margin:'0 0 8px',fontFamily:'monospace'}}>{acc.location.lat.toFixed(5)}, {acc.location.lng.toFixed(5)}</p>
+              <a href={`https://maps.google.com/?q=${acc.location.lat},${acc.location.lng}`} target="_blank" rel="noreferrer"
+                style={{fontSize:'12px',color:'var(--gold)',textDecoration:'none'}}>🗺 View on Google Maps</a>
+            </>
+          : <p style={{fontSize:'12px',color:'var(--muted)',margin:0,fontStyle:'italic'}}>Not set — therapist must update their location from the therapist app.</p>
+        }
+      </div>
 
       {/* Actions */}
       <div className="ma-card" style={{padding:'16px 20px',display:'flex',gap:'10px',flexWrap:'wrap'}}>
