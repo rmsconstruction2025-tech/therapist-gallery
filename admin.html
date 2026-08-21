@@ -4786,6 +4786,39 @@ function FeelFreeSpaBot() {
             </button>
           </div>
 
+          {/* Bot Queue cleanup */}
+          {(() => {
+            const [clearing, setClearing] = React.useState(false);
+            const [clearMsg, setClearMsg] = React.useState('');
+            const clearQueue = async () => {
+              if (!window.confirm('Delete all botQueue documents? This cannot be undone.')) return;
+              setClearing(true); setClearMsg('');
+              try {
+                const snap = await db.collection('botQueue').get();
+                const batch = db.batch();
+                snap.docs.forEach(d => batch.delete(d.ref));
+                await batch.commit();
+                setClearMsg(`✅ Deleted ${snap.size} docs`);
+              } catch(e) { setClearMsg('❌ '+e.message); }
+              setClearing(false);
+              setTimeout(()=>setClearMsg(''),4000);
+            };
+            return (
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',background:'var(--elevated)',borderRadius:'10px',border:'1px solid var(--border)'}}>
+                <div>
+                  <p style={{fontSize:'0.78rem',fontWeight:'600',color:'var(--text)',margin:0}}>🗑️ Clear Bot Queue</p>
+                  <p style={{fontSize:'0.68rem',color:'var(--muted)',margin:'2px 0 0'}}>Delete all pending/sent queue docs to stop duplicate sends</p>
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                  {clearMsg && <span style={{fontSize:'0.72rem',color:clearMsg.startsWith('✅')?'var(--success)':'var(--danger)'}}>{clearMsg}</span>}
+                  <button onClick={clearQueue} disabled={clearing} className="btn btn-ghost btn-sm">
+                    {clearing?<span className="spin">✦</span>:'Clear Queue'}
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Links sent table */}
           <div style={card}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'14px',flexWrap:'wrap',gap:'8px'}}>
