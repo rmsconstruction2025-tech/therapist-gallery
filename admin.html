@@ -4432,6 +4432,7 @@ function FeelFreeSpaBot() {
   const [settSaving,  setSettSaving]  = React.useState(false);
   const [settMsg,     setSettMsg]     = React.useState('');
   const [newShortcut, setNewShortcut] = React.useState({ key: '', cmd: '' });
+  const [newRule,     setNewRule]     = React.useState({ keywords: '', reply: '' });
 
   React.useEffect(() => {
     const unsub = db.collection('botSettings').doc('config').onSnapshot(doc => {
@@ -4466,6 +4467,20 @@ function FeelFreeSpaBot() {
     const updated = { ...settings.shortcuts };
     delete updated[key];
     await saveSetting({ shortcuts: updated });
+  };
+
+  const addRule = async () => {
+    const kws   = newRule.keywords.split(',').map(k => k.trim()).filter(Boolean);
+    const reply = newRule.reply.trim();
+    if (!kws.length || !reply) return;
+    const rules = [...(settings.autoReply?.rules || []), { id: Date.now().toString(), keywords: kws, reply }];
+    await saveSetting({ autoReply: { ...settings.autoReply, rules } });
+    setNewRule({ keywords: '', reply: '' });
+  };
+
+  const deleteRule = async (id) => {
+    const rules = (settings.autoReply?.rules || []).filter(r => r.id !== id);
+    await saveSetting({ autoReply: { ...settings.autoReply, rules } });
   };
 
   // ── Send Link (chat) state ──────────────────────────────
@@ -4764,37 +4779,97 @@ function FeelFreeSpaBot() {
 
             {/* ─ Auto-Reply ─ */}
             <div style={card}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'12px'}}>
+              {/* Header + toggle */}
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px'}}>
                 <div>
                   <p style={{fontWeight:'700',fontSize:'0.92rem',color:'var(--text)',margin:0}}>Auto-Reply</p>
-                  <p style={{fontSize:'0.72rem',color:'var(--muted)',margin:'3px 0 0'}}>Automatically reply when a customer messages Feel Free Spa</p>
+                  <p style={{fontSize:'0.72rem',color:'var(--muted)',margin:'3px 0 0'}}>Reply automatically when a customer messages Feel Free Spa</p>
                 </div>
-                <button
-                  disabled={settSaving}
+                <button disabled={settSaving}
                   onClick={() => saveSetting({ autoReply: { ...settings.autoReply, enabled: !settings.autoReply?.enabled } })}
-                  style={{
-                    padding:'8px 18px',borderRadius:'20px',border:'none',cursor:'pointer',fontFamily:'inherit',
-                    fontWeight:'700',fontSize:'0.82rem',flexShrink:0,transition:'all .2s',
-                    background: settings.autoReply?.enabled ? 'rgba(37,211,102,0.15)' : 'var(--elevated)',
-                    color: settings.autoReply?.enabled ? '#25d366' : 'var(--muted)',
-                    outline: `1px solid ${settings.autoReply?.enabled ? 'rgba(37,211,102,0.4)' : 'var(--border)'}`,
+                  style={{padding:'8px 18px',borderRadius:'20px',border:'none',cursor:'pointer',fontFamily:'inherit',fontWeight:'700',fontSize:'0.82rem',flexShrink:0,transition:'all .2s',
+                    background:settings.autoReply?.enabled?'rgba(37,211,102,0.15)':'var(--elevated)',
+                    color:settings.autoReply?.enabled?'#25d366':'var(--muted)',
+                    outline:`1px solid ${settings.autoReply?.enabled?'rgba(37,211,102,0.4)':'var(--border)'}`,
                   }}>
                   {settings.autoReply?.enabled ? '● ON' : '○ OFF'}
                 </button>
               </div>
-              <textarea
-                rows={4}
-                value={settings.autoReply?.message || ''}
-                onChange={e => setSettings(s => ({...s, autoReply: {...s.autoReply, message: e.target.value}}))}
-                placeholder="e.g. Thank you for reaching out to Feel Free Spa! We'll send you a gallery link shortly. 🌿"
-                style={{width:'100%',background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'10px',padding:'10px 12px',fontSize:'0.82rem',color:'var(--text)',fontFamily:'inherit',resize:'vertical',outline:'none',lineHeight:'1.5'}}
-              />
-              <button
-                disabled={settSaving}
-                onClick={() => saveSetting({ autoReply: settings.autoReply })}
-                style={{marginTop:'10px',padding:'9px 20px',borderRadius:'10px',border:'1px solid var(--border-gold)',background:'var(--gold-glow)',color:'var(--gold)',fontWeight:'700',cursor:'pointer',fontFamily:'inherit',fontSize:'0.82rem'}}>
-                {settSaving ? 'Saving…' : 'Save Auto-Reply'}
-              </button>
+
+              {/* ── Keyword Rules ── */}
+              <div style={{marginBottom:'16px'}}>
+                <p style={{fontSize:'0.72rem',fontWeight:'700',color:'var(--muted)',letterSpacing:'1px',textTransform:'uppercase',margin:'0 0 8px'}}>Keyword Rules</p>
+                <p style={{fontSize:'0.71rem',color:'var(--muted)',margin:'0 0 10px'}}>
+                  If a customer's message contains any of these keywords → send that specific reply.
+                </p>
+
+                {/* Existing rules */}
+                {(settings.autoReply?.rules || []).length === 0 ? (
+                  <p style={{fontSize:'0.78rem',color:'var(--muted)',marginBottom:'10px'}}>No rules yet — add one below.</p>
+                ) : (
+                  <div style={{display:'flex',flexDirection:'column',gap:'8px',marginBottom:'10px'}}>
+                    {(settings.autoReply?.rules || []).map(rule => (
+                      <div key={rule.id} style={{background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'10px',padding:'10px 12px'}}>
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'6px'}}>
+                          <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
+                            {(rule.keywords || []).map(kw => (
+                              <span key={kw} style={{padding:'2px 8px',borderRadius:'20px',fontSize:'0.7rem',fontWeight:'700',background:'var(--gold-glow)',color:'var(--gold)',border:'1px solid var(--border-gold)'}}>{kw}</span>
+                            ))}
+                          </div>
+                          <button onClick={() => deleteRule(rule.id)}
+                            style={{background:'var(--danger-bg)',border:'1px solid rgba(220,38,38,0.2)',borderRadius:'7px',padding:'3px 10px',color:'var(--danger)',cursor:'pointer',fontFamily:'inherit',fontSize:'0.72rem',fontWeight:'600',flexShrink:0,marginLeft:'8px'}}>
+                            Delete
+                          </button>
+                        </div>
+                        <p style={{fontSize:'0.79rem',color:'var(--text)',margin:0,lineHeight:'1.5',whiteSpace:'pre-wrap'}}>{rule.reply}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add new rule */}
+                <div style={{background:'var(--elevated)',borderRadius:'10px',padding:'12px',border:'1px solid var(--border)',display:'flex',flexDirection:'column',gap:'8px'}}>
+                  <div>
+                    <label style={{fontSize:'0.65rem',color:'var(--muted)',fontWeight:'600',letterSpacing:'1px',textTransform:'uppercase',display:'block',marginBottom:'4px'}}>Keywords (comma-separated)</label>
+                    <input
+                      value={newRule.keywords}
+                      onChange={e => setNewRule(r => ({...r, keywords: e.target.value}))}
+                      placeholder="price, cost, rate, charges"
+                      style={{width:'100%',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'8px',padding:'8px 10px',fontSize:'0.82rem',color:'var(--text)',fontFamily:'inherit',outline:'none'}}
+                    />
+                  </div>
+                  <div>
+                    <label style={{fontSize:'0.65rem',color:'var(--muted)',fontWeight:'600',letterSpacing:'1px',textTransform:'uppercase',display:'block',marginBottom:'4px'}}>Reply message</label>
+                    <textarea rows={3}
+                      value={newRule.reply}
+                      onChange={e => setNewRule(r => ({...r, reply: e.target.value}))}
+                      placeholder="Our massage prices:&#10;• Wet Massage — ₹1500&#10;• Oil Massage — ₹1800&#10;• Dry Massage — ₹1200"
+                      style={{width:'100%',background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'8px',padding:'8px 10px',fontSize:'0.82rem',color:'var(--text)',fontFamily:'inherit',resize:'vertical',outline:'none',lineHeight:'1.5'}}
+                    />
+                  </div>
+                  <button onClick={addRule} disabled={settSaving || !newRule.keywords || !newRule.reply}
+                    style={{alignSelf:'flex-start',padding:'8px 18px',borderRadius:'8px',border:'1px solid var(--border-gold)',background:'var(--gold-glow)',color:'var(--gold)',fontWeight:'700',cursor:'pointer',fontFamily:'inherit',fontSize:'0.82rem'}}>
+                    + Add Rule
+                  </button>
+                </div>
+              </div>
+
+              {/* ── Default Reply ── */}
+              <div>
+                <p style={{fontSize:'0.72rem',fontWeight:'700',color:'var(--muted)',letterSpacing:'1px',textTransform:'uppercase',margin:'0 0 4px'}}>Default Reply</p>
+                <p style={{fontSize:'0.71rem',color:'var(--muted)',margin:'0 0 8px'}}>Sent when no keyword rule matches.</p>
+                <textarea rows={3}
+                  value={settings.autoReply?.message || ''}
+                  onChange={e => setSettings(s => ({...s, autoReply: {...s.autoReply, message: e.target.value}}))}
+                  placeholder="e.g. Thank you for reaching out to Feel Free Spa! We'll get back to you shortly. 🌿"
+                  style={{width:'100%',background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'10px',padding:'10px 12px',fontSize:'0.82rem',color:'var(--text)',fontFamily:'inherit',resize:'vertical',outline:'none',lineHeight:'1.5'}}
+                />
+                <button disabled={settSaving}
+                  onClick={() => saveSetting({ autoReply: settings.autoReply })}
+                  style={{marginTop:'10px',padding:'9px 20px',borderRadius:'10px',border:'1px solid var(--border-gold)',background:'var(--gold-glow)',color:'var(--gold)',fontWeight:'700',cursor:'pointer',fontFamily:'inherit',fontSize:'0.82rem'}}>
+                  {settSaving ? 'Saving…' : 'Save'}
+                </button>
+              </div>
             </div>
 
             {/* ─ Shortcuts ─ */}
