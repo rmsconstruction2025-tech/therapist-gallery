@@ -4580,7 +4580,7 @@ function FeelFreeSpaBot() {
   };
 
   // ── Settings state ─────────────────────────────────────
-  const SETT_DEFAULTS = { enabled:true, autoReply:{enabled:false,message:'',rules:[]}, shortcuts:{}, welcome:{enabled:false,message:''} };
+  const SETT_DEFAULTS = { enabled:true, autoReply:{enabled:false,message:'',rules:[]}, shortcuts:{}, welcome:{enabled:false,message:''}, staffSchedule:{enabled:false,morningTime:'09:00',eveningTime:'18:00'} };
   const [settings,     setSettings]    = React.useState(SETT_DEFAULTS);
   const [settLoad,     setSettLoad]    = React.useState(true);
   const [settSaving,   setSettSaving]  = React.useState(false);
@@ -5107,6 +5107,50 @@ function FeelFreeSpaBot() {
                   + Add
                 </button>
               </div>
+            </div>
+
+            {/* ─ Staff Availability Schedule ─ */}
+            <div style={card}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'14px'}}>
+                <div>
+                  <p style={{fontWeight:'700',fontSize:'0.92rem',color:'var(--text)',margin:'0 0 4px'}}>📅 Auto Availability Check</p>
+                  <p style={{fontSize:'0.72rem',color:'var(--muted)',margin:0}}>Bot automatically asks all staff if they're available — every morning & evening</p>
+                </div>
+                <label style={{display:'flex',alignItems:'center',gap:'8px',cursor:'pointer',flexShrink:0}}>
+                  <div
+                    onClick={() => {
+                      const next = { ...(settings.staffSchedule||{}), enabled: !(settings.staffSchedule?.enabled) };
+                      db.collection('botSettings').doc('config').set({ staffSchedule: next }, { merge: true });
+                    }}
+                    style={{width:'44px',height:'24px',borderRadius:'12px',position:'relative',cursor:'pointer',transition:'background 0.2s',
+                      background: settings.staffSchedule?.enabled ? 'var(--gold)' : 'var(--border)'}}>
+                    <div style={{position:'absolute',top:'3px',left: settings.staffSchedule?.enabled ? '22px' : '3px',width:'18px',height:'18px',borderRadius:'50%',background:'#fff',transition:'left 0.2s',boxShadow:'0 1px 4px rgba(0,0,0,0.3)'}}/>
+                  </div>
+                  <span style={{fontSize:'0.78rem',fontWeight:'700',color: settings.staffSchedule?.enabled ? 'var(--gold)' : 'var(--muted)'}}>
+                    {settings.staffSchedule?.enabled ? 'ON' : 'OFF'}
+                  </span>
+                </label>
+              </div>
+
+              {settings.staffSchedule?.enabled && (
+                <div style={{display:'flex',gap:'16px',flexWrap:'wrap'}}>
+                  {[['morningTime','🌅 Morning check','09:00'],['eveningTime','🌆 Evening check','18:00']].map(([field,label,def])=>(
+                    <div key={field} style={{flex:'1',minWidth:'140px'}}>
+                      <label style={{fontSize:'0.65rem',color:'var(--muted)',fontWeight:'600',letterSpacing:'1px',textTransform:'uppercase',display:'block',marginBottom:'6px'}}>{label}</label>
+                      <input
+                        type="time"
+                        value={settings.staffSchedule?.[field] || def}
+                        onChange={e => {
+                          const next = { ...(settings.staffSchedule||{}), [field]: e.target.value };
+                          db.collection('botSettings').doc('config').set({ staffSchedule: next }, { merge: true });
+                        }}
+                        style={{background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'8px',padding:'8px 10px',fontSize:'0.85rem',color:'var(--text)',fontFamily:'inherit',outline:'none',width:'100%',boxSizing:'border-box'}}
+                      />
+                      <p style={{fontSize:'0.68rem',color:'var(--muted)',margin:'5px 0 0'}}>IST time · daily</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </>)}
         </div>
