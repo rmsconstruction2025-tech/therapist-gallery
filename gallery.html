@@ -1333,9 +1333,13 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
     return new Promise(resolve=>{
       const canvas = canvasRef.current;
       if (!canvas) { resolve(therapist.imageUrl); return; }
+      // Safety timeout — resolve with original URL if image never loads
+      const timeout = setTimeout(()=>resolve(therapist.imageUrl), 10000);
+      const done = (url)=>{ clearTimeout(timeout); resolve(url); };
       const img = new Image();
-      // Do NOT set crossOrigin for base64 data URLs — it breaks canvas on iOS Safari
+      img.crossOrigin = 'anonymous'; // needed to avoid tainted canvas on Firebase Storage URLs
       img.onload = ()=>{
+        try {
         const W=img.naturalWidth||img.width, H=img.naturalHeight||img.height;
         canvas.width=W; canvas.height=H;
         const ctx=canvas.getContext('2d');
@@ -1371,9 +1375,10 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
         ctx.textAlign='center';
         ctx.fillText(`${clientName} | +91${clientPhone} | ${ts}`,W/2,H-Math.max(14,H*0.025));
         ctx.restore();
-        resolve(canvas.toDataURL('image/jpeg',0.92));
+        done(canvas.toDataURL('image/jpeg',0.92));
+        } catch(e){ done(therapist.imageUrl); } // tainted canvas fallback
       };
-      img.onerror=()=>resolve(therapist.imageUrl);
+      img.onerror=()=>done(therapist.imageUrl);
       img.src=therapist.imageUrl;
     });
   },[therapist.imageUrl,clientName,clientPhone]);
