@@ -15,7 +15,7 @@ service cloud.firestore {
       allow update: if isAdmin()
         || request.resource.data.diff(resource.data)
              .affectedKeys()
-             .hasOnly(['available','name','bio','speciality','workStart','workEnd','workingHours','imageUrl','updatedAt','phone','fcmToken','sessionActive','lastActiveAt','onDuty','dutyStartedAt','locationUpdatedAt','location','emergencyContacts']);
+             .hasOnly(['available','name','bio','speciality','workStart','workEnd','workingHours','imageUrl','updatedAt','phone','fcmToken','sessionActive','lastActiveAt','onDuty','dutyStartedAt','locationUpdatedAt','location','emergencyContacts','photos','availableToday','availableTime','availabilityUpdatedAt']);
     }
 
     // Gallery tokens: admin full control; clients can read & update tracking fields
@@ -77,6 +77,21 @@ service cloud.firestore {
     match /config/{docId} {
       allow read:             if true;
       allow create, update:   if isAdmin();
+    }
+
+    // Bot settings: admin full control; bot (server) reads via service account
+    match /botSettings/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Bot session (auth + lidMap): only admin & bot service account
+    match /botSession/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Bot queue: admin creates tasks; bot server processes them
+    match /botQueue/{docId} {
+      allow read, write: if isAdmin();
     }
 
     // Chat: admin ↔ therapist real-time messaging

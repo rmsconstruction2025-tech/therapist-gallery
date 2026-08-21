@@ -713,7 +713,12 @@ function TherapistGallery({ tokenData, clientName, clientPhone, clientLoc, isBlu
 
         // Always fetch online therapists
         const onlineSnap = await db.collection('therapists').where('available','==',true).get();
-        const onlineAll = onlineSnap.docs.map(d=>({id:d.id,...d.data()}));
+        const onlineAll = onlineSnap.docs.map(d=>{
+          const data = d.data();
+          // Use first gallery photo as imageUrl fallback
+          if (!data.imageUrl && data.photos && data.photos.length) data.imageUrl = data.photos[0].url;
+          return {id:d.id,...data};
+        });
 
         // Also query active bookings to catch busy therapists
         let busyDocIds = new Set();
@@ -728,7 +733,7 @@ function TherapistGallery({ tokenData, clientName, clientPhone, clientLoc, isBlu
 
         // Filter online therapists normally
         const onlineFiltered = onlineAll.filter(t => {
-          if (!t.imageUrl) return false;
+          if (!t.imageUrl && !(t.photos && t.photos.length)) return false;
           if (t.sessionActive === true) return false;
           if (busyDocIds.has(t.id)) return false;
           const wh = t.workingHours;

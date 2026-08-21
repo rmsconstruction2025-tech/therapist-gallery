@@ -3367,7 +3367,7 @@ const goldBtn = {background:'linear-gradient(135deg,var(--gold-dark),var(--gold)
 function TherapistAccounts() {
   const [accounts,    setAccounts]   = useState([]);
   const [loading,     setLoading]    = useState(true);
-  const [form,        setForm]       = useState({ name:'', pin:'' });
+  const [form,        setForm]       = useState({ name:'', pin:'', phone:'' });
   const [saving,      setSaving]     = useState(false);
   const [msg,         setMsg]        = useState('');
   const [selected,    setSelected]   = useState(null); // therapist doc shown in detail
@@ -3403,10 +3403,11 @@ function TherapistAccounts() {
       const therapistId = `TH_${Date.now().toString(36).toUpperCase()}_${Math.random().toString(36).slice(2,6).toUpperCase()}`;
       await db.collection('therapists').add({
         therapistId, name: form.name.trim(), pin: form.pin.trim(),
-        available: false, imageUrl: '', createdAt: FieldValue.serverTimestamp()
+        phone: form.phone.replace(/\D/g,'') || '',
+        available: false, imageUrl: '', photos: [], createdAt: FieldValue.serverTimestamp()
       });
       setMsg(`✓ Account created! ID: ${therapistId}`);
-      setForm({ name:'', pin:'' });
+      setForm({ name:'', pin:'', phone:'' });
       load();
     } catch(e) { setMsg(`Error: ${e.message}`); }
     setSaving(false);
@@ -3479,11 +3480,15 @@ function TherapistAccounts() {
         <p style={{fontSize:'13px',fontWeight:'700',color:'var(--text)',margin:'0 0 14px'}}>➕ Create New Account</p>
         <form onSubmit={handleCreate} style={{display:'flex',flexDirection:'column',gap:'10px'}}>
           <div style={{display:'flex',gap:'10px',flexWrap:'wrap'}}>
-            <div style={{flex:'1 1 150px'}}>
+            <div style={{flex:'1 1 140px'}}>
               <label className="form-label">Name *</label>
               <input value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. Priya" className="form-input"/>
             </div>
-            <div style={{flex:'0 1 120px'}}>
+            <div style={{flex:'1 1 130px'}}>
+              <label className="form-label">WhatsApp Phone</label>
+              <input value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))} placeholder="10-digit number" className="form-input"/>
+            </div>
+            <div style={{flex:'0 1 110px'}}>
               <label className="form-label">PIN (min 4)</label>
               <input value={form.pin} onChange={e=>setForm(f=>({...f,pin:e.target.value}))} placeholder="e.g. 1234" className="form-input"/>
             </div>
@@ -3523,9 +3528,14 @@ function TherapistAccounts() {
                     <div style={{flex:1,minWidth:0}}>
                       <p style={{fontSize:'14px',fontWeight:'700',color:'var(--text)',margin:'0 0 3px',
                         whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{acc.name||'—'}</p>
-                      <p style={{fontSize:'11px',color:'var(--muted)',margin:0,fontFamily:'monospace'}}>{acc.therapistId}</p>
+                      <p style={{fontSize:'11px',color:'var(--muted)',margin:0}}>
+                        {acc.phone ? `📱 ${acc.phone}` : 'No phone'}{acc.availableToday ? ` · ⏰ ${acc.availableTime||'Available'}` : ''}
+                      </p>
                     </div>
-                    <div style={{display:'flex',alignItems:'center',gap:'8px',flexShrink:0}}>
+                    <div style={{display:'flex',alignItems:'center',gap:'6px',flexShrink:0}}>
+                      {acc.availableToday && (
+                        <span className="ma-badge" style={{background:'rgba(37,211,102,0.12)',color:'#25d366',border:'1px solid rgba(37,211,102,0.3)'}}>✅ Today</span>
+                      )}
                       <span className="ma-badge" style={{
                         background:acc.onDuty?'rgba(22,163,74,0.1)':'rgba(100,100,100,0.08)',
                         color:acc.onDuty?'#16a34a':'var(--muted)',
@@ -3550,6 +3560,85 @@ function TherapistDetail({ acc, onBack, onDelete, onResetPin, onToggleDuty, togg
   const [uploadingImg,setUploadingImg] = useState(false);
   const [photoMsg,    setPhotoMsg]   = useState('');
   const imgRef = useRef(null);
+
+  // Phone
+  const [editPhone,   setEditPhone]  = useState(acc.phone||'');
+  const [savingPhone, setSavingPhone]= useState(false);
+  const savePhone = async () => {
+    setSavingPhone(true);
+    try { await db.collection('therapists').doc(acc.id).update({ phone: editPhone.replace(/\D/g,'') }); reload(); }
+    catch(e) { alert('Error: '+e.message); }
+    setSavingPhone(false);
+  };
+
+  // Availability check via bot
+  const [checkMsg, setCheckMsg] = useState('');
+  const [checking, setChecking] = useState(false);
+  const checkAvailability = async () => {
+    if (!acc.phone) { setCheckMsg('⚠️ No phone number set for this staff.'); setTimeout(()=>setCheckMsg(''),3000); return; }
+    setChecking(true); setCheckMsg('');
+    try {
+      const phone = (acc.phone||'').replace(/\D/g,'');
+      const msg = `👋 Hi ${acc.name}!\n\nAre you available today for Feel Free Spa?\n\nReply:\n✅ *yes 10am-8pm* (or your hours)\n❌ *no*`;
+      await db.collection('botQueue').add({ phone, name: acc.name, message: msg, status: 'pending', therapistId: acc.id, createdAt: FieldValue.serverTimestamp() });
+      setCheckMsg('✅ Check sent via WhatsApp bot!');
+    } catch(e) { setCheckMsg('❌ '+e.message); }
+    setChecking(false);
+    setTimeout(()=>setCheckMsg(''),5000);
+  };
+
+  // Gallery photos (multiple)
+  const [photos,       setPhotos]      = useState(acc.photos||[]);
+  const [uploadingPh,  setUploadingPh] = useState(false);
+  const [galleryMsg,   setGalleryMsg]  = useState('');
+  const galleryRef = useRef(null);
+
+  const uploadGalleryPhoto = async (file) => {
+    if (!file) return;
+    setUploadingPh(true); setGalleryMsg('');
+    try {
+      const ext  = file.name.split('.').pop();
+      const name = `photo_${Date.now()}.${ext}`;
+      const path = `therapists/${acc.id}/gallery/${name}`;
+      const ref  = storage.ref(path);
+      await ref.put(file);
+      const url  = await ref.getDownloadURL();
+      const updated = [...photos, { url, path, name }];
+      await db.collection('therapists').doc(acc.id).update({ photos: updated });
+      // Also set imageUrl to first photo if none
+      if (!acc.imageUrl) await db.collection('therapists').doc(acc.id).update({ imageUrl: url });
+      setPhotos(updated);
+      setGalleryMsg('✅ Photo added!');
+      reload();
+    } catch(e) { setGalleryMsg('❌ '+e.message); }
+    setUploadingPh(false);
+    setTimeout(()=>setGalleryMsg(''),3000);
+  };
+
+  const deleteGalleryPhoto = async (photo) => {
+    if (!window.confirm('Delete this photo?')) return;
+    try {
+      try { await storage.ref(photo.path).delete(); } catch(_) {}
+      const updated = photos.filter(p=>p.path!==photo.path);
+      await db.collection('therapists').doc(acc.id).update({ photos: updated });
+      if (acc.imageUrl === photo.url) {
+        await db.collection('therapists').doc(acc.id).update({ imageUrl: updated[0]?.url||'' });
+      }
+      setPhotos(updated);
+      setGalleryMsg('🗑️ Photo deleted');
+      reload();
+    } catch(e) { setGalleryMsg('❌ '+e.message); }
+    setTimeout(()=>setGalleryMsg(''),3000);
+  };
+
+  const setAsProfile = async (photo) => {
+    try {
+      await db.collection('therapists').doc(acc.id).update({ imageUrl: photo.url });
+      setGalleryMsg('✅ Set as profile photo!');
+      reload();
+    } catch(e) { setGalleryMsg('❌ '+e.message); }
+    setTimeout(()=>setGalleryMsg(''),3000);
+  };
 
   // Attendance state
   const now          = new Date();
@@ -3689,6 +3778,70 @@ function TherapistDetail({ acc, onBack, onDelete, onResetPin, onToggleDuty, togg
         <button onClick={()=>onDelete(acc)} disabled={deleting===acc.id} className="btn btn-danger btn-sm" style={{flex:'1 1 80px',minHeight:'40px'}}>
           {deleting===acc.id?<span className="spin">✦</span>:'Delete'}
         </button>
+      </div>
+
+      {/* Phone + Availability */}
+      <div className="ma-card" style={{padding:'20px',display:'flex',flexDirection:'column',gap:'16px'}}>
+        <p style={{fontSize:'13px',fontWeight:'700',color:'var(--text)',margin:'0 0 4px'}}>📱 WhatsApp Phone</p>
+        <div style={{display:'flex',gap:'8px'}}>
+          <input value={editPhone} onChange={e=>setEditPhone(e.target.value)} className="form-input" style={{flex:1}} placeholder="e.g. 919876543210"/>
+          <button onClick={savePhone} disabled={savingPhone||editPhone.replace(/\D/g,'')===(acc.phone||'')} className="btn btn-gold btn-sm" style={{minWidth:'60px'}}>
+            {savingPhone?<span className="spin">✦</span>:'Save'}
+          </button>
+        </div>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:'10px',padding:'14px 16px',background:'var(--elevated)',borderRadius:'10px',border:'1px solid var(--border)'}}>
+          <div>
+            <p style={{fontSize:'12px',fontWeight:'700',color:'var(--text)',margin:'0 0 4px'}}>Today's Availability</p>
+            {acc.availableToday
+              ? <p style={{fontSize:'13px',color:'#25d366',margin:0,fontWeight:'600'}}>✅ Available · <span style={{color:'var(--muted)',fontWeight:'400'}}>{acc.availableTime||'Time not set'}</span></p>
+              : acc.availableToday===false
+                ? <p style={{fontSize:'13px',color:'var(--danger)',margin:0,fontWeight:'600'}}>❌ Not available today</p>
+                : <p style={{fontSize:'12px',color:'var(--muted)',margin:0}}>Not checked yet</p>
+            }
+            {acc.availabilityUpdatedAt && <p style={{fontSize:'10px',color:'var(--muted)',margin:'4px 0 0'}}>Updated: {new Date(acc.availabilityUpdatedAt?.toDate?.()??acc.availabilityUpdatedAt).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</p>}
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:'6px',alignItems:'flex-end'}}>
+            <button onClick={checkAvailability} disabled={checking||!acc.phone} className="btn btn-gold btn-sm" style={{minWidth:'160px'}}>
+              {checking?<span className="spin">✦</span>:'📨 Check Availability'}
+            </button>
+            {checkMsg && <p style={{fontSize:'11px',margin:0,color:checkMsg.startsWith('✅')?'var(--success)':'var(--danger)',textAlign:'right'}}>{checkMsg}</p>}
+          </div>
+        </div>
+      </div>
+
+      {/* Gallery Photos */}
+      <div className="ma-card" style={{overflow:'hidden'}}>
+        <div style={{padding:'16px 20px',borderBottom:'0.5px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+          <div>
+            <p style={{fontSize:'13px',fontWeight:'700',color:'var(--text)',margin:0}}>🖼️ Gallery Photos</p>
+            <p style={{fontSize:'11px',color:'var(--muted)',margin:'2px 0 0'}}>Photos shown in gallery link · {photos.length} photo{photos.length!==1?'s':''}</p>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+            {galleryMsg && <span style={{fontSize:'11px',color:galleryMsg.startsWith('✅')?'var(--success)':galleryMsg.startsWith('🗑')?'var(--muted)':'var(--danger)'}}>{galleryMsg}</span>}
+            <input ref={galleryRef} type="file" accept="image/*" multiple style={{display:'none'}}
+              onChange={e=>{ const files=Array.from(e.target.files); files.forEach(f=>uploadGalleryPhoto(f)); e.target.value=''; }}/>
+            <button onClick={()=>galleryRef.current?.click()} disabled={uploadingPh} className="btn btn-gold btn-sm">
+              {uploadingPh?<span className="spin">✦</span>:'+ Add Photo'}
+            </button>
+          </div>
+        </div>
+        <div style={{padding:'16px'}}>
+          {photos.length===0
+            ? <p style={{textAlign:'center',color:'var(--muted)',fontSize:'13px',padding:'20px 0',margin:0}}>No photos yet. Add photos that will appear in the gallery link.</p>
+            : <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))',gap:'12px'}}>
+                {photos.map((ph,idx)=>(
+                  <div key={ph.path||idx} style={{position:'relative',borderRadius:'10px',overflow:'hidden',border:acc.imageUrl===ph.url?'2px solid var(--gold)':'1px solid var(--border)',aspectRatio:'1',background:'var(--elevated)'}}>
+                    <img src={ph.url} style={{width:'100%',height:'100%',objectFit:'cover'}} onError={e=>{e.target.style.display='none';}}/>
+                    {acc.imageUrl===ph.url && <div style={{position:'absolute',top:'4px',left:'4px',background:'rgba(0,0,0,0.7)',borderRadius:'4px',padding:'2px 6px',fontSize:'10px',color:'var(--gold)',fontWeight:'700'}}>Profile</div>}
+                    <div style={{position:'absolute',bottom:0,left:0,right:0,background:'linear-gradient(transparent,rgba(0,0,0,0.8))',padding:'20px 6px 6px',display:'flex',gap:'4px',justifyContent:'flex-end'}}>
+                      {acc.imageUrl!==ph.url && <button onClick={()=>setAsProfile(ph)} style={{fontSize:'10px',padding:'3px 7px',borderRadius:'5px',border:'none',background:'rgba(255,215,0,0.85)',color:'#000',cursor:'pointer',fontWeight:'700'}}>Profile</button>}
+                      <button onClick={()=>deleteGalleryPhoto(ph)} style={{fontSize:'10px',padding:'3px 7px',borderRadius:'5px',border:'none',background:'rgba(220,38,38,0.85)',color:'#fff',cursor:'pointer',fontWeight:'700'}}>✕</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+          }
+        </div>
       </div>
 
       {/* Attendance this month */}
