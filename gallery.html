@@ -1517,11 +1517,30 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
             ? <img src={canvasUrl} onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover',display:'block',WebkitUserSelect:'none',userSelect:'none'}}/>
             : <video ref={videoRef} poster={canvasUrl} muted playsInline autoPlay onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
           }
+          {/* CSS watermark overlay — always visible even if canvas CORS fails */}
+          <div aria-hidden="true" style={{position:'absolute',inset:0,zIndex:9,pointerEvents:'none',overflow:'hidden',display:'flex',alignItems:'center',justifyContent:'center'}}>
+            {/* Diagonal repeated text */}
+            <div style={{position:'absolute',inset:'-50%',display:'grid',gridTemplateColumns:'repeat(3,1fr)',gridTemplateRows:'repeat(5,1fr)',transform:'rotate(-30deg)',opacity:0.32}}>
+              {Array.from({length:15}).map((_,i)=>(
+                <div key={i} style={{display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.72rem',fontWeight:'800',color:'#ffd700',textShadow:'0 1px 3px #000',letterSpacing:'0.5px',whiteSpace:'nowrap',padding:'4px'}}>
+                  {clientName} · +91{clientPhone}
+                </div>
+              ))}
+            </div>
+            {/* Top banner */}
+            <div style={{position:'absolute',top:0,left:0,right:0,padding:'6px 8px',background:'rgba(0,0,0,0.55)',color:'#ffd700',fontSize:'0.6rem',fontWeight:'700',textAlign:'center',letterSpacing:'0.4px'}}>
+              FOR: {clientName} &nbsp;|&nbsp; +91{clientPhone}
+            </div>
+            {/* Bottom banner */}
+            <div style={{position:'absolute',bottom:0,left:0,right:0,padding:'5px 8px',background:'rgba(0,0,0,0.55)',color:'rgba(255,215,0,0.85)',fontSize:'0.58rem',fontWeight:'600',textAlign:'center',letterSpacing:'0.3px'}}>
+              {clientName} | +91{clientPhone} | feelfreespa.in
+            </div>
+          </div>
           {/* Countdown pill */}
           <div style={{position:'absolute',top:'12px',right:'12px',zIndex:10,background:'rgba(0,0,0,0.8)',color:'var(--gold)',borderRadius:'16px',padding:'4px 13px',fontSize:'0.85rem',fontWeight:'800',letterSpacing:'0.5px',backdropFilter:'blur(6px)'}}>{timeLeft}s</div>
           {/* Photo counter */}
           {allPhotos.length > 1 && (
-            <div style={{position:'absolute',bottom:'12px',left:'50%',transform:'translateX(-50%)',zIndex:10,display:'flex',gap:'5px'}}>
+            <div style={{position:'absolute',bottom:'24px',left:'50%',transform:'translateX(-50%)',zIndex:10,display:'flex',gap:'5px'}}>
               {allPhotos.map((_,i)=>(
                 <div key={i} style={{width:'6px',height:'6px',borderRadius:'50%',background:i===photoIndex?'var(--gold)':'rgba(255,255,255,0.35)',transition:'background 0.3s'}}/>
               ))}
