@@ -4379,7 +4379,7 @@ function BookingsPanel() {
 // ══════════════════════════════════════════════════════
 function FeelFreeSpaBot() {
   const BOT_URL = 'https://feelfreespa-whatsapp-bot-production.up.railway.app';
-  const [view, setView] = React.useState('monitor'); // 'monitor' | 'send'
+  const [view, setView] = React.useState('monitor'); // 'monitor' | 'send' | 'settings'
 
   // ── Monitor state ──────────────────────────────────────
   const [botSt,  setBotSt]  = React.useState(null);
@@ -4424,6 +4424,48 @@ function FeelFreeSpaBot() {
     if (!ts) return '—';
     const d = ts.toDate ? ts.toDate() : new Date(ts);
     return d.toLocaleString('en-IN', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:true});
+  };
+
+  // ── Settings state ─────────────────────────────────────
+  const [settings,    setSettings]    = React.useState({ enabled: true, autoReply: { enabled: false, message: '' }, shortcuts: {} });
+  const [settLoad,    setSettLoad]    = React.useState(true);
+  const [settSaving,  setSettSaving]  = React.useState(false);
+  const [settMsg,     setSettMsg]     = React.useState('');
+  const [newShortcut, setNewShortcut] = React.useState({ key: '', cmd: '' });
+
+  React.useEffect(() => {
+    const unsub = db.collection('botSettings').doc('config').onSnapshot(doc => {
+      if (doc.exists) setSettings({ enabled:true, autoReply:{enabled:false,message:''}, shortcuts:{}, ...doc.data() });
+      setSettLoad(false);
+    }, () => setSettLoad(false));
+    return unsub;
+  }, []);
+
+  const saveSetting = async (patch) => {
+    setSettSaving(true); setSettMsg('');
+    try {
+      await db.collection('botSettings').doc('config').set({ ...settings, ...patch }, { merge: true });
+      setSettings(s => ({ ...s, ...patch }));
+      setSettMsg('✅ Saved!');
+    } catch(e) { setSettMsg('❌ ' + e.message); }
+    setSettSaving(false);
+    setTimeout(() => setSettMsg(''), 3000);
+  };
+
+  const addShortcut = async () => {
+    const key = newShortcut.key.trim().toLowerCase();
+    const cmd = newShortcut.cmd.trim();
+    if (!key || !cmd) return;
+    if (!key.startsWith('/')) { setSettMsg('⚠️ Shortcut must start with /'); setTimeout(()=>setSettMsg(''),3000); return; }
+    const updated = { ...settings.shortcuts, [key]: cmd };
+    await saveSetting({ shortcuts: updated });
+    setNewShortcut({ key: '', cmd: '' });
+  };
+
+  const deleteShortcut = async (key) => {
+    const updated = { ...settings.shortcuts };
+    delete updated[key];
+    await saveSetting({ shortcuts: updated });
   };
 
   // ── Send Link (chat) state ──────────────────────────────
@@ -4536,8 +4578,9 @@ function FeelFreeSpaBot() {
 
       {/* ── Tab switcher ── */}
       <div style={{display:'flex',gap:'6px',borderBottom:'1px solid var(--border)',paddingBottom:'12px'}}>
-        <button style={tabBtn(view==='monitor')} onClick={()=>setView('monitor')}>📡 Monitor</button>
-        <button style={tabBtn(view==='send')}    onClick={()=>setView('send')}>📲 Send Link</button>
+        <button style={tabBtn(view==='monitor')}  onClick={()=>setView('monitor')}>📡 Monitor</button>
+        <button style={tabBtn(view==='send')}     onClick={()=>setView('send')}>📲 Send Link</button>
+        <button style={tabBtn(view==='settings')} onClick={()=>setView('settings')}>⚙️ Settings</button>
       </div>
 
       {/* ══ MONITOR VIEW ══ */}
@@ -4680,6 +4723,135 @@ function FeelFreeSpaBot() {
               Send
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ══ SETTINGS VIEW ══ */}
+      {view === 'settings' && (
+        <div style={{display:'flex',flexDirection:'column',gap:'14px',overflowY:'auto',paddingBottom:'24px'}}>
+          {settLoad ? (
+            <div style={{textAlign:'center',padding:'40px',color:'var(--muted)'}}><span className="spin" style={{display:'inline-block',fontSize:'1.3rem'}}>⟳</span></div>
+          ) : (<>
+            {settMsg && (
+              <div style={{padding:'10px 14px',borderRadius:'10px',fontSize:'0.82rem',fontWeight:'600',
+                background:settMsg.startsWith('✅')?'var(--success-bg)':settMsg.startsWith('❌')?'var(--danger-bg)':'var(--gold-glow)',
+                color:settMsg.startsWith('✅')?'var(--success)':settMsg.startsWith('❌')?'var(--danger)':'var(--gold)',
+                border:`1px solid ${settMsg.startsWith('✅')?'rgba(22,163,74,0.3)':settMsg.startsWith('❌')?'rgba(220,38,38,0.3)':'var(--border-gold)'}`,
+              }}>{settMsg}</div>
+            )}
+
+            {/* ─ Bot On/Off ─ */}
+            <div style={{...card,display:'flex',alignItems:'center',justifyContent:'space-between',gap:'16px'}}>
+              <div>
+                <p style={{fontWeight:'700',fontSize:'0.92rem',color:'var(--text)',margin:0}}>Bot Active</p>
+                <p style={{fontSize:'0.72rem',color:'var(--muted)',margin:'3px 0 0'}}>
+                  {settings.enabled ? '🟢 Bot is processing commands' : '🔴 Bot is paused — ignoring all commands'}
+                </p>
+              </div>
+              <button
+                disabled={settSaving}
+                onClick={() => saveSetting({ enabled: !settings.enabled })}
+                style={{
+                  padding:'10px 22px',borderRadius:'24px',border:'none',cursor:'pointer',fontFamily:'inherit',
+                  fontWeight:'700',fontSize:'0.85rem',transition:'all .2s',flexShrink:0,
+                  background: settings.enabled ? 'rgba(37,211,102,0.15)' : 'var(--danger-bg)',
+                  color: settings.enabled ? '#25d366' : 'var(--danger)',
+                  outline: `1.5px solid ${settings.enabled ? 'rgba(37,211,102,0.4)' : 'rgba(220,38,38,0.3)'}`,
+                }}>
+                {settings.enabled ? '● ON' : '○ OFF'}
+              </button>
+            </div>
+
+            {/* ─ Auto-Reply ─ */}
+            <div style={card}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'12px'}}>
+                <div>
+                  <p style={{fontWeight:'700',fontSize:'0.92rem',color:'var(--text)',margin:0}}>Auto-Reply</p>
+                  <p style={{fontSize:'0.72rem',color:'var(--muted)',margin:'3px 0 0'}}>Automatically reply when a customer messages Feel Free Spa</p>
+                </div>
+                <button
+                  disabled={settSaving}
+                  onClick={() => saveSetting({ autoReply: { ...settings.autoReply, enabled: !settings.autoReply?.enabled } })}
+                  style={{
+                    padding:'8px 18px',borderRadius:'20px',border:'none',cursor:'pointer',fontFamily:'inherit',
+                    fontWeight:'700',fontSize:'0.82rem',flexShrink:0,transition:'all .2s',
+                    background: settings.autoReply?.enabled ? 'rgba(37,211,102,0.15)' : 'var(--elevated)',
+                    color: settings.autoReply?.enabled ? '#25d366' : 'var(--muted)',
+                    outline: `1px solid ${settings.autoReply?.enabled ? 'rgba(37,211,102,0.4)' : 'var(--border)'}`,
+                  }}>
+                  {settings.autoReply?.enabled ? '● ON' : '○ OFF'}
+                </button>
+              </div>
+              <textarea
+                rows={4}
+                value={settings.autoReply?.message || ''}
+                onChange={e => setSettings(s => ({...s, autoReply: {...s.autoReply, message: e.target.value}}))}
+                placeholder="e.g. Thank you for reaching out to Feel Free Spa! We'll send you a gallery link shortly. 🌿"
+                style={{width:'100%',background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'10px',padding:'10px 12px',fontSize:'0.82rem',color:'var(--text)',fontFamily:'inherit',resize:'vertical',outline:'none',lineHeight:'1.5'}}
+              />
+              <button
+                disabled={settSaving}
+                onClick={() => saveSetting({ autoReply: settings.autoReply })}
+                style={{marginTop:'10px',padding:'9px 20px',borderRadius:'10px',border:'1px solid var(--border-gold)',background:'var(--gold-glow)',color:'var(--gold)',fontWeight:'700',cursor:'pointer',fontFamily:'inherit',fontSize:'0.82rem'}}>
+                {settSaving ? 'Saving…' : 'Save Auto-Reply'}
+              </button>
+            </div>
+
+            {/* ─ Shortcuts ─ */}
+            <div style={card}>
+              <p style={{fontWeight:'700',fontSize:'0.92rem',color:'var(--text)',margin:'0 0 4px'}}>Shortcuts</p>
+              <p style={{fontSize:'0.72rem',color:'var(--muted)',margin:'0 0 14px'}}>
+                Type a short key in WhatsApp and the bot expands it. E.g. <code style={{background:'var(--elevated)',padding:'1px 6px',borderRadius:'4px',fontFamily:'monospace'}}>/priya</code> → <code style={{background:'var(--elevated)',padding:'1px 6px',borderRadius:'4px',fontFamily:'monospace'}}>/link Priya 9876543210</code>
+              </p>
+
+              {/* Existing shortcuts */}
+              {Object.keys(settings.shortcuts || {}).length === 0 ? (
+                <p style={{fontSize:'0.78rem',color:'var(--muted)',marginBottom:'14px'}}>No shortcuts yet — add one below.</p>
+              ) : (
+                <div style={{display:'flex',flexDirection:'column',gap:'6px',marginBottom:'14px'}}>
+                  {Object.entries(settings.shortcuts || {}).map(([key, cmd]) => (
+                    <div key={key} style={{display:'flex',alignItems:'center',gap:'8px',background:'var(--elevated)',borderRadius:'10px',padding:'8px 12px',border:'1px solid var(--border)'}}>
+                      <code style={{fontFamily:'monospace',fontSize:'0.8rem',color:'var(--gold)',fontWeight:'700',flexShrink:0}}>{key}</code>
+                      <span style={{color:'var(--muted)',fontSize:'0.78rem',flexShrink:0}}>→</span>
+                      <span style={{fontSize:'0.8rem',color:'var(--text)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cmd}</span>
+                      <button
+                        onClick={() => deleteShortcut(key)}
+                        style={{background:'var(--danger-bg)',border:'1px solid rgba(220,38,38,0.2)',borderRadius:'8px',padding:'4px 10px',color:'var(--danger)',cursor:'pointer',fontFamily:'inherit',fontSize:'0.75rem',fontWeight:'600',flexShrink:0}}>
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add new shortcut */}
+              <div style={{display:'flex',gap:'8px',flexWrap:'wrap',alignItems:'flex-end'}}>
+                <div style={{display:'flex',flexDirection:'column',gap:'4px',flex:'1',minWidth:'110px'}}>
+                  <label style={{fontSize:'0.65rem',color:'var(--muted)',fontWeight:'600',letterSpacing:'1px',textTransform:'uppercase'}}>Shortcut key</label>
+                  <input
+                    value={newShortcut.key}
+                    onChange={e => setNewShortcut(s => ({...s, key: e.target.value}))}
+                    placeholder="/priya"
+                    style={{background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'8px',padding:'8px 10px',fontSize:'0.82rem',color:'var(--text)',fontFamily:'monospace',outline:'none'}}
+                  />
+                </div>
+                <div style={{display:'flex',flexDirection:'column',gap:'4px',flex:'2',minWidth:'160px'}}>
+                  <label style={{fontSize:'0.65rem',color:'var(--muted)',fontWeight:'600',letterSpacing:'1px',textTransform:'uppercase'}}>Expands to</label>
+                  <input
+                    value={newShortcut.cmd}
+                    onChange={e => setNewShortcut(s => ({...s, cmd: e.target.value}))}
+                    placeholder="/link Priya 9876543210"
+                    style={{background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'8px',padding:'8px 10px',fontSize:'0.82rem',color:'var(--text)',fontFamily:'inherit',outline:'none'}}
+                  />
+                </div>
+                <button
+                  onClick={addShortcut} disabled={settSaving || !newShortcut.key || !newShortcut.cmd}
+                  style={{padding:'9px 18px',borderRadius:'8px',border:'1px solid var(--border-gold)',background:'var(--gold-glow)',color:'var(--gold)',fontWeight:'700',cursor:'pointer',fontFamily:'inherit',fontSize:'0.82rem',flexShrink:0}}>
+                  + Add
+                </button>
+              </div>
+            </div>
+          </>)}
         </div>
       )}
     </div>
