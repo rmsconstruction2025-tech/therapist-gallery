@@ -1296,9 +1296,18 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
   const [loading,      setLoading]      = useState(false);
   const [canvasUrl,    setCanvasUrl]    = useState('');
   const [showBooking,  setShowBooking]  = useState(false);
-  const timerRef  = useRef(null);
-  const canvasRef = useRef(null);
-  const videoRef  = useRef(null);
+  const [photoIndex,   setPhotoIndex]   = useState(0);
+  const timerRef     = useRef(null);
+  const canvasRef    = useRef(null);
+  const videoRef     = useRef(null);
+  const photoIndexRef = useRef(0); // ref mirror for use inside timer closure
+
+  // All photos for this therapist
+  const allPhotos = useMemo(()=>{
+    const urls = (therapist.photos||[]).map(p=>p.url).filter(Boolean);
+    if (!urls.length && therapist.imageUrl) return [therapist.imageUrl];
+    return urls;
+  }, [therapist]);
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 
   // Feed canvas stream into video (non-iOS only — iOS doesn't support captureStream)
@@ -1329,12 +1338,13 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
     return ()=>clearInterval(timerRef.current);
   },[]);
 
-  const buildCanvas = useCallback(()=>{
+  const buildCanvas = useCallback((photoUrl)=>{
+    const srcUrl = photoUrl || therapist.imageUrl;
     return new Promise(resolve=>{
       const canvas = canvasRef.current;
-      if (!canvas) { resolve(therapist.imageUrl); return; }
+      if (!canvas) { resolve(srcUrl); return; }
       // Safety timeout — resolve with original URL if image never loads
-      const timeout = setTimeout(()=>resolve(therapist.imageUrl), 10000);
+      const timeout = setTimeout(()=>resolve(srcUrl), 10000);
       const done = (url)=>{ clearTimeout(timeout); resolve(url); };
       const img = new Image();
       img.crossOrigin = 'anonymous'; // needed to avoid tainted canvas on Firebase Storage URLs
@@ -1376,10 +1386,10 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
         ctx.fillText(`${clientName} | +91${clientPhone} | ${ts}`,W/2,H-Math.max(14,H*0.025));
         ctx.restore();
         done(canvas.toDataURL('image/jpeg',0.92));
-        } catch(e){ done(therapist.imageUrl); } // tainted canvas fallback
+        } catch(e){ done(srcUrl); } // tainted canvas fallback
       };
-      img.onerror=()=>done(therapist.imageUrl);
-      img.src=therapist.imageUrl;
+      img.onerror=()=>done(srcUrl);
+      img.src=srcUrl;
     });
   },[therapist.imageUrl,clientName,clientPhone]);
 
@@ -1407,21 +1417,35 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
       setViewCount(newCount);
       if(newCount>=maxViews) setLimitReached(true);
 
-      const url=await buildCanvas();
-      setCanvasUrl(url);
-      setIsVisible(true); setTimeLeft(viewSecs);
-      // Use wall-clock timer so iOS background throttling doesn't break countdown
-      const endAt = Date.now() + viewSecs * 1000;
-      const tick = () => {
-        const rem = Math.ceil((endAt - Date.now()) / 1000);
-        if (rem <= 0) {
-          clearInterval(timerRef.current);
-          setIsVisible(false); setCanvasUrl(''); setTimeLeft(0);
-        } else {
-          setTimeLeft(rem);
-        }
+      // Show all photos in sequence
+      photoIndexRef.current = 0;
+      setPhotoIndex(0);
+
+      const showPhoto = async (idx) => {
+        const url = await buildCanvas(allPhotos[idx]);
+        setCanvasUrl(url);
+        setPhotoIndex(idx);
+        photoIndexRef.current = idx;
+        setIsVisible(true);
+        setTimeLeft(viewSecs);
+        const endAt = Date.now() + viewSecs * 1000;
+        clearInterval(timerRef.current);
+        timerRef.current = setInterval(() => {
+          const rem = Math.ceil((endAt - Date.now()) / 1000);
+          if (rem <= 0) {
+            clearInterval(timerRef.current);
+            const next = photoIndexRef.current + 1;
+            if (next < allPhotos.length) {
+              showPhoto(next); // advance to next photo
+            } else {
+              setIsVisible(false); setCanvasUrl(''); setTimeLeft(0);
+            }
+          } else {
+            setTimeLeft(rem);
+          }
+        }, 400);
       };
-      timerRef.current = setInterval(tick, 400); // poll at 400ms for accuracy
+      await showPhoto(0);
     } catch(err){ console.error(err); }
     finally{ setLoading(false); }
   };
@@ -1495,6 +1519,14 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
           }
           {/* Countdown pill */}
           <div style={{position:'absolute',top:'12px',right:'12px',zIndex:10,background:'rgba(0,0,0,0.8)',color:'var(--gold)',borderRadius:'16px',padding:'4px 13px',fontSize:'0.85rem',fontWeight:'800',letterSpacing:'0.5px',backdropFilter:'blur(6px)'}}>{timeLeft}s</div>
+          {/* Photo counter */}
+          {allPhotos.length > 1 && (
+            <div style={{position:'absolute',bottom:'12px',left:'50%',transform:'translateX(-50%)',zIndex:10,display:'flex',gap:'5px'}}>
+              {allPhotos.map((_,i)=>(
+                <div key={i} style={{width:'6px',height:'6px',borderRadius:'50%',background:i===photoIndex?'var(--gold)':'rgba(255,255,255,0.35)',transition:'background 0.3s'}}/>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1514,7 +1546,7 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
                   ? <svg width="20" height="20" viewBox="0 0 24 24" fill="#5a3c00" className="spin"><circle cx="12" cy="12" r="10" stroke="#5a3c00" strokeWidth="2" fill="none"/><path d="M12 6v6l4 2" stroke="#0a0800" strokeWidth="2"/></svg>
                   : <>
                       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0a0800" strokeWidth="2.2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                      <span>View Photo</span>
+                      <span>{allPhotos.length > 1 ? `View Photos (${allPhotos.length})` : 'View Photo'}</span>
                       <span style={{fontSize:'0.66rem',opacity:0.55,fontWeight:'600'}}>{viewCount}/{maxViews} uses</span>
                     </>
                 }
