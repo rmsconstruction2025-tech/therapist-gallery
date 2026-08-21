@@ -3574,15 +3574,19 @@ function TherapistDetail({ acc, onBack, onDelete, onResetPin, onToggleDuty, togg
   // Availability check via bot
   const [checkMsg, setCheckMsg] = useState('');
   const [checking, setChecking] = useState(false);
+  const [lastCheckTime, setLastCheckTime] = useState(0);
   const checkAvailability = async () => {
     if (!acc.phone) { setCheckMsg('⚠️ No phone number set for this staff.'); setTimeout(()=>setCheckMsg(''),3000); return; }
-    setChecking(true); setCheckMsg('');
+    // Prevent duplicate sends within 60 seconds
+    const now = Date.now();
+    if (now - lastCheckTime < 60000) { setCheckMsg('⏳ Already sent — wait 60s before sending again.'); setTimeout(()=>setCheckMsg(''),3000); return; }
+    setChecking(true); setCheckMsg(''); setLastCheckTime(now);
     try {
       const phone = (acc.phone||'').replace(/\D/g,'');
       const msg = `👋 Hi ${acc.name}!\n\nAre you available today for Feel Free Spa?\n\nReply:\n✅ *yes 10am-8pm* (or your hours)\n❌ *no*`;
       await db.collection('botQueue').add({ phone, name: acc.name, message: msg, status: 'pending', therapistId: acc.id, createdAt: FieldValue.serverTimestamp() });
       setCheckMsg('✅ Check sent via WhatsApp bot!');
-    } catch(e) { setCheckMsg('❌ '+e.message); }
+    } catch(e) { setCheckMsg('❌ '+e.message); setLastCheckTime(0); }
     setChecking(false);
     setTimeout(()=>setCheckMsg(''),5000);
   };
