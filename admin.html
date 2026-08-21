@@ -3554,12 +3554,60 @@ function TherapistAccounts() {
 }
 
 // ── Therapist Detail / Edit View ─────────────────────
+const DAYS = ['MON','TUE','WED','THU','FRI','SAT','SUN'];
+const DEFAULT_WH = { enabled: false, start: '09:00', end: '18:00' };
+
 function TherapistDetail({ acc, onBack, onDelete, onResetPin, onToggleDuty, togglingDuty, deleting, reload }) {
   const [editName,    setEditName]   = useState(acc.name||'');
   const [savingName,  setSavingName] = useState(false);
   const [uploadingImg,setUploadingImg] = useState(false);
   const [photoMsg,    setPhotoMsg]   = useState('');
   const imgRef = useRef(null);
+
+  // Speciality / Bio
+  const [editSpec,    setEditSpec]   = useState(acc.speciality||'');
+  const [savingSpec,  setSavingSpec] = useState(false);
+  const [editBio,     setEditBio]    = useState(acc.bio||'');
+  const [savingBio,   setSavingBio]  = useState(false);
+
+  const saveSpec = async () => {
+    setSavingSpec(true);
+    try { await db.collection('therapists').doc(acc.id).update({ speciality: editSpec.trim() }); reload(); }
+    catch(e) { alert('Error: '+e.message); }
+    setSavingSpec(false);
+  };
+  const saveBio = async () => {
+    setSavingBio(true);
+    try { await db.collection('therapists').doc(acc.id).update({ bio: editBio.trim() }); reload(); }
+    catch(e) { alert('Error: '+e.message); }
+    setSavingBio(false);
+  };
+
+  // Working Hours
+  const initWH = () => {
+    const wh = acc.workingHours || {};
+    const out = {};
+    DAYS.forEach(d => { out[d] = { ...DEFAULT_WH, ...(wh[d]||{}) }; });
+    // default weekdays ON if no data
+    if (!acc.workingHours) ['MON','TUE','WED','THU','FRI'].forEach(d => { out[d].enabled = true; });
+    return out;
+  };
+  const [wh, setWh] = useState(initWH);
+  const [savingWH, setSavingWH] = useState(false);
+  const [whMsg, setWhMsg] = useState('');
+
+  const toggleDay = (d) => setWh(prev => ({ ...prev, [d]: { ...prev[d], enabled: !prev[d].enabled } }));
+  const setDayTime = (d, field, val) => setWh(prev => ({ ...prev, [d]: { ...prev[d], [field]: val } }));
+
+  const saveWH = async () => {
+    setSavingWH(true); setWhMsg('');
+    try {
+      await db.collection('therapists').doc(acc.id).update({ workingHours: wh });
+      setWhMsg('✓ Saved'); reload();
+    } catch(e) { setWhMsg('❌ '+e.message); }
+    setSavingWH(false);
+    setTimeout(() => setWhMsg(''), 3000);
+  };
 
   // Phone
   const [editPhone,   setEditPhone]  = useState(acc.phone||'');
@@ -3770,6 +3818,71 @@ function TherapistDetail({ acc, onBack, onDelete, onResetPin, onToggleDuty, togg
           </div>
         </div>
       </div>
+
+      {/* Speciality & Bio */}
+      <div className="ma-card" style={{padding:'20px',display:'flex',flexDirection:'column',gap:'16px'}}>
+        <p style={{fontSize:'13px',fontWeight:'700',color:'var(--text)',margin:'0 0 4px'}}>📋 Profile Details</p>
+        <div>
+          <label className="form-label">Speciality / Services</label>
+          <div style={{display:'flex',gap:'8px'}}>
+            <input value={editSpec} onChange={e=>setEditSpec(e.target.value)} className="form-input" style={{flex:1}} placeholder="e.g. Swedish Massage, Deep Tissue"/>
+            <button onClick={saveSpec} disabled={savingSpec||editSpec===acc.speciality} className="btn btn-gold btn-sm" style={{minWidth:'60px'}}>
+              {savingSpec?<span className="spin">✦</span>:'Save'}
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="form-label">Short Bio</label>
+          <textarea value={editBio} onChange={e=>setEditBio(e.target.value)} className="form-input" rows={3}
+            style={{resize:'vertical',fontFamily:'inherit',fontSize:'13px'}} placeholder="Brief description about the therapist…"/>
+          <button onClick={saveBio} disabled={savingBio||editBio===acc.bio} className="btn btn-gold btn-sm" style={{marginTop:'8px',minWidth:'60px'}}>
+            {savingBio?<span className="spin">✦</span>:'Save Bio'}
+          </button>
+        </div>
+      </div>
+
+      {/* Working Hours */}
+      <div className="ma-card" style={{padding:'20px',display:'flex',flexDirection:'column',gap:'14px'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:'8px'}}>
+          <p style={{fontSize:'13px',fontWeight:'700',color:'var(--text)',margin:0}}>🕐 Working Hours</p>
+          <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+            {whMsg && <span style={{fontSize:'11px',color:whMsg.startsWith('✓')?'var(--success)':'var(--danger)'}}>{whMsg}</span>}
+            <button onClick={saveWH} disabled={savingWH} className="btn btn-gold btn-sm" style={{minWidth:'100px'}}>
+              {savingWH?<span className="spin">✦</span>:'Save Hours'}
+            </button>
+          </div>
+        </div>
+        {DAYS.map(d=>(
+          <div key={d} style={{display:'flex',alignItems:'center',gap:'10px',flexWrap:'wrap'}}>
+            <button onClick={()=>toggleDay(d)}
+              style={{width:'52px',height:'30px',borderRadius:'15px',border:'none',cursor:'pointer',fontWeight:'700',fontSize:'11px',letterSpacing:'0.4px',
+                background:wh[d].enabled?'var(--gold)':'var(--elevated)',color:wh[d].enabled?'#000':'var(--muted)',
+                transition:'all 0.2s',flexShrink:0}}>
+              {d}
+            </button>
+            {wh[d].enabled
+              ? <>
+                  <input type="time" value={wh[d].start} onChange={e=>setDayTime(d,'start',e.target.value)}
+                    style={{padding:'5px 8px',borderRadius:'7px',border:'1px solid var(--border)',background:'var(--elevated)',color:'var(--text)',fontSize:'13px',fontFamily:'inherit'}}/>
+                  <span style={{color:'var(--muted)',fontSize:'12px'}}>to</span>
+                  <input type="time" value={wh[d].end} onChange={e=>setDayTime(d,'end',e.target.value)}
+                    style={{padding:'5px 8px',borderRadius:'7px',border:'1px solid var(--border)',background:'var(--elevated)',color:'var(--text)',fontSize:'13px',fontFamily:'inherit'}}/>
+                </>
+              : <span style={{color:'var(--muted)',fontSize:'12px',fontStyle:'italic'}}>Day off</span>
+            }
+          </div>
+        ))}
+      </div>
+
+      {/* Location */}
+      {acc.location && (
+        <div className="ma-card" style={{padding:'16px 20px'}}>
+          <p style={{fontSize:'13px',fontWeight:'700',color:'var(--text)',margin:'0 0 8px'}}>📍 Location</p>
+          <p style={{fontSize:'12px',color:'var(--muted)',margin:'0 0 8px',fontFamily:'monospace'}}>{acc.location.lat?.toFixed(5)}, {acc.location.lng?.toFixed(5)}</p>
+          <a href={`https://maps.google.com/?q=${acc.location.lat},${acc.location.lng}`} target="_blank" rel="noreferrer"
+            style={{fontSize:'12px',color:'var(--gold)',textDecoration:'none'}}>🗺 View on Google Maps</a>
+        </div>
+      )}
 
       {/* Actions */}
       <div className="ma-card" style={{padding:'16px 20px',display:'flex',gap:'10px',flexWrap:'wrap'}}>
