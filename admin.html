@@ -1497,6 +1497,7 @@ function Dashboard({ user }) {
     { id:'earnings',   icon:'💰', label:'Earnings' },
     { id:'tracker',    icon:'📍', label:'Live Tracker' },
     { id:'chat',       icon:'💬', label:'Chat' },
+    { id:'bot',        icon:'🤖', label:'FFS Bot' },
   ];
   // Mobile bottom nav — 4 key + More
   const mobileTabs = [
@@ -1512,6 +1513,7 @@ function Dashboard({ user }) {
     { id:'clients',    icon:'🎯', label:'Clients',           desc:'Retargeting database of gallery visitors' },
     { id:'earnings',   icon:'💰', label:'Earnings',          desc:'View completed session revenue by therapist' },
     { id:'tracker',    icon:'📍', label:'Live Tracker',      desc:'Track therapist GPS locations in real time' },
+    { id:'bot',        icon:'🤖', label:'FFS Bot',           desc:'AI WhatsApp bot — send gallery links via /link' },
   ];
   // Is the current tab one of the "more" extras (highlight More in bottom nav)?
   const isMoreTab = moreTabs.some(t => t.id === tab);
@@ -1605,6 +1607,7 @@ function Dashboard({ user }) {
           {tab==='earnings'   && <MobileSubPage title="Earnings" onBack={()=>setTab('more')}><EarningsTab/></MobileSubPage>}
           {tab==='tracker'    && <MobileSubPage title="Live Tracker"  onBack={()=>setTab('more')}><LiveTracker/></MobileSubPage>}
           {tab==='chat'       && <ChatAdmin/>}
+          {tab==='bot'        && <MobileSubPage title="FFS Bot" onBack={()=>setTab('more')}><FeelFreeSpaBot/></MobileSubPage>}
           {tab==='more'       && <MobileMoreMenu moreTabs={moreTabs} onNavigate={setTab} user={user} onSignOut={()=>auth.signOut()} onTheme={toggleTheme} dark={dark}/>}
         </div>
       </div>
@@ -4367,6 +4370,318 @@ function BookingsPanel() {
               })
         }
       </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════
+//  FEEL FREE SPA BOT
+// ══════════════════════════════════════════════════════
+function FeelFreeSpaBot() {
+  const BOT_URL = 'https://feelfreespa-whatsapp-bot-production.up.railway.app';
+  const [view, setView] = React.useState('monitor'); // 'monitor' | 'send'
+
+  // ── Monitor state ──────────────────────────────────────
+  const [botSt,  setBotSt]  = React.useState(null);
+  const [stErr,  setStErr]  = React.useState(false);
+  const [stLoad, setStLoad] = React.useState(true);
+  const [links,  setLinks]  = React.useState([]);
+  const [lLoad,  setLLoad]  = React.useState(true);
+
+  const fetchStatus = React.useCallback(async () => {
+    setStLoad(true); setStErr(false);
+    try {
+      const r = await fetch(`${BOT_URL}/status`);
+      setBotSt(await r.json());
+    } catch { setStErr(true); setBotSt(null); }
+    finally { setStLoad(false); }
+  }, []);
+
+  React.useEffect(() => {
+    fetchStatus();
+    const id = setInterval(fetchStatus, 30_000);
+    return () => clearInterval(id);
+  }, [fetchStatus]);
+
+  React.useEffect(() => {
+    const unsub = db.collection('galleryTokens')
+      .orderBy('createdAt', 'desc').limit(50)
+      .onSnapshot(snap => {
+        setLinks(snap.docs.map(d => ({id:d.id,...d.data()})).filter(d => d.sentViaBot));
+        setLLoad(false);
+      }, () => setLLoad(false));
+    return unsub;
+  }, []);
+
+  const fmtUptime = (s) => {
+    if (!s && s !== 0) return '—';
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m`;
+    return `${Math.floor(s)}s`;
+  };
+  const fmtDate = (ts) => {
+    if (!ts) return '—';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleString('en-IN', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:true});
+  };
+
+  // ── Send Link (chat) state ──────────────────────────────
+  const [messages, setMessages] = React.useState([{
+    role:'bot', id:0,
+    text:`👋 Hi! I'm the **Feel Free Spa Bot**.\n\nI help you send gallery links to customers on WhatsApp instantly.\n\n**Commands:**\n• \`/link [name] [phone]\` — Create & send a gallery link\n• \`/link\` — Guided step-by-step\n• \`/history\` — Recent sent links\n• \`/help\` — Show this guide\n\n_Example: /link Priya 9876543210_`
+  }]);
+  const [input,    setInput]    = React.useState('');
+  const [busy,     setBusy]     = React.useState(false);
+  const [form,     setForm]     = React.useState(null);
+  const [therps,   setTherps]   = React.useState([]);
+  const [selTherp, setSelTherp] = React.useState('');
+  const bottomRef = React.useRef(null);
+
+  React.useEffect(() => {
+    db.collection('therapists').orderBy('name').get()
+      .then(s => setTherps(s.docs.map(d => ({id:d.id,...d.data()})))).catch(()=>{});
+  }, []);
+
+  React.useEffect(() => { bottomRef.current?.scrollIntoView({behavior:'smooth'}); }, [messages]);
+
+  const addMsg = (role, text) => setMessages(p => [...p, {role, id:Date.now()+Math.random(), text}]);
+
+  const createAndSend = async (name, phone, therapistId) => {
+    setBusy(true);
+    try {
+      const token = genToken();
+      const tSnap = therapistId ? therps.find(t => t.id === therapistId) : null;
+      await db.collection('galleryTokens').add({
+        token,
+        expiresAt: firebase.firestore.Timestamp.fromDate(new Date(Date.now() + 86400_000)),
+        maxViewsPerImage:3, viewDurationSeconds:4,
+        clientName: name.trim(), clientPhone: phone.replace(/\D/g,''),
+        serviceType:'', bookType:'now',
+        selectedTherapistIds: tSnap ? [tSnap.id] : [],
+        used: false, createdAt: FieldValue.serverTimestamp(), sentViaBot: true,
+      });
+      const url   = `${window.location.origin}/gallery.html?token=${token}`;
+      const waNum = '91' + phone.replace(/\D/g,'').replace(/^91/,'');
+      const waMsg = `✨ Hello ${name}! Feel Free Spa has shared a personalised gallery.\n\n${url}\n\n_Valid 24 hours_ 🌿`;
+      addMsg('bot', `✅ Gallery link created!\n\n🔗 \`${url}\`\n\n📲 Opening WhatsApp for **${name}** (${phone})…`);
+      setTimeout(() => window.open(`https://wa.me/${waNum}?text=${encodeURIComponent(waMsg)}`, '_blank'), 600);
+    } catch(err) { addMsg('bot', `❌ Failed: ${err.message}`); }
+    setBusy(false); setForm(null); setSelTherp('');
+  };
+
+  const handleCmd = async (raw) => {
+    const text = raw.trim();
+    if (!text) return;
+    addMsg('user', text);
+    setInput('');
+    const lower = text.toLowerCase();
+    if (lower === '/help') {
+      addMsg('bot', `**Commands:**\n• \`/link [name] [phone]\` — Send gallery link\n• \`/history\` — Recent links\n• \`/help\` — This guide`);
+      return;
+    }
+    if (lower === '/history') {
+      setBusy(true);
+      try {
+        const snap = await db.collection('galleryTokens').orderBy('createdAt','desc').limit(40).get();
+        const docs = snap.docs.map(d=>({id:d.id,...d.data()})).filter(d=>d.sentViaBot).slice(0,10);
+        if (!docs.length) { addMsg('bot','No links sent via bot yet.'); }
+        else {
+          const lines = docs.map(d => `• **${d.clientName}** (${d.clientPhone}) — ${d.used?'✅ Used':'⏳ Pending'}\n  ${window.location.origin}/gallery.html?token=${d.token}`);
+          addMsg('bot', `**Recent bot links:**\n\n${lines.join('\n\n')}`);
+        }
+      } catch(e) { addMsg('bot', `❌ ${e.message}`); }
+      setBusy(false); return;
+    }
+    if (lower.startsWith('/link')) {
+      const parts = text.slice(5).trim().split(/\s+/);
+      if (parts.length >= 2) {
+        if (!/^\d{10,12}$/.test(parts[1].replace(/\D/g,''))) { addMsg('bot', `⚠️ Phone number looks invalid.\n_Example: /link Priya 9876543210_`); return; }
+        setForm({name:parts[0], phone:parts[1], step:'therapist'});
+        addMsg('bot', `Got it! Creating a link for **${parts[0]}** (${parts[1]}).\n\nOptionally pick a therapist below, or leave blank to show all.`);
+      } else {
+        setForm({name:'', phone:'', step:'name'});
+        addMsg('bot', `Sure! What's the **customer's name**?`);
+      }
+      return;
+    }
+    if (form) {
+      if (form.step === 'name') { setForm({...form, name:text, step:'phone'}); addMsg('bot', `Now enter the **phone number** (10 digits):`); return; }
+      if (form.step === 'phone') {
+        const ph = text.replace(/\D/g,'');
+        if (ph.length < 10) { addMsg('bot', `⚠️ Need 10 digits. Try again:`); return; }
+        setForm({...form, phone:ph, step:'therapist'}); addMsg('bot', `Got it! Optionally choose a **therapist** (or type "skip"):`); return;
+      }
+      if (form.step === 'therapist') { await createAndSend(form.name, form.phone, (lower==='skip'||lower==='no')?null:selTherp||null); return; }
+    }
+    addMsg('bot', `I didn't understand that. Type \`/help\` for commands.`);
+  };
+
+  // ── Shared styles ──────────────────────────────────────
+  const card = {background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'14px',padding:'16px'};
+  const tabBtn = (active) => ({
+    padding:'8px 18px',borderRadius:'10px',border:'none',cursor:'pointer',fontFamily:'inherit',
+    fontSize:'0.82rem',fontWeight:active?'700':'500',
+    background:active?'var(--gold-glow)':'transparent',
+    color:active?'var(--gold)':'var(--muted)',
+    outline:active?'1px solid var(--border-gold)':'none',
+    transition:'all .15s',
+  });
+  const renderText = (t) =>
+    t.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+     .replace(/`([^`]+)`/g,'<code style="background:rgba(128,128,128,0.15);padding:1px 5px;border-radius:4px;font-family:monospace;font-size:0.78rem">$1</code>');
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:'14px',height:'100%'}}>
+
+      {/* ── Tab switcher ── */}
+      <div style={{display:'flex',gap:'6px',borderBottom:'1px solid var(--border)',paddingBottom:'12px'}}>
+        <button style={tabBtn(view==='monitor')} onClick={()=>setView('monitor')}>📡 Monitor</button>
+        <button style={tabBtn(view==='send')}    onClick={()=>setView('send')}>📲 Send Link</button>
+      </div>
+
+      {/* ══ MONITOR VIEW ══ */}
+      {view === 'monitor' && (
+        <div style={{display:'flex',flexDirection:'column',gap:'14px',overflowY:'auto',paddingBottom:'24px'}}>
+
+          {/* Bot status card */}
+          <div style={{...card,display:'flex',alignItems:'center',gap:'16px',flexWrap:'wrap'}}>
+            <div style={{
+              width:'52px',height:'52px',borderRadius:'50%',flexShrink:0,
+              display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.4rem',
+              background:stErr?'var(--danger-bg)':botSt?.ready?'rgba(37,211,102,0.12)':'var(--gold-glow)',
+              border:`1.5px solid ${stErr?'var(--danger)':botSt?.ready?'rgba(37,211,102,0.5)':'var(--border-gold)'}`,
+            }}>
+              {stLoad ? <span className="spin" style={{fontSize:'1.1rem'}}>⟳</span> : stErr ? '⚠️' : botSt?.ready ? '🤖' : '💤'}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:'700',fontSize:'1.05rem',color:'var(--text)'}}>
+                {stLoad ? 'Checking…' : stErr ? 'Unreachable' : botSt?.ready ? '🟢 Online' : botSt?.qr ? '🟡 QR Pending' : '🔴 Offline'}
+              </div>
+              <div style={{fontSize:'0.72rem',color:'var(--muted)',marginTop:'3px'}}>
+                {botSt ? `Uptime: ${fmtUptime(botSt.uptime)}` : stErr ? 'Bot may be down or restarting' : ''}
+                {botSt?.qr ? ' · Needs QR scan' : ''}
+              </div>
+            </div>
+            <button onClick={fetchStatus} disabled={stLoad}
+              style={{padding:'8px 14px',borderRadius:'10px',border:'1px solid var(--border)',background:'var(--elevated)',color:'var(--muted)',cursor:'pointer',fontFamily:'inherit',fontSize:'0.78rem',fontWeight:'600',display:'flex',alignItems:'center',gap:'5px',flexShrink:0}}>
+              <span className={stLoad?'spin':''} style={{display:'inline-block'}}>⟳</span> Refresh
+            </button>
+          </div>
+
+          {/* Links sent table */}
+          <div style={card}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'14px',flexWrap:'wrap',gap:'8px'}}>
+              <div>
+                <p style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--text)',margin:0}}>Links Sent via Bot</p>
+                <p style={{fontSize:'0.7rem',color:'var(--muted)',margin:'2px 0 0'}}>{links.length} total</p>
+              </div>
+              <div style={{display:'flex',gap:'12px',fontSize:'0.72rem',color:'var(--muted)'}}>
+                <span>✅ Used: <strong style={{color:'var(--success)'}}>{links.filter(l=>l.used).length}</strong></span>
+                <span>⏳ Pending: <strong style={{color:'var(--gold)'}}>{links.filter(l=>!l.used).length}</strong></span>
+              </div>
+            </div>
+            {lLoad ? (
+              <div style={{textAlign:'center',padding:'28px',color:'var(--muted)',fontSize:'0.82rem'}}>
+                <span className="spin" style={{display:'inline-block',fontSize:'1.3rem'}}>⟳</span><br/>Loading…
+              </div>
+            ) : links.length === 0 ? (
+              <div style={{textAlign:'center',padding:'28px',color:'var(--muted)',fontSize:'0.82rem'}}>
+                📭 No bot links yet.<br/>
+                <span style={{fontSize:'0.75rem'}}>Use <strong>/link Name Phone</strong> in WhatsApp to send a link.</span>
+              </div>
+            ) : (
+              <div style={{overflowX:'auto'}}>
+                <table style={{width:'100%',borderCollapse:'collapse',fontSize:'0.8rem'}}>
+                  <thead>
+                    <tr style={{borderBottom:'1px solid var(--border)'}}>
+                      {['Name','Phone','Sent At','Status'].map(h=>(
+                        <th key={h} style={{padding:'7px 10px',textAlign:'left',color:'var(--muted)',fontWeight:'600',fontSize:'0.65rem',letterSpacing:'1px',textTransform:'uppercase',whiteSpace:'nowrap'}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {links.map(l => (
+                      <tr key={l.id} style={{borderBottom:'1px solid var(--border)'}}>
+                        <td style={{padding:'9px 10px',color:'var(--text)',fontWeight:'600'}}>{l.clientName||'—'}</td>
+                        <td style={{padding:'9px 10px',color:'var(--muted)',fontFamily:'monospace',fontSize:'0.79rem'}}>{l.clientPhone||'—'}</td>
+                        <td style={{padding:'9px 10px',color:'var(--muted)',whiteSpace:'nowrap',fontSize:'0.75rem'}}>{fmtDate(l.createdAt)}</td>
+                        <td style={{padding:'9px 10px'}}>
+                          <span style={{
+                            padding:'3px 9px',borderRadius:'20px',fontSize:'0.7rem',fontWeight:'700',
+                            background:l.used?'var(--success-bg)':'var(--gold-glow)',
+                            color:l.used?'var(--success)':'var(--gold)',
+                            border:`1px solid ${l.used?'rgba(22,163,74,0.3)':'var(--border-gold)'}`,
+                          }}>
+                            {l.used ? '✅ Used' : '⏳ Pending'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ══ SEND LINK VIEW (chat) ══ */}
+      {view === 'send' && (
+        <div style={{display:'flex',flexDirection:'column',flex:1,background:'var(--surface)',borderRadius:'14px',overflow:'hidden',border:'1px solid var(--border)',maxHeight:'calc(100vh - 210px)'}}>
+          {/* Chat header */}
+          <div style={{padding:'12px 16px',borderBottom:'1px solid var(--border)',background:'var(--elevated)',display:'flex',alignItems:'center',gap:'10px'}}>
+            <div style={{width:'34px',height:'34px',borderRadius:'50%',background:'rgba(37,211,102,0.12)',border:'1px solid rgba(37,211,102,0.35)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem'}}>🤖</div>
+            <div>
+              <p style={{fontWeight:'700',fontSize:'0.88rem',color:'var(--text)',margin:0}}>Feel Free Spa Bot</p>
+              <p style={{fontSize:'0.65rem',color:'#25d366',margin:0}}>● Admin chat interface</p>
+            </div>
+          </div>
+          {/* Messages */}
+          <div style={{flex:1,overflowY:'auto',padding:'14px',display:'flex',flexDirection:'column',gap:'10px'}}>
+            {messages.map(m => (
+              <div key={m.id} style={{
+                maxWidth:'85%', alignSelf:m.role==='user'?'flex-end':'flex-start',
+                background:m.role==='user'?'rgba(212,175,55,0.18)':'var(--elevated)',
+                border:`1px solid ${m.role==='user'?'rgba(212,175,55,0.4)':'var(--border)'}`,
+                borderRadius:m.role==='user'?'16px 16px 4px 16px':'16px 16px 16px 4px',
+                padding:'10px 14px',fontSize:'0.82rem',lineHeight:'1.5',color:'var(--text)',
+                whiteSpace:'pre-wrap',wordBreak:'break-word',
+              }} dangerouslySetInnerHTML={{__html:renderText(m.text)}}/>
+            ))}
+            {form?.step==='therapist' && (
+              <div style={{alignSelf:'flex-start',background:'var(--elevated)',border:'1px solid var(--border)',borderRadius:'12px',padding:'12px',display:'flex',flexDirection:'column',gap:'8px',maxWidth:'85%'}}>
+                <p style={{fontSize:'0.78rem',color:'var(--muted)',margin:0}}>Choose therapist (optional):</p>
+                <select value={selTherp} onChange={e=>setSelTherp(e.target.value)}
+                  style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'8px',padding:'8px 10px',fontSize:'0.82rem',color:'var(--text)',fontFamily:'inherit'}}>
+                  <option value="">— Any / All therapists —</option>
+                  {therps.map(t=><option key={t.id} value={t.id}>{t.name||t.therapistId}</option>)}
+                </select>
+                <button onClick={()=>createAndSend(form.name,form.phone,selTherp||null)} disabled={busy}
+                  style={{background:'rgba(37,211,102,0.12)',border:'1px solid rgba(37,211,102,0.35)',borderRadius:'8px',padding:'8px 14px',color:'#25d366',fontWeight:'700',fontSize:'0.82rem',cursor:'pointer',fontFamily:'inherit'}}>
+                  {busy?'Creating…':'📲 Send via WhatsApp'}
+                </button>
+              </div>
+            )}
+            {busy && <div style={{alignSelf:'flex-start',color:'var(--muted)',fontSize:'0.78rem'}}>🤖 thinking…</div>}
+            <div ref={bottomRef}/>
+          </div>
+          {/* Input */}
+          <div style={{padding:'10px 12px',borderTop:'1px solid var(--border)',display:'flex',gap:'8px',background:'var(--elevated)'}}>
+            <input
+              style={{flex:1,background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'10px',padding:'10px 12px',fontSize:'0.85rem',color:'var(--text)',fontFamily:'inherit',outline:'none'}}
+              value={input} onChange={e=>setInput(e.target.value)}
+              onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!busy){e.preventDefault();handleCmd(input);}}}
+              placeholder={form?.step==='name'?'Enter customer name…':form?.step==='phone'?'Enter phone number…':'Type /link, /help, /history…'}
+              disabled={busy||form?.step==='therapist'}
+            />
+            <button onClick={()=>handleCmd(input)} disabled={busy||form?.step==='therapist'}
+              style={{background:'rgba(212,175,55,0.15)',border:'1px solid rgba(212,175,55,0.4)',borderRadius:'10px',padding:'8px 14px',color:'var(--gold)',fontWeight:'700',cursor:'pointer',fontFamily:'inherit',fontSize:'0.85rem'}}>
+              Send
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
