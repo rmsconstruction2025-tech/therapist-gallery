@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-  <title>Feel Free Spa — Premium Massage & Wellness, Chennai</title>
-  <meta name="description" content="Experience world-class massage therapy at Feel Free Spa, Chennai. Book your relaxation session today — Swedish, Deep Tissue, Aromatherapy & more."/>
-  <meta property="og:title"       content="Feel Free Spa — Premium Wellness, Chennai"/>
-  <meta property="og:description" content="Book a rejuvenating massage session with our expert therapists. Serving Chennai."/>
+  <title>Feel Free — Doorstep Massage Service, Chennai</title>
+  <meta name="description" content="Premium doorstep massage service in Chennai. Our certified therapists come to your home. Wet, Oil, Dry & Cream massage — ₹2,500 + travel."/>
+  <meta property="og:title"       content="Feel Free — Doorstep Massage, Chennai"/>
+  <meta property="og:description" content="We come to you. Book a certified massage therapist at your home in Chennai."/>
   <meta property="og:image"       content="https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80"/>
   <meta name="twitter:card"       content="summary_large_image"/>
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin/>
@@ -409,8 +409,8 @@
       <circle cx="14" cy="14" r="2" fill="#c9a84c"/>
     </svg>
     <div>
-      <div class="nav-logo-text">Feel Free Spa</div>
-      <div class="nav-logo-sub">Chennai</div>
+      <div class="nav-logo-text">Feel Free</div>
+      <div class="nav-logo-sub">Doorstep Massage · Chennai</div>
     </div>
   </div>
   <div class="nav-links">
@@ -424,7 +424,7 @@
 <div id="root"></div>
 
 <!-- Floating WhatsApp -->
-<a class="wa-float" href="https://wa.me/918148243019?text=Hi%2C%20I%27d%20like%20to%20book%20a%20session%20at%20Feel%20Free%20Spa." target="_blank" rel="noopener" aria-label="Chat on WhatsApp">
+<a class="wa-float" href="https://wa.me/918148243019?text=Hi%2C%20I%27d%20like%20to%20book%20a%20doorstep%20massage%20in%20Chennai." target="_blank" rel="noopener" aria-label="Chat on WhatsApp">
   <span class="wa-tooltip">Chat with us</span>
   <svg viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.558 4.122 1.532 5.859L.057 23.55a.5.5 0 0 0 .611.61l5.756-1.506A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.929 0-3.73-.518-5.276-1.42l-.378-.222-3.916 1.025 1.04-3.8-.245-.39A9.96 9.96 0 0 1 2 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/></svg>
 </a>
@@ -452,12 +452,10 @@ const db = firebase.firestore();
 // DATA
 // ═══════════════════════════════════════
 const SERVICES = [
-  { icon:'🌿', name:'Swedish Massage',      price:'₹1,200', duration:'60 min', desc:'Gentle, relaxing strokes to relieve tension and improve circulation.' },
-  { icon:'💆', name:'Deep Tissue Massage',  price:'₹1,500', duration:'60 min', desc:'Targets deeper muscle layers for chronic pain and stiffness relief.' },
-  { icon:'🌸', name:'Aromatherapy Massage', price:'₹1,400', duration:'75 min', desc:'Essential oil infused massage for total mind-body relaxation.' },
-  { icon:'🪨', name:'Hot Stone Therapy',    price:'₹1,800', duration:'90 min', desc:'Warm basalt stones melt away muscle tension and stress.' },
-  { icon:'🦶', name:'Foot Reflexology',     price:'₹800',   duration:'45 min', desc:'Pressure point therapy on feet for full-body wellness.' },
-  { icon:'✨', name:'Full Body Scrub',       price:'₹1,600', duration:'60 min', desc:'Exfoliating treatment to reveal softer, glowing skin.' },
+  { icon:'💧', name:'Wet Massage',   price:'₹2,500', travel:true, duration:'60 min', desc:'Soothing water-based technique that hydrates skin and deeply relaxes every muscle group.' },
+  { icon:'🛢️', name:'Oil Massage',   price:'₹2,500', travel:true, duration:'60 min', desc:'Warm aromatic oils ease tension, improve circulation and leave skin feeling renewed.' },
+  { icon:'🌿', name:'Dry Massage',   price:'₹2,500', travel:true, duration:'60 min', desc:'Invigorating dry technique targeting pressure points for deep muscle relief without oils.' },
+  { icon:'✨', name:'Cream Massage', price:'₹2,500', travel:true, duration:'60 min', desc:'Luxurious cream-based massage that softens skin while relieving stress and tension.' },
 ];
 
 const DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -483,7 +481,7 @@ function Hero() {
       <div className="hero-bg"/>
       <div className="hero-badge fade-up">
         <span className="dot"/>
-        Now accepting bookings · Chennai
+        Doorstep Service · We Come To You · Chennai
       </div>
       <div className="hero-ornament fade-up">
         <span className="line"/>
@@ -491,11 +489,11 @@ function Hero() {
         <span className="line r"/>
       </div>
       <h1 className="hero-title fade-up">
-        Feel <span>Free.</span><br/>Feel <span>Renewed.</span>
+        Relax at <span>Home.</span><br/>We Come <span>To You.</span>
       </h1>
       <p className="hero-sub fade-up">
-        Premium massage therapy and wellness experiences,<br/>
-        crafted for your complete relaxation.
+        Premium certified massage therapy delivered to your doorstep.<br/>
+        No travel, no hassle — just pure relaxation.
       </p>
       <div className="hero-ctas fade-up">
         <a href="#booking" className="btn-primary">Book a Session</a>
@@ -520,8 +518,8 @@ function Services() {
     <section id="services">
       <div className="section-inner">
         <div className="section-label">What we offer</div>
-        <h2 className="section-title">Our Signature Treatments</h2>
-        <p className="section-sub">Each session is tailored to your needs, delivered by trained, certified therapists in a serene private setting.</p>
+        <h2 className="section-title">Our Treatments</h2>
+        <p className="section-sub">All sessions delivered at your home by certified therapists. Flat ₹2,500 per session + travelling allowance based on your location.</p>
         <div className="services-grid">
           {SERVICES.map(s=>(
             <div key={s.name} className="service-card">
@@ -529,6 +527,7 @@ function Services() {
               <div className="service-name">{s.name}</div>
               <div className="service-desc">{s.desc}</div>
               <div className="service-price">{s.price}</div>
+              {s.travel && <div style={{fontSize:'.7rem',color:'var(--muted)',marginTop:'4px'}}>+ Travelling Allowance</div>}
               <div className="service-duration">⏱ {s.duration}</div>
             </div>
           ))}
@@ -541,48 +540,73 @@ function Services() {
 // ═══════════════════════════════════════
 // THERAPISTS (anonymous)
 // ═══════════════════════════════════════
-function TherapistAvatar() {
-  return (
-    <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-      <circle cx="20" cy="14" r="8" stroke="#3d8c58" strokeWidth="1.5"/>
-      <path d="M5 36c0-8.284 6.716-15 15-15s15 6.716 15 15" stroke="#3d8c58" strokeWidth="1.5" strokeLinecap="round"/>
-    </svg>
-  );
-}
+// DiceBear AI avatar seeds — each gives a unique illustrated persona
+const AVATAR_SEEDS = ['Lily','Jade','Zara','Maya','Aria','Nova','Luna','Ivy'];
 
-function TherapistCard({ therapist, index }) {
+function TherapistCard({ therapist, index, onSelect, selected }) {
   const isOnline = therapist.available;
   const ts = therapist.lastActiveAt?.toMillis?.() ?? 0;
   const agoMin = ts ? (Date.now() - ts) / 60000 : 9999;
   const statusLabel = isOnline ? 'Online' : agoMin < 30 ? `${Math.floor(agoMin)}m ago` : 'Offline';
   const dotColor    = isOnline ? '#4cfa8a' : agoMin < 30 ? '#f39c12' : '#555';
 
+  // Derive location area: use speciality if it mentions a place, else 'Chennai'
+  const speciality = therapist.speciality || 'Massage Specialist';
+  const areaKeywords = ['poonamalee','velachery','anna nagar','t nagar','tambaram','adyar','porur','perambur','chromepet','guindy','mylapore'];
+  const lowerSpec = speciality.toLowerCase();
+  const knownArea = areaKeywords.find(k => lowerSpec.includes(k));
+  const areaLabel = knownArea
+    ? knownArea.replace(/\b\w/g, c => c.toUpperCase())
+    : (therapist.bio || '').split(' ').slice(0,3).join(' ') || 'Chennai';
+
+  // Clean speciality text — if it's just a location string, show "Massage Specialist"
+  const displaySpeciality = knownArea ? 'Massage Specialist' : speciality;
+
+  const seed = AVATAR_SEEDS[index % AVATAR_SEEDS.length];
+  const avatarUrl = `https://api.dicebear.com/7.x/personas/svg?seed=${seed}&backgroundColor=162e1e&backgroundType=solid`;
+
   const handleBook = () => {
-    const msg = encodeURIComponent(`Hi, I'd like to book a session with Therapist #${index+1} (${therapist.speciality || 'General Massage'}) at Feel Free Spa, Chennai.`);
-    window.open(`https://wa.me/${ADMIN_WA}?text=${msg}`, '_blank');
+    document.getElementById('booking')?.scrollIntoView({ behavior:'smooth' });
+    onSelect && onSelect(index);
   };
 
   return (
-    <div className="th-card fade-up">
-      <div className="th-photo">
+    <div className="th-card fade-up" style={selected ? {border:'1.5px solid var(--green-lt)',boxShadow:'0 0 0 3px rgba(61,140,88,.2)'} : {}}>
+      <div className="th-photo" style={{position:'relative',background:'#0d2218'}}>
         <div className="th-status-dot">
           <span style={{width:'6px',height:'6px',borderRadius:'50%',background:dotColor,display:'inline-block'}}/>
           {statusLabel}
         </div>
-        <div className="th-avatar"><TherapistAvatar/></div>
-        <div className="th-number">Therapist #{index+1}</div>
+        {/* AI-generated illustrated avatar */}
+        <img
+          src={avatarUrl}
+          alt={`Therapist #${index+1}`}
+          style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}
+          loading="lazy"
+        />
+        {/* Location badge — bottom of photo */}
+        <div style={{position:'absolute',bottom:'10px',left:'50%',transform:'translateX(-50%)',zIndex:2,
+          background:'rgba(0,0,0,.7)',backdropFilter:'blur(8px)',borderRadius:'20px',
+          padding:'3px 10px',fontSize:'.6rem',color:'var(--cream2)',whiteSpace:'nowrap',
+          display:'flex',alignItems:'center',gap:'4px'}}>
+          📍 {areaLabel}
+        </div>
       </div>
       <div className="th-panel">
-        <div className="th-speciality">{therapist.speciality || 'Massage Specialist'}</div>
+        <div className="th-speciality">{displaySpeciality}</div>
         <div className="th-tag">✓ Certified</div>
-        <button className="th-book-btn" onClick={handleBook}>Book This Therapist</button>
+        <button className="th-book-btn" onClick={handleBook}>
+          {selected ? '✓ Selected' : 'Select Therapist'}
+        </button>
       </div>
     </div>
   );
 }
 
+// Shared state for selected therapist (lifted to App level via window)
 function Therapists() {
   const [therapists, setTherapists] = useState(null);
+  const [selected,   setSelected]   = useState(null);
 
   useEffect(()=>{
     db.collection('therapists')
@@ -591,8 +615,7 @@ function Therapists() {
       .then(snap=>{
         const list = snap.docs.map(d=>({id:d.id,...d.data()})).filter(t=>t.name||t.speciality);
         if (list.length === 0) {
-          // fallback: get all active
-          return db.collection('therapists').limit(6).get().then(s=>{
+          return db.collection('therapists').limit(8).get().then(s=>{
             setTherapists(s.docs.map(d=>({id:d.id,...d.data()})));
           });
         }
@@ -601,15 +624,23 @@ function Therapists() {
       .catch(()=>setTherapists([]));
   },[]);
 
+  const handleSelect = (idx) => {
+    setSelected(idx);
+    // Share selection with booking form
+    if (therapists) {
+      window.__selectedTherapist = { index: idx, data: therapists[idx] };
+    }
+  };
+
   return (
     <section id="therapists">
       <div className="section-inner">
         <div className="section-label">Our Team</div>
-        <h2 className="section-title">Meet Our Therapists</h2>
-        <p className="section-sub">All therapists are certified, professionally trained, and dedicated to your wellbeing. Profile details are kept private for their security.</p>
+        <h2 className="section-title">Choose Your Therapist</h2>
+        <p className="section-sub">Select a therapist below, then fill the booking form. Identities are protected — full profiles shared after booking confirmation.</p>
         <div className="therapist-notice">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          Therapist identities are protected. Full profiles are shared privately after booking confirmation.
+          Click "Select Therapist" on any card — your choice will auto-fill in the booking form below.
         </div>
         {therapists === null
           ? <div className="therapists-grid">
@@ -627,7 +658,13 @@ function Therapists() {
           : therapists.length === 0
             ? <p style={{color:'var(--muted)',marginTop:'24px'}}>No therapists on duty right now. Please WhatsApp us to check availability.</p>
             : <div className="therapists-grid">
-                {therapists.map((t,i)=><TherapistCard key={t.id} therapist={t} index={i}/>)}
+                {therapists.map((t,i)=>(
+                  <TherapistCard
+                    key={t.id} therapist={t} index={i}
+                    onSelect={handleSelect}
+                    selected={selected===i}
+                  />
+                ))}
               </div>
         }
       </div>
@@ -640,20 +677,32 @@ function Therapists() {
 // ═══════════════════════════════════════
 function BookingForm() {
   const [form, setForm] = useState({
-    name:'', phone:'', service:'', date:'', time:'', notes:'', chennai:false
+    name:'', phone:'', address:'', service:'', therapist:'', date:'', time:'', notes:'', chennai:false
   });
   const [errors, setErrors]   = useState({});
   const [success, setSuccess] = useState(false);
   const [sending, setSending] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
-
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
+
+  // Pick up therapist selection made from cards section
+  useEffect(()=>{
+    const check = setInterval(()=>{
+      const sel = window.__selectedTherapist;
+      if (sel && sel.index !== undefined) {
+        const label = `Therapist #${sel.index+1}${sel.data?.speciality ? ' — ' + sel.data.speciality : ''}`;
+        setForm(f=>({...f, therapist: label}));
+      }
+    }, 500);
+    return ()=>clearInterval(check);
+  },[]);
 
   const validate = () => {
     const e = {};
     if (!form.name.trim())    e.name    = 'Please enter your name';
     if (!/^\d{10}$/.test(form.phone.replace(/\s/g,''))) e.phone = 'Enter a valid 10-digit mobile number';
+    if (!form.address.trim()) e.address = 'Please enter your doorstep address';
     if (!form.service)        e.service = 'Please select a service';
     if (!form.date)           e.date    = 'Please pick a preferred date';
     if (!form.time)           e.time    = 'Please pick a preferred time';
@@ -668,16 +717,17 @@ function BookingForm() {
     setErrors({});
     setSending(true);
     const msg = [
-      `Hi! I'd like to book a session at Feel Free Spa.`,
+      `Hi! I'd like to book a doorstep massage with Feel Free.`,
       ``,
       `📋 *Booking Details*`,
       `Name: ${form.name}`,
       `Phone: +91${form.phone}`,
+      `Address: ${form.address}`,
       `Service: ${form.service}`,
+      form.therapist ? `Therapist Preference: ${form.therapist}` : '',
       `Date: ${form.date}`,
       `Time: ${form.time}`,
       form.notes ? `Notes: ${form.notes}` : '',
-      `Location: Chennai`,
     ].filter(Boolean).join('\n');
     setTimeout(()=>{
       window.open(`https://wa.me/${ADMIN_WA}?text=${encodeURIComponent(msg)}`, '_blank');
@@ -694,8 +744,8 @@ function BookingForm() {
           <div className="form-success">
             <div style={{fontSize:'2.5rem',marginBottom:'12px'}}>🌿</div>
             <h3>WhatsApp opened!</h3>
-            <p style={{marginBottom:'16px'}}>Your booking details are pre-filled. Just send the message and we'll confirm your session shortly.</p>
-            <button onClick={()=>{setSuccess(false);setForm({name:'',phone:'',service:'',date:'',time:'',notes:'',chennai:false});}}
+            <p style={{marginBottom:'16px'}}>Your booking details are pre-filled. Just tap Send — we'll confirm and our therapist will come to your doorstep.</p>
+            <button onClick={()=>{setSuccess(false);setForm({name:'',phone:'',address:'',service:'',therapist:'',date:'',time:'',notes:'',chennai:false});window.__selectedTherapist=null;}}
               style={{background:'var(--green2)',color:'var(--cream)',border:'none',borderRadius:'10px',padding:'10px 24px',fontSize:'.85rem',fontWeight:'700',cursor:'pointer'}}>
               Book Another
             </button>
@@ -710,19 +760,19 @@ function BookingForm() {
       <div className="section-inner">
         <div className="section-label">Reserve your session</div>
         <h2 className="section-title">Book Your Appointment</h2>
-        <p className="section-sub">Fill in your details and we'll open WhatsApp with everything pre-filled — just tap Send.</p>
+        <p className="section-sub">Our therapist will come to your home. Fill the form and we'll confirm via WhatsApp within 15 minutes.</p>
         <div className="booking-wrap">
           {/* Info */}
           <div className="booking-info-block">
             <div className="chennai-notice">
               <span>📍</span>
-              Currently serving <strong style={{marginLeft:4}}>Chennai only</strong>
+              Doorstep service — <strong style={{marginLeft:4}}>Chennai only</strong>
             </div>
             {[
-              { icon:'🕐', title:'Flexible Hours',     desc:'Sessions available 9 AM – 9 PM, 7 days a week including weekends.' },
-              { icon:'🔒', title:'Safe & Private',     desc:'All sessions conducted in fully private rooms with certified professionals.' },
-              { icon:'✅', title:'Instant Confirmation', desc:'We confirm your slot via WhatsApp within 15 minutes of your request.' },
-              { icon:'💳', title:'Pay at Spa',         desc:'No advance payment needed. Pay in cash or UPI at the time of your visit.' },
+              { icon:'🏠', title:'We Come To You',      desc:'Our therapist travels to your home, hotel, or office anywhere in Chennai.' },
+              { icon:'🕐', title:'Flexible Hours',       desc:'Sessions available 9 AM – 9 PM, 7 days a week including weekends.' },
+              { icon:'🔒', title:'Safe & Certified',     desc:'All therapists are certified professionals. Your privacy is our priority.' },
+              { icon:'💳', title:'Pay on Arrival',       desc:'No advance payment. Pay in cash or UPI when the therapist arrives.' },
             ].map(f=>(
               <div key={f.title} className="booking-feature">
                 <div className="booking-feature-icon">{f.icon}</div>
@@ -750,13 +800,31 @@ function BookingForm() {
                 </div>
               </div>
               <div className="form-group">
-                <label className="form-label">Service *</label>
-                <select className="form-select" value={form.service} onChange={e=>set('service',e.target.value)}>
-                  <option value="">Select a treatment</option>
-                  {SERVICES.map(s=><option key={s.name} value={s.name}>{s.name} — {s.price}</option>)}
-                  <option value="Not sure - need recommendation">Not sure — need recommendation</option>
-                </select>
-                {errors.service && <div className="form-error">{errors.service}</div>}
+                <label className="form-label">Your Doorstep Address *</label>
+                <input className="form-input" placeholder="Flat/House no., Street, Area, Chennai" value={form.address} onChange={e=>set('address',e.target.value)}/>
+                {errors.address && <div className="form-error">{errors.address}</div>}
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Service *</label>
+                  <select className="form-select" value={form.service} onChange={e=>set('service',e.target.value)}>
+                    <option value="">Select a treatment</option>
+                    {SERVICES.map(s=><option key={s.name} value={s.name}>{s.name} — {s.price}</option>)}
+                    <option value="Not sure">Not sure — need recommendation</option>
+                  </select>
+                  {errors.service && <div className="form-error">{errors.service}</div>}
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Therapist</label>
+                  <input
+                    className="form-input"
+                    placeholder="Auto-filled when selected above ↑"
+                    value={form.therapist}
+                    onChange={e=>set('therapist',e.target.value)}
+                    style={form.therapist ? {borderColor:'rgba(61,140,88,.5)',background:'rgba(42,102,64,.08)'} : {}}
+                  />
+                  {form.therapist && <div style={{fontSize:'.7rem',color:'var(--green-lt)',marginTop:'4px'}}>✓ Therapist selected from above</div>}
+                </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
@@ -775,7 +843,7 @@ function BookingForm() {
               </div>
               <div className="form-group">
                 <label className="form-label">Any notes (optional)</label>
-                <textarea className="form-textarea" placeholder="Medical conditions, preferences, or special requests…" value={form.notes} onChange={e=>set('notes',e.target.value)}/>
+                <textarea className="form-textarea" placeholder="Medical conditions, preferences, floor number, gate code…" value={form.notes} onChange={e=>set('notes',e.target.value)}/>
               </div>
               <label className="chennai-check">
                 <input type="checkbox" checked={form.chennai} onChange={e=>set('chennai',e.target.checked)}/>
@@ -804,13 +872,13 @@ function Location() {
   return (
     <section id="location">
       <div className="section-inner">
-        <div className="section-label">Find us</div>
-        <h2 className="section-title">Location & Hours</h2>
+        <div className="section-label">Service Area</div>
+        <h2 className="section-title">We Serve All of Chennai</h2>
         <div className="location-wrap">
           <div className="location-details">
             {[
-              { icon:'📍', title:'Address', content:
-                  <p>Feel Free Spa<br/>Chennai, Tamil Nadu<br/>India</p> },
+              { icon:'📍', title:'Service Area', content:
+                  <p>All areas across Chennai<br/><span style={{fontSize:'.78rem',color:'var(--muted)'}}>North · South · Central · East · West</span><br/><span style={{fontSize:'.78rem',color:'var(--muted)'}}>Travelling allowance applies based on distance</span></p> },
               { icon:'📞', title:'Contact', content:
                   <p><a href="https://wa.me/918148243019" style={{color:'#4cfa8a'}}>+91 81482 43019</a><br/><span style={{fontSize:'.78rem',color:'var(--muted)'}}>WhatsApp preferred</span></p> },
               { icon:'🕐', title:'Working Hours', content:
@@ -853,8 +921,8 @@ function Location() {
 function Footer() {
   return (
     <footer>
-      <div className="footer-logo">🌿 Feel Free Spa</div>
-      <div className="footer-tagline">Premium Wellness · Chennai</div>
+      <div className="footer-logo">🌿 Feel Free</div>
+      <div className="footer-tagline">Doorstep Massage Service · Chennai</div>
       <div className="footer-links">
         <a href="#services">Services</a>
         <a href="#therapists">Therapists</a>
@@ -862,7 +930,7 @@ function Footer() {
         <a href="#location">Location</a>
         <a href={`https://wa.me/${ADMIN_WA}`} target="_blank" rel="noopener">WhatsApp</a>
       </div>
-      <div className="footer-copy">© {new Date().getFullYear()} Feel Free Spa. All rights reserved. · Serving Chennai only.</div>
+      <div className="footer-copy">© {new Date().getFullYear()} Feel Free. All rights reserved. · Doorstep massage service · Serving Chennai only.</div>
     </footer>
   );
 }
