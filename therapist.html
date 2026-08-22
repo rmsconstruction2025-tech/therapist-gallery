@@ -442,7 +442,6 @@ function TherapistPortal({ session, onLogout }) {
   const [locPermission,  setLocPermission]  = useState('unknown'); // 'granted'|'denied'|'prompt'|'unknown'
 
   const fileRef          = useRef(null);
-  const seenInitRef      = useRef(false);
   const alertIntervalRef = useRef(null);
   const watchRef         = useRef(null);
   const dutyTimerRef     = useRef(null);
@@ -577,42 +576,62 @@ function TherapistPortal({ session, onLogout }) {
     if(pendingBookings.length===0) setHasNewPending(false);
   },[pendingBookings.length]);
 
-  // Real-time booking listener — no Firestore index required, filter client-side
+  // Real-time booking listener — scoped to this therapist using the
+  // therapistId+createdAt and therapistDocId+createdAt composite indexes
+  // (see firestore.indexes.json). Two listeners are needed because older /
+  // not-yet-accepted bookings only carry therapistId, while ones this
+  // client has touched (accept/decline) also carry therapistDocId.
+  // Previously this ran an unscoped `.limit(100)` over the WHOLE bookings
+  // collection with client-side filtering — once the spa passed 100 total
+  // bookings, a therapist's own bookings could silently fall outside that
+  // window and never appear.
   useEffect(()=>{
-    const unsub = db.collection('bookings')
-      .limit(100)
-      .onSnapshot(snap=>{
-        const mine = snap.docs
-          .map(d=>({id:d.id,...d.data()}))
-          .filter(b=> b.therapistId===session.therapistId || b.therapistDocId===session.docId)
-          .sort((a,b)=>(b.createdAt?.toMillis?.()??0)-(a.createdAt?.toMillis?.()??0));
+    const byId       = new Map();
+    const initLoaded = { byTherapistId:false, byDocId:false };
+    const alertedIds = new Set();
 
-        const pending   = mine.filter(b=>b.status==='pending');
-        const scheduled = mine.filter(b=>b.status==='scheduled');
-        setAllBookings(mine);
+    const rebuild = () => {
+      const mine = Array.from(byId.values())
+        .sort((a,b)=>(b.createdAt?.toMillis?.()??0)-(a.createdAt?.toMillis?.()??0));
+      setAllBookings(mine);
+      setPendingBookings(mine.filter(b=>b.status==='pending'));
+      setScheduledBookings(mine.filter(b=>b.status==='scheduled'));
+    };
 
-        // Trigger alert on new booking arrival (after initial load)
-        if(seenInitRef.current){
-          snap.docChanges().forEach(c=>{
-            const d = c.doc.data();
-            const isMyBooking = d.therapistId===session.therapistId || d.therapistDocId===session.docId;
-            if(c.type==='added' && isMyBooking){
-              if(d.status==='pending'){
-                // Book Now → start repeating long alert
-                setHasNewPending(true);
-              } else if(d.status==='scheduled'){
-                // Book Later → single short beep only, no loop
-                playAlert('accept');
-                setNewScheduledCount(n=>n+1);
-              }
-            }
-          });
+    const handleSnap = (key) => (snap) => {
+      const wasInit = initLoaded[key];
+      snap.docChanges().forEach(c=>{
+        if(c.type==='removed'){ byId.delete(c.doc.id); return; }
+        const b = { id:c.doc.id, ...c.doc.data() };
+        byId.set(b.id, b);
+        // Trigger alert on new booking arrival (after this listener's initial load)
+        if(wasInit && c.type==='added' && !alertedIds.has(b.id)){
+          if(b.status==='pending'){
+            // Book Now → start repeating long alert
+            alertedIds.add(b.id);
+            setHasNewPending(true);
+          } else if(b.status==='scheduled'){
+            // Book Later → single short beep only, no loop
+            alertedIds.add(b.id);
+            playAlert('accept');
+            setNewScheduledCount(n=>n+1);
+          }
         }
-        seenInitRef.current = true;
-        setPendingBookings(pending);
-        setScheduledBookings(scheduled);
-      }, err=>console.error('bookings listener error:',err));
-    return ()=>unsub();
+      });
+      initLoaded[key] = true;
+      rebuild();
+    };
+
+    const unsubA = db.collection('bookings')
+      .where('therapistId','==',session.therapistId)
+      .orderBy('createdAt','desc').limit(100)
+      .onSnapshot(handleSnap('byTherapistId'), err=>console.error('bookings listener (therapistId) error:',err));
+    const unsubB = db.collection('bookings')
+      .where('therapistDocId','==',session.docId)
+      .orderBy('createdAt','desc').limit(100)
+      .onSnapshot(handleSnap('byDocId'), err=>console.error('bookings listener (therapistDocId) error:',err));
+
+    return ()=>{ unsubA(); unsubB(); };
   },[]);
 
   const acceptBooking = async (b)=>{
@@ -739,55 +758,11 @@ function TherapistPortal({ session, onLogout }) {
     lastKnownPosRef.current = null;
   };
 
-  const handleStartDuty = async () => {
-    if(dutyLoading) return;
-    setDutyLoading(true);
-    // Try fast network location first, GPS second, start duty even without location
-    let initialLoc = null;
-    try {
-      const pos = await new Promise((res, rej) =>
-        navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:false, timeout:6000, maximumAge:0})
-      );
-      initialLoc = {lat: pos.coords.latitude, lng: pos.coords.longitude};
-    } catch(_) {
-      try {
-        const pos = await new Promise((res, rej) =>
-          navigator.geolocation.getCurrentPosition(res, rej, {enableHighAccuracy:true, timeout:8000})
-        );
-        initialLoc = {lat: pos.coords.latitude, lng: pos.coords.longitude};
-      } catch(_) { /* GPS failed — will show warning below */ }
-    }
-    if(!initialLoc){
-      showMsg('⚠️ GPS unavailable — going on duty anyway. Allow location in browser settings.', 'error');
-    }
-    try {
-      const updates = { onDuty:true, available:true, dutyStartedAt:FieldValue.serverTimestamp(), locationUpdatedAt:FieldValue.serverTimestamp(), ...(initialLoc ? {location:initialLoc} : {}) };
-      await db.collection('therapists').doc(session.docId).update(updates);
-      setOnDuty(true);
-      setAvailable(true);
-      setDutySeconds(0);
-      dutyTimerRef.current = setInterval(() => setDutySeconds(s => s + 1), 1000);
-      startLocationTracking(initialLoc);
-    } catch(err) {
-      showMsg(`StartDuty: ${err.message}`, 'error');
-    }
-    setDutyLoading(false);
-  };
-
-  const handleEndDuty = async () => {
-    if(dutyLoading) return;
-    setDutyLoading(true);
-    stopLocationTracking();
-    if(dutyTimerRef.current){ clearInterval(dutyTimerRef.current); dutyTimerRef.current = null; }
-    try {
-      await db.collection('therapists').doc(session.docId).update({ onDuty: false, available: false, location: null, locationUpdatedAt: FieldValue.serverTimestamp() });
-      setOnDuty(false);
-      setAvailable(false);
-      setDutySeconds(0);
-      showMsg('Duty ended');
-    } catch(err) { showMsg(`EndDuty: ${err.message}`, 'error'); }
-    setDutyLoading(false);
-  };
+  // NOTE: duty start/end used to also exist as standalone handleStartDuty /
+  // handleEndDuty functions, but no UI control ever called them — DutyCard
+  // (below) never accepted onStartDuty/onEndDuty props, so the real entry
+  // point was always handleToggleDuty (the Online/Offline pill). Removed
+  // the dead pair so there's only one duty-toggle code path to maintain.
 
   const handleSOS = async () => {
     let gps = null;
@@ -1135,8 +1110,6 @@ function TherapistPortal({ session, onLogout }) {
           onDuty={onDuty}
           dutySeconds={dutySeconds}
           dutyLoading={dutyLoading}
-          onStartDuty={handleStartDuty}
-          onEndDuty={handleEndDuty}
           onSOS={handleSOS}
           showMsg={showMsg}
           locPermission={locPermission}
@@ -1147,7 +1120,7 @@ function TherapistPortal({ session, onLogout }) {
         {activeTab==='earnings'&&<div style={{padding:'16px'}}><EarningsTab session={session}/></div>}
 
         {/* ══ ATTENDANCE TAB ══ */}
-        {activeTab==='attendance'&&<div style={{padding:'16px'}}><AttendanceTab session={session}/></div>}
+        {activeTab==='attendance'&&<div style={{padding:'16px'}}><AttendanceTab session={session} workingHours={workingHours}/></div>}
 
         {/* ══ PROFILE TAB ══ */}
         {activeTab==='profile'&&(<div style={{display:'flex',flexDirection:'column',gap:'16px',padding:'16px'}}>
@@ -1370,17 +1343,22 @@ function ChatTab({ session }) {
   const audioChunksRef   = useRef([]);
   const recTimerRef      = useRef(null);
 
-  /* ── Load messages + mark admin msgs as read ── */
+  /* ── Load messages + mark admin msgs as read ──
+     Fetches the newest 100 messages (orderBy desc + limit, then reversed
+     for display). Previously this used orderBy('sentAt','asc').limit(100),
+     which fetched the OLDEST 100 messages — once a chat passed 100 total
+     messages, every message after that point was silently excluded. */
   useEffect(() => {
     const unsub = db.collection('chats').doc(session.docId)
       .collection('messages')
-      .orderBy('sentAt', 'asc')
+      .orderBy('sentAt', 'desc')
       .limit(100)
       .onSnapshot(snap => {
-        setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        const docs = [...snap.docs].reverse(); // oldest → newest for display
+        setMessages(docs.map(d => ({ id: d.id, ...d.data() })));
         const batch = db.batch();
         let changed = false;
-        snap.docs.forEach(doc => {
+        docs.forEach(doc => {
           if (doc.data().sender === 'admin' && !doc.data().readByTherapist) {
             batch.update(doc.ref, { readByTherapist: true });
             changed = true;
@@ -1746,7 +1724,7 @@ function ChatTab({ session }) {
 // ══════════════════════════════════════════════════════
 //  HOME TAB
 // ══════════════════════════════════════════════════════
-function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allBookings, myGPS, onAccept, onDecline, onMarkComplete, onUpdateStatus, onViewEarnings, onLogout, onDuty, dutySeconds, dutyLoading, onStartDuty, onEndDuty, onSOS, showMsg, locPermission, onRequestLoc }) {
+function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allBookings, myGPS, onAccept, onDecline, onMarkComplete, onUpdateStatus, onViewEarnings, onLogout, onDuty, dutySeconds, dutyLoading, onSOS, showMsg, locPermission, onRequestLoc }) {
   const [earnings,      setEarnings]      = useState([]);
   const [earningsLoaded,setEarningsLoaded]= useState(false);
   const [markingId,     setMarkingId]     = useState(null);
@@ -1853,7 +1831,7 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
           <h1 style={{fontSize:'1.55rem',fontWeight:'700',color:'var(--text)',lineHeight:'1.1'}}>{firstName}</h1>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:'10px',flexShrink:0,paddingTop:'2px'}}>
-          <button onClick={onToggleDuty} style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 16px',borderRadius:'20px',border:'none',cursor:'pointer',fontFamily:'inherit',background:available?'rgba(39,174,96,0.15)':'rgba(100,100,100,0.12)'}}>
+          <button onClick={onToggleDuty} disabled={dutyLoading} style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 16px',borderRadius:'20px',border:'none',cursor:dutyLoading?'default':'pointer',opacity:dutyLoading?0.6:1,fontFamily:'inherit',background:available?'rgba(39,174,96,0.15)':'rgba(100,100,100,0.12)'}}>
             <div style={{width:'8px',height:'8px',borderRadius:'50%',background:available?'#27ae60':'var(--muted)',boxShadow:available?'0 0 7px #27ae60':'none',flexShrink:0}}/>
             <span style={{fontSize:'0.83rem',fontWeight:'700',color:available?'#27ae60':'var(--muted)'}}>{available?'Online':'Offline'}</span>
           </button>
@@ -1890,9 +1868,6 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
       <DutyCard
         onDuty={onDuty}
         dutySeconds={dutySeconds}
-        dutyLoading={dutyLoading}
-        onStartDuty={onStartDuty}
-        onEndDuty={onEndDuty}
         onSOS={onSOS}
         session={session}
         showMsg={showMsg}
@@ -2022,7 +1997,7 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
               const isConfirmed = ['confirmed','accepted','admin_pending'].includes(b.status);
               const isOnWay     = b.status==='on_way';
               const isInSession = b.status==='in_session';
-              const isScheduled = b.bookingType==='later' || b.status==='scheduled' || !!(b.scheduledDate);
+              const isScheduled = b.bookingType==='later' || b.status==='scheduled' || !!apptDate(b);
               const accentColor = isCompleted?'#27ae60':isInSession?'#ffa500':isOnWay?'#4a9eff':isConfirmed?'var(--gold)':isScheduled?'#4a9eff':'var(--muted)';
               const statusLabel = isCompleted?'Done':isInSession?'In Session':isOnWay?'On the Way':isConfirmed?'Active':'Awaiting';
               // Overdue check
@@ -2032,7 +2007,10 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
               const overdueColor   = isOnWay ? '#ef9f27' : '#e74c3c';
               const overdueBg      = isOnWay ? 'rgba(239,159,39,0.15)' : 'rgba(231,76,60,0.15)';
               // Show "On My Way" only within 2 hours of scheduled time (always show for immediate bookings)
-              const apptMs     = (b.scheduledDate&&b.scheduledTime) ? new Date(`${b.scheduledDate}T${b.scheduledTime}`) - new Date() : null;
+              // Use apptDate/apptTime (not raw scheduledDate/scheduledTime) so bookings
+              // written with the newer appointmentDate/appointmentTime fields aren't
+              // treated as immediate and don't skip this gate.
+              const apptMs     = (apptDate(b)&&apptTime(b)) ? new Date(`${apptDate(b)}T${apptTime(b)}`) - new Date() : null;
               const canGoOnWay = apptMs!==null ? apptMs <= 2*60*60*1000 : true;
               const minsLeft   = apptMs !== null ? Math.round(apptMs / 60000) : null;
               // location: stored as clientLocation object {address} or {lat,lng}
@@ -2044,7 +2022,7 @@ function HomeTab({ session, data, available, onToggleDuty, pendingBookings, allB
                     <div style={{borderLeft:`3px solid ${isOverdue?overdueColor:accentColor}`,paddingLeft:'12px',flex:1,minWidth:0}}>
                       <p style={{fontWeight:'700',fontSize:'0.9rem',color:'var(--text)',marginBottom:'3px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{b.clientName||'—'}</p>
                       <p style={{fontSize:'0.73rem',color:'var(--muted)',display:'flex',alignItems:'center',gap:'5px',flexWrap:'wrap'}}>
-                        {isScheduled?<><span style={{color:'#4a9eff'}}>📅</span><span>{b.scheduledTime||'Scheduled'}</span></>:<><span style={{color:'var(--gold)'}}>⚡</span><span>Now</span></>}
+                        {isScheduled?<><span style={{color:'#4a9eff'}}>📅</span><span>{apptTime(b)||'Scheduled'}</span></>:<><span style={{color:'var(--gold)'}}>⚡</span><span>Now</span></>}
                         <span>·</span><span style={{color:isOverdue?overdueColor:accentColor,fontWeight:'600'}}>{statusLabel}</span>
                         {isOverdue&&<span style={{background:overdueBg,color:overdueColor,fontSize:'0.6rem',padding:'2px 7px',borderRadius:'10px',fontWeight:'700'}}>Overdue</span>}
                       </p>
@@ -2730,11 +2708,20 @@ function EarningsTab({ session }) {
 // ══════════════════════════════════════════════════════
 //  ATTENDANCE TAB
 // ══════════════════════════════════════════════════════
-function AttendanceTab({ session }) {
+function AttendanceTab({ session, workingHours }) {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab,     setTab]     = useState('cal');
   const [selDay,  setSelDay]  = useState(null);
+
+  // Maps Date.getDay() (0=Sun..6=Sat) to the therapist's workingHours keys.
+  // Previously every day-off check here hardcoded Sunday, ignoring each
+  // therapist's actual on/off schedule from the Working Hours settings.
+  const DOW_KEYS = ['sun','mon','tue','wed','thu','fri','sat'];
+  const isOffDay = (date) => {
+    const dh = workingHours && workingHours[DOW_KEYS[date.getDay()]];
+    return dh ? !dh.on : date.getDay()===0; // fall back to Sunday if hours haven't loaded
+  };
 
   const now         = new Date();
   const todayStr    = now.toISOString().split('T')[0];
@@ -2774,7 +2761,7 @@ function AttendanceTab({ session }) {
     const ds   = `${yr}-${String(mo+1).padStart(2,'0')}-${String(dayNum).padStart(2,'0')}`;
     const date = new Date(yr,mo,dayNum);
     if(ds>todayStr) return 'future';
-    if(date.getDay()===0) return 'weekend';
+    if(isOffDay(date)) return 'weekend';
     const r = byDate[ds];
     if(r) return r.status||'present';
     // Only mark absent for days AFTER the first record date (tracking started)
@@ -2949,7 +2936,7 @@ function AttendanceTab({ session }) {
             let streak=0;
             for(let d=now.getDate();d>=1;d--){
               const ds=`${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-              if(new Date(yr,mo,d).getDay()===0) continue;
+              if(isOffDay(new Date(yr,mo,d))) continue;
               const r=byDate[ds];
               if(r&&(r.status==='present'||r.status==='half-day')) streak++;
               else if(ds<=todayStr) break;
