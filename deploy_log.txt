@@ -1,17 +1,58 @@
+Deploy started Sat 06/20/2026 17:16:16.66 
+        1 file(s) copied.
+        1 file(s) copied.
+        1 file(s) copied.
+        1 file(s) copied.
+Copy done 
+warning: in the working copy of 'admin.html', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'gallery.html', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'therapist.html', LF will be replaced by CRLF the next time Git touches it
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes to be committed:
+  (use "git restore --staged <file>..." to unstage)
+	modified:   admin.html
+	modified:   gallery.html
+	modified:   therapist.html
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   .firebase/hosting..cache
+	modified:   deploy_log.txt
+
+[main 295c59a] fix: Firestore rules allow gallery visit tracking fields + GPS cached heartbeat 10s
+ 3 files changed, 99 insertions(+), 23 deletions(-)
+To https://github.com/rmsconstruction2025-tech/therapist-gallery.git
+ ! [rejected]        main -> main (fetch first)
+error: failed to push some refs to 'https://github.com/rmsconstruction2025-tech/therapist-gallery.git'
+hint: Updates were rejected because the remote contains work that you do not
+hint: have locally. This is usually caused by another repository pushing to
+hint: the same ref. If you want to integrate the remote changes, use
+hint: 'git pull' before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+Git done 
 
 [1m[37m===[39m Deploying to 'therapist-gallery'...[22m
 
-[36m[1mi [22m[39m deploying [1mfirestore[22m
+[36m[1mi [22m[39m deploying [1mfirestore, hosting[22m
 [36m[1mi  firestore:[22m[39m ensuring required API [1mfirestore.googleapis.com[22m is enabled...
 [36m[1mi  firestore:[22m[39m ensuring required API [1mfirestore.googleapis.com[22m is enabled...
 [36m[1mi [22m[39m [1m[36mfirestore:[39m[22m reading indexes from [1mfirestore.indexes.json[22m...
 [36m[1mi  cloud.firestore:[22m[39m checking [1mfirestore.rules[22m for compilation errors...
 [32m[1m+  cloud.firestore:[22m[39m rules file [1mfirestore.rules[22m compiled successfully
-[36m[1mi  firestore:[22m[39m latest version of [1mfirestore.rules[22m already up to date, skipping upload...
-[36m[1mi [22m[39m [1m[36mfirestore: [39m[22mdeploying indexes...
-[32m[1m+ [22m[39m [1m[32mfirestore:[39m[22m deployed indexes in [1mfirestore.indexes.json[22m successfully for (default) database
+[36m[1mi  firestore:[22m[39m uploading rules [1mfirestore.rules[22m...
+[36m[1mi  hosting[therapist-gallery]:[22m[39m beginning deploy...
+[36m[1mi  hosting[therapist-gallery]:[22m[39m found 6102 files in [1m.[22m
+[32m[1m+  hosting[therapist-gallery]:[22m[39m file upload complete
 [32m[1m+  firestore:[22m[39m released rules [1mfirestore.rules[22m to [1mcloud.firestore[22m
+[36m[1mi  hosting[therapist-gallery]:[22m[39m finalizing version...
+[32m[1m+  hosting[therapist-gallery]:[22m[39m version finalized
+[36m[1mi  hosting[therapist-gallery]:[22m[39m releasing new version...
+[32m[1m+  hosting[therapist-gallery]:[22m[39m release complete
 
 [32m[1m+ [22m[39m [1m[4mDeploy complete![24m[22m
 
 [1mProject Console:[22m https://console.firebase.google.com/project/therapist-gallery/overview
+[1mHosting URL:[22m https://therapist-gallery.web.app
