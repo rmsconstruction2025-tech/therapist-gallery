@@ -553,8 +553,17 @@ function Services() {
 // ═══════════════════════════════════════
 // THERAPISTS (anonymous)
 // ═══════════════════════════════════════
-// DiceBear AI avatar seeds — each gives a unique illustrated persona
-const AVATAR_SEEDS = ['Lily','Jade','Zara','Maya','Aria','Nova','Luna','Ivy'];
+// Realistic professional therapist photos (Unsplash)
+const AVATAR_PHOTOS = [
+  'https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=400&h=500&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=500&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=500&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=500&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=400&h=500&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=500&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=500&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=400&h=500&fit=crop&q=80',
+];
 
 function TherapistCard({ therapist, index, onSelect, selected }) {
   const isOnline = therapist.available;
@@ -575,8 +584,7 @@ function TherapistCard({ therapist, index, onSelect, selected }) {
   // Clean speciality text — if it's just a location string, show "Massage Specialist"
   const displaySpeciality = knownArea ? 'Massage Specialist' : speciality;
 
-  const seed = AVATAR_SEEDS[index % AVATAR_SEEDS.length];
-  const avatarUrl = `https://api.dicebear.com/7.x/personas/svg?seed=${seed}&backgroundColor=162e1e&backgroundType=solid`;
+  const avatarUrl = AVATAR_PHOTOS[index % AVATAR_PHOTOS.length];
 
   const handleBook = () => {
     document.getElementById('booking')?.scrollIntoView({ behavior:'smooth' });
@@ -585,7 +593,7 @@ function TherapistCard({ therapist, index, onSelect, selected }) {
 
   return (
     <div className="th-card fade-up" style={selected ? {border:'1.5px solid var(--green-lt)',boxShadow:'0 0 0 3px rgba(61,140,88,.2)'} : {}}>
-      <div className="th-photo" style={{position:'relative',background:'#0d2218'}}>
+      <div className="th-photo" style={{position:'relative',background:'#0a1a10'}}>
         <div className="th-status-dot">
           <span style={{width:'6px',height:'6px',borderRadius:'50%',background:dotColor,display:'inline-block'}}/>
           {statusLabel}
