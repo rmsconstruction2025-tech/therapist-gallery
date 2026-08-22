@@ -1431,15 +1431,20 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
     if(limitReached||isVisible||loading) return;
     setLoading(true);
     try {
-      const snap = await db.collection('viewCounts').doc(countDocId).get();
-      const live  = snap.exists ? (snap.data().count||0) : 0;
-      if(live>=maxViews){ setViewCount(live); setLimitReached(true); return; }
+      // Optimistic: use local count — show immediately, verify in background
+      const optimisticCount = viewCount + 1;
+      if(optimisticCount > maxViews){ setLimitReached(true); setLoading(false); return; }
 
-      const newCount = live + 1;
+      const newCount = optimisticCount;
       setViewCount(newCount);
-      if(newCount>=maxViews) setLimitReached(true);
+      if(newCount >= maxViews) setLimitReached(true);
 
-      // Fire Firestore writes in background — don't block image display
+      // All Firestore I/O in background — never block image display
+      db.collection('viewCounts').doc(countDocId).get().then(snap => {
+        const live = snap.exists ? (snap.data().count||0) : 0;
+        if(live >= maxViews){ setLimitReached(true); setIsVisible(false); setCanvasUrl(''); clearInterval(timerRef.current); }
+      }).catch(()=>{});
+
       db.collection('viewCounts').doc(countDocId).set({
         count: FieldValue.increment(1), lastViewedAt: FieldValue.serverTimestamp(),
         therapistId:therapist.id, tokenId,
@@ -1456,13 +1461,17 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
       photoIndexRef.current = 0;
       setPhotoIndex(0);
 
-      const showPhoto = async (idx) => {
-        const url = await buildCanvas(allPhotos[idx]);
-        setCanvasUrl(url);
+      const showPhoto = (idx) => {
+        const rawUrl = allPhotos[idx];
+
+        // ── Step 1: Show raw image INSTANTLY (CSS watermark overlay is already on top) ──
+        setCanvasUrl(rawUrl);
         setPhotoIndex(idx);
         photoIndexRef.current = idx;
         setIsVisible(true);
         setTimeLeft(viewSecs);
+
+        // ── Step 2: Start countdown timer immediately ──
         const endAt = Date.now() + viewSecs * 1000;
         clearInterval(timerRef.current);
         timerRef.current = setInterval(() => {
@@ -1471,7 +1480,7 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
             clearInterval(timerRef.current);
             const next = photoIndexRef.current + 1;
             if (next < allPhotos.length) {
-              showPhoto(next); // advance to next photo
+              showPhoto(next);
             } else {
               setIsVisible(false); setCanvasUrl(''); setTimeLeft(0);
             }
@@ -1479,8 +1488,17 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
             setTimeLeft(rem);
           }
         }, 400);
+
+        // ── Step 3: Build canvas watermark in background, swap silently ──
+        buildCanvas(rawUrl).then(canvasUrl => {
+          // Only swap if user is still viewing this same photo
+          if (photoIndexRef.current === idx) {
+            setCanvasUrl(canvasUrl);
+          }
+        }).catch(()=>{});
       };
-      await showPhoto(0);
+
+      showPhoto(0);
     } catch(err){ console.error(err); }
     finally{ setLoading(false); }
   };
