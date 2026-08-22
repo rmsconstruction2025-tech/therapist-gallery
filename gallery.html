@@ -17,15 +17,20 @@
   <meta name="twitter:description"content="Browse our expert therapists and book your relaxation session."/>
   <meta name="twitter:image"      content="https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=1200&h=630&fit=crop&q=80"/>
 
-  <!-- Firebase compat SDK -->
+  <!-- DNS prefetch for CDN domains -->
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin/>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin/>
+  <link rel="dns-prefetch" href="https://firestore.googleapis.com"/>
+  <link rel="dns-prefetch" href="https://firebasestorage.googleapis.com"/>
+
+  <!-- Firebase compat SDK (no auth — gallery doesn't need it) -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
 
-  <!-- React 18 + Babel -->
-  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
+  <!-- React 18 production + Babel -->
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
 
   <style>
@@ -225,7 +230,21 @@
   </style>
 </head>
 <body>
-<div id="root"></div>
+<div id="root">
+  <!-- Instant skeleton shown before React loads -->
+  <div id="initial-skeleton" style="min-height:100dvh;display:flex;flex-direction:column;align-items:center;padding:40px 20px;background:#0c0a07">
+    <div style="width:2px;height:40px;background:linear-gradient(#d4af37,transparent);margin-bottom:24px"></div>
+    <div style="width:180px;height:28px;border-radius:6px;background:rgba(212,175,55,0.12);animation:skPulse 1.4s ease-in-out infinite;margin-bottom:12px"></div>
+    <div style="width:120px;height:14px;border-radius:4px;background:rgba(212,175,55,0.07);animation:skPulse 1.4s ease-in-out infinite .2s;margin-bottom:40px"></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;width:100%;max-width:900px">
+      <div style="border-radius:16px;background:#111;border:1px solid #1e1b16;overflow:hidden;height:340px;animation:skPulse 1.4s ease-in-out infinite .1s"></div>
+      <div style="border-radius:16px;background:#111;border:1px solid #1e1b16;overflow:hidden;height:340px;animation:skPulse 1.4s ease-in-out infinite .3s"></div>
+    </div>
+  </div>
+</div>
+<style>
+@keyframes skPulse { 0%,100%{opacity:.4} 50%{opacity:.9} }
+</style>
 
 <script type="text/babel">
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
@@ -1036,7 +1055,7 @@ function BookingModal({ therapist, clientName, clientPhone, tokenData, onClose }
         <div style={{display:'flex',alignItems:'center',gap:'12px',marginBottom:'20px',paddingBottom:'16px',borderBottom:'1px solid rgba(212,175,55,0.1)'}}>
           <div style={{width:'44px',height:'44px',borderRadius:'50%',overflow:'hidden',border:'1.5px solid rgba(212,175,55,0.35)',flexShrink:0}}>
             {therapist.imageUrl
-              ? <img src={therapist.imageUrl} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+              ? <img src={therapist.imageUrl} loading="lazy" decoding="async" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
               : <div style={{width:'100%',height:'100%',background:'rgba(212,175,55,0.08)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--gold)',fontSize:'1rem',fontWeight:'700'}}>{(tName[0]||'?').toUpperCase()}</div>
             }
           </div>
@@ -1692,6 +1711,8 @@ function PageWatermark({ name, phone }) {
   );
 }
 
+const sk = document.getElementById('initial-skeleton');
+if (sk) sk.remove();
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
