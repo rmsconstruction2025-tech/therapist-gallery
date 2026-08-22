@@ -436,11 +436,101 @@
 
 <div id="root"></div>
 
-<!-- Floating WhatsApp -->
-<a class="wa-float" href="https://wa.me/918148243019?text=Hi%2C%20I%27d%20like%20to%20book%20a%20doorstep%20massage%20in%20Chennai." target="_blank" rel="noopener" aria-label="Chat on WhatsApp">
+<!-- Floating WhatsApp — location gated -->
+<a class="wa-float" href="#" onclick="gatedWhatsApp(event,'Hi, I\'d like to book a doorstep massage.')" aria-label="Chat on WhatsApp">
   <span class="wa-tooltip">Chat with us</span>
   <svg viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.558 4.122 1.532 5.859L.057 23.55a.5.5 0 0 0 .611.61l5.756-1.506A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.929 0-3.73-.518-5.276-1.42l-.378-.222-3.916 1.025 1.04-3.8-.245-.39A9.96 9.96 0 0 1 2 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/></svg>
 </a>
+
+<!-- Location verification modal -->
+<div id="loc-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);backdrop-filter:blur(6px);align-items:center;justify-content:center;">
+  <div style="background:#0f2218;border:1px solid rgba(201,168,76,.25);border-radius:20px;padding:32px 28px;max-width:340px;width:90%;text-align:center;font-family:Georgia,serif;">
+    <div id="loc-icon" style="font-size:2.5rem;margin-bottom:12px;">📍</div>
+    <h3 id="loc-title" style="color:#f0e9d6;margin-bottom:8px;font-size:1.1rem;">Verifying your location</h3>
+    <p id="loc-msg" style="color:#7a8f7f;font-size:.85rem;line-height:1.6;margin-bottom:20px;">We need your location to confirm you're in the Chennai service area.</p>
+    <button id="loc-btn" onclick="document.getElementById('loc-modal').style.display='none'" style="background:rgba(42,102,64,.3);color:#7a8f7f;border:1px solid rgba(61,140,88,.2);border-radius:10px;padding:10px 24px;font-size:.85rem;cursor:pointer;font-family:Georgia,serif;">Cancel</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════
+// LOCATION VERIFICATION SYSTEM
+// Chennai centre + 50 km radius
+// ═══════════════════════════════════
+const CHENNAI_LAT = 13.0827, CHENNAI_LNG = 80.2707, MAX_KM = 50;
+const ADMIN_WA_NUM = '918148243019';
+
+function haversineKm(lat1,lng1,lat2,lng2){
+  const R=6371,dL=(lat2-lat1)*Math.PI/180,dG=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dL/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dG/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function showLocModal(icon,title,msg,btnText,btnStyle){
+  const m=document.getElementById('loc-modal');
+  document.getElementById('loc-icon').textContent=icon;
+  document.getElementById('loc-title').textContent=title;
+  document.getElementById('loc-msg').textContent=msg;
+  const btn=document.getElementById('loc-btn');
+  btn.textContent=btnText||'Close';
+  btn.style.cssText=btnStyle||'background:rgba(42,102,64,.3);color:#7a8f7f;border:1px solid rgba(61,140,88,.2);border-radius:10px;padding:10px 24px;font-size:.85rem;cursor:pointer;font-family:Georgia,serif;';
+  btn.onclick=()=>{ m.style.display='none'; };
+  m.style.display='flex';
+}
+
+async function reverseGeocode(lat,lng){
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=14&addressdetails=1`,{headers:{'Accept-Language':'en'}});
+    const d=await r.json();
+    const a=d.address||{};
+    return a.suburb||a.neighbourhood||a.town||a.city_district||a.city||'your area';
+  }catch(_){ return 'your area'; }
+}
+
+// Returns {lat,lng,area} or throws
+function getLocation(){
+  return new Promise((resolve,reject)=>{
+    if(!navigator.geolocation){ reject(new Error('no-geo')); return; }
+    showLocModal('📍','Getting your location…','Please allow location access when your browser asks.','Cancel');
+    navigator.geolocation.getCurrentPosition(
+      pos=>resolve({lat:pos.coords.latitude,lng:pos.coords.longitude}),
+      err=>reject(new Error(err.code===1?'denied':'timeout')),
+      {timeout:10000,maximumAge:0}
+    );
+  });
+}
+
+async function verifyLocation(){
+  let pos;
+  try{ pos=await getLocation(); }
+  catch(e){
+    if(e.message==='no-geo') showLocModal('❌','Not supported','Your browser does not support location. Please use Chrome or Safari.','Close');
+    else if(e.message==='denied') showLocModal('🚫','Location denied','Please allow location access in your browser settings and try again.','Close');
+    else showLocModal('⚠️','Location timeout','Could not get your location. Check your GPS and try again.','Close');
+    return null;
+  }
+  const km=haversineKm(pos.lat,pos.lng,CHENNAI_LAT,CHENNAI_LNG);
+  if(km>MAX_KM){
+    showLocModal('🚫','Outside service area',`You appear to be ${Math.round(km)} km from Chennai. We currently serve only Chennai and nearby areas (within 50 km).`,'Close');
+    return null;
+  }
+  const area=await reverseGeocode(pos.lat,pos.lng);
+  document.getElementById('loc-modal').style.display='none';
+  return {lat:pos.lat,lng:pos.lng,area,km:Math.round(km)};
+}
+
+// Called by WA buttons
+async function gatedWhatsApp(e,baseMsg){
+  if(e) e.preventDefault();
+  const loc=await verifyLocation();
+  if(!loc) return;
+  const msg=`Hi! I'm reaching out from ${loc.area}, Chennai.\n${baseMsg}`;
+  window.open(`https://wa.me/${ADMIN_WA_NUM}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+// Exposed for React booking form
+window.verifyLocation=verifyLocation;
+</script>
 
 <script type="text/babel">
 const { useState, useEffect, useRef, useCallback } = React;
@@ -488,7 +578,6 @@ const HOURS = [
 // HERO
 // ═══════════════════════════════════════
 function Hero() {
-  const waUrl = `https://wa.me/${ADMIN_WA}?text=${encodeURIComponent("Hi, I'd like to book a massage session at Feel Free Spa, Chennai.")}`;
   return (
     <section className="hero" id="home">
       <div className="hero-bg"/>
@@ -510,7 +599,7 @@ function Hero() {
       </p>
       <div className="hero-ctas fade-up">
         <a href="#booking" className="btn-primary">Book a Session</a>
-        <a href={waUrl} target="_blank" rel="noopener" className="btn-wa">
+        <a href="#" onClick={e=>window.gatedWhatsApp(e,"I'd like to book a doorstep massage.")} className="btn-wa">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.558 4.122 1.532 5.859L.057 23.55a.5.5 0 0 0 .611.61l5.756-1.506A11.94 11.94 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.929 0-3.73-.518-5.276-1.42l-.378-.222-3.916 1.025 1.04-3.8-.245-.39A9.96 9.96 0 0 1 2 12c0-5.514 4.486-10 10-10s10 4.486 10 10-4.486 10-10 10z"/></svg>
           WhatsApp Us
         </a>
@@ -631,8 +720,10 @@ function TherapistCard({ therapist, index, onSelect, selected }) {
 // ═══════════════════════════════════════
 function BookingForm() {
   const [form, setForm] = useState({
-    name:'', phone:'', address:'', service:'', date:'', time:'', notes:'', chennai:false
+    name:'', phone:'', service:'', date:'', time:'', notes:''
   });
+  const [locState, setLocState] = useState({ verified:false, area:'', km:0 });
+  const [locLoading, setLocLoading] = useState(false);
   const [errors, setErrors]   = useState({});
   const [success, setSuccess] = useState(false);
   const [sending, setSending] = useState(false);
@@ -645,11 +736,10 @@ function BookingForm() {
     const e = {};
     if (!form.name.trim())    e.name    = 'Please enter your name';
     if (!/^\d{10}$/.test(form.phone.replace(/\s/g,''))) e.phone = 'Enter a valid 10-digit mobile number';
-    if (!form.address.trim()) e.address = 'Please enter your doorstep address';
+    if (!locState.verified)   e.location = 'Please verify your location first';
     if (!form.service)        e.service = 'Please select a service';
     if (!form.date)           e.date    = 'Please pick a preferred date';
     if (!form.time)           e.time    = 'Please pick a preferred time';
-    if (!form.chennai)        e.chennai = 'Booking is available for Chennai only';
     return e;
   };
 
@@ -660,12 +750,13 @@ function BookingForm() {
     setErrors({});
     setSending(true);
     const msg = [
-      `Hi! I'd like to book a doorstep massage with Feel Free.`,
+      `Hi! I'm reaching out from ${locState.area}, Chennai.`,
+      `I'd like to book a doorstep massage with Feel Free.`,
       ``,
       `📋 *Booking Details*`,
       `Name: ${form.name}`,
       `Phone: +91${form.phone}`,
-      `Address: ${form.address}`,
+      `Location: ${locState.area}, Chennai`,
       `Service: ${form.service}`,
       `Date: ${form.date}`,
       `Time: ${form.time}`,
@@ -689,7 +780,7 @@ function BookingForm() {
             <div style={{fontSize:'2.5rem',marginBottom:'12px'}}>🌿</div>
             <h3>WhatsApp opened!</h3>
             <p style={{marginBottom:'16px'}}>Your booking details are pre-filled. Just tap Send — we'll confirm and our therapist will come to your doorstep.</p>
-            <button onClick={()=>{setSuccess(false);setForm({name:'',phone:'',address:'',service:'',date:'',time:'',notes:'',chennai:false});}}
+            <button onClick={()=>{setSuccess(false);setForm({name:'',phone:'',service:'',date:'',time:'',notes:''});setLocState({verified:false,area:'',km:0});}}
               style={{background:'var(--green2)',color:'var(--cream)',border:'none',borderRadius:'10px',padding:'10px 24px',fontSize:'.85rem',fontWeight:'700',cursor:'pointer'}}>
               Book Another
             </button>
@@ -744,9 +835,35 @@ function BookingForm() {
                 </div>
               </div>
               <div className="form-group">
-                <label className="form-label">Your Doorstep Address *</label>
-                <input className="form-input" placeholder="Flat/House no., Street, Area, Chennai" value={form.address} onChange={e=>set('address',e.target.value)}/>
-                {errors.address && <div className="form-error">{errors.address}</div>}
+                <label className="form-label">Your Location *</label>
+                {locState.verified
+                  ? (
+                    <div style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px 14px',background:'rgba(42,102,64,.15)',border:'1px solid rgba(61,140,88,.4)',borderRadius:'10px'}}>
+                      <span style={{fontSize:'1.2rem'}}>✅</span>
+                      <div style={{flex:1}}>
+                        <div style={{color:'#4cfa8a',fontWeight:'700',fontSize:'.88rem'}}>{locState.area}, Chennai</div>
+                        <div style={{color:'var(--muted)',fontSize:'.75rem'}}>{locState.km} km from city centre · Within service area</div>
+                      </div>
+                      <button type="button" onClick={()=>setLocState({verified:false,area:'',km:0})}
+                        style={{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:'.75rem',textDecoration:'underline'}}>Change</button>
+                    </div>
+                  ) : (
+                    <button type="button" disabled={locLoading}
+                      onClick={async()=>{
+                        setLocLoading(true);
+                        const loc = await window.verifyLocation();
+                        setLocLoading(false);
+                        if(loc) setLocState({verified:true,area:loc.area,km:loc.km});
+                      }}
+                      style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',padding:'12px 16px',background:'rgba(42,102,64,.12)',border:'1px dashed rgba(61,140,88,.4)',borderRadius:'10px',color:locLoading?'var(--muted)':'var(--cream)',cursor:locLoading?'not-allowed':'pointer',fontSize:'.9rem',fontFamily:'Georgia,serif'}}>
+                      {locLoading
+                        ? <><span style={{display:'inline-block',animation:'spin .8s linear infinite'}}>⟳</span> Verifying location…</>
+                        : <><span>📍</span> Use My Current Location</>
+                      }
+                    </button>
+                  )
+                }
+                {errors.location && <div className="form-error">{errors.location}</div>}
               </div>
               <div className="form-row">
                 <div className="form-group">
@@ -778,11 +895,6 @@ function BookingForm() {
                 <label className="form-label">Any notes (optional)</label>
                 <textarea className="form-textarea" placeholder="Medical conditions, preferences, floor number, gate code…" value={form.notes} onChange={e=>set('notes',e.target.value)}/>
               </div>
-              <label className="chennai-check">
-                <input type="checkbox" checked={form.chennai} onChange={e=>set('chennai',e.target.checked)}/>
-                I confirm I am located in Chennai
-              </label>
-              {errors.chennai && <div className="form-error" style={{marginBottom:'12px'}}>{errors.chennai}</div>}
               <button type="submit" className="form-submit" disabled={sending}>
                 {sending
                   ? <span>Opening WhatsApp… <span style={{display:'inline-block',animation:'spin .8s linear infinite'}}>⟳</span></span>
@@ -813,7 +925,7 @@ function Location() {
               { icon:'📍', title:'Service Area', content:
                   <p>All areas across Chennai<br/><span style={{fontSize:'.78rem',color:'var(--muted)'}}>North · South · Central · East · West</span><br/><span style={{fontSize:'.78rem',color:'var(--muted)'}}>Travelling allowance applies based on distance</span></p> },
               { icon:'📞', title:'Contact', content:
-                  <p><a href="https://wa.me/918148243019" style={{color:'#4cfa8a'}}>+91 81482 43019</a><br/><span style={{fontSize:'.78rem',color:'var(--muted)'}}>WhatsApp preferred</span></p> },
+                  <p><a href="#" onClick={e=>window.gatedWhatsApp(e,"I'd like to enquire about your doorstep massage service.")} style={{color:'#4cfa8a'}}>+91 81482 43019</a><br/><span style={{fontSize:'.78rem',color:'var(--muted)'}}>WhatsApp preferred</span></p> },
               { icon:'🕐', title:'Working Hours', content:
                   <table className="hours-table">
                     <tbody>
@@ -861,7 +973,7 @@ function Footer() {
         <a href="#therapists">Therapists</a>
         <a href="#booking">Book Now</a>
         <a href="#location">Location</a>
-        <a href={`https://wa.me/${ADMIN_WA}`} target="_blank" rel="noopener">WhatsApp</a>
+        <a href="#" onClick={e=>window.gatedWhatsApp(e,"I'd like to book a doorstep massage.")}>WhatsApp</a>
       </div>
       <div className="footer-copy">© {new Date().getFullYear()} Feel Free. All rights reserved. · Doorstep massage service · Serving Chennai only.</div>
     </footer>

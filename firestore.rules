@@ -46,25 +46,27 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // Bookings: clients create; therapists + admin read & update status
+    // Bookings: clients create & read own; only allowed fields updatable publicly
     match /bookings/{bookingId} {
       allow create: if true;
       allow read:   if true;
-      allow update: if true;   // therapist accepts/declines; admin views
+      allow update: if isAdmin()
+        || request.resource.data.diff(resource.data)
+             .affectedKeys()
+             .hasOnly(['status','therapistResponse','respondedAt','clientConfirmed','clientConfirmedAt']);
       allow delete: if isAdmin();
     }
 
-    // Earnings: therapists add/read/delete their own session earnings
+    // Earnings: therapists only — locked from public
     match /earnings/{earnId} {
-      allow read, write: if true;
+      allow read, write: if isAdmin();
     }
 
-    // Attendance: therapists write their own records (duty on/off + session count);
-    // admin can read all. Doc IDs follow pattern: {therapistDocId}_{YYYY-MM-DD}
+    // Attendance: therapists write their own records; locked from public delete
     match /attendance/{attendId} {
-      allow read:          if true;                // admin + therapist can read
-      allow create, update: if true;               // therapist portal writes without Firebase auth
-      allow delete:        if isAdmin();
+      allow read:           if isAdmin();
+      allow create, update: if true;        // therapist portal writes without Firebase auth
+      allow delete:         if isAdmin();
     }
 
     // Tracking links: client-facing live location tokens (no phone exposed)
@@ -94,13 +96,11 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
-    // Chat: admin ↔ therapist real-time messaging
-    // Metadata doc (chats/{therapistDocId}): last message, unread counts
+    // Chat: admin ↔ therapist real-time messaging (locked from public)
     match /chats/{therapistDocId} {
-      allow read, write: if true;
-      // Messages subcollection
+      allow read, write: if isAdmin();
       match /messages/{messageId} {
-        allow read, write: if true;
+        allow read, write: if isAdmin();
       }
     }
   }
