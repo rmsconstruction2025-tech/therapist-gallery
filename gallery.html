@@ -405,11 +405,25 @@ function App() {
   }, []);
 
   // Token validation
-  useEffect(() => {
+  const [validating, setValidating] = useState(false);
+  const [slowLoad,   setSlowLoad]   = useState(false);
+
+  const runValidation = () => {
     if (!tokenStr) { setStatus('invalid'); return; }
+    setValidating(true); setSlowLoad(false);
+    // Show "taking longer..." message after 4 seconds
+    const slowTimer = setTimeout(() => setSlowLoad(true), 4000);
     (async () => {
       try {
-        const snap = await db.collection('galleryTokens').where('token','==',tokenStr).get();
+        // Try cache first (instant on repeat visits), fallback to server
+        let snap;
+        try {
+          snap = await db.collection('galleryTokens').where('token','==',tokenStr).get({ source: 'cache' });
+          if (snap.empty) throw new Error('not in cache');
+        } catch(_) {
+          snap = await db.collection('galleryTokens').where('token','==',tokenStr).get();
+        }
+        clearTimeout(slowTimer);
         if (snap.empty) { setStatus('invalid'); return; }
         const data = {id:snap.docs[0].id,...snap.docs[0].data()};
         if (data.expiresAt?.toDate?.() < new Date()) { setStatus('expired'); return; }
@@ -420,9 +434,16 @@ function App() {
         } else {
           setStatus('info');
         }
-      } catch(err) { console.error(err); setStatus('invalid'); }
+      } catch(err) {
+        clearTimeout(slowTimer);
+        console.error(err);
+        setStatus('invalid');
+      }
+      setValidating(false);
     })();
-  }, [tokenStr]);
+  };
+
+  useEffect(() => { runValidation(); }, [tokenStr]);
 
   const msgTitle = {fontSize:'1.4rem',fontWeight:'700',color:'var(--gold)',marginBottom:'8px'};
   const msgSub   = {color:'var(--muted)',fontSize:'0.9rem',lineHeight:'1.6',maxWidth:'320px'};
@@ -437,7 +458,21 @@ function App() {
     </FullScreen>
   );
 
-  if (status==='loading') return <FullScreen><span className="spin" style={{fontSize:'2.5rem',color:'var(--gold)'}}>✦</span><p style={{color:'var(--muted)',marginTop:'16px'}}>Validating access…</p></FullScreen>;
+  if (status==='loading') return (
+    <FullScreen>
+      <span className="spin" style={{fontSize:'2.5rem',color:'var(--gold)'}}>✦</span>
+      <p style={{color:'var(--muted)',marginTop:'16px',fontSize:'0.9rem'}}>
+        {slowLoad ? 'Slow connection detected…' : 'Validating access…'}
+      </p>
+      {slowLoad && (
+        <button onClick={()=>{ setStatus('loading'); runValidation(); }}
+          style={{marginTop:'20px',padding:'10px 24px',borderRadius:'24px',border:'1px solid var(--gold)',
+            background:'rgba(212,175,55,0.12)',color:'var(--gold)',fontSize:'0.9rem',cursor:'pointer',fontFamily:'inherit'}}>
+          🔄 Tap to retry
+        </button>
+      )}
+    </FullScreen>
+  );
   if (status==='invalid') return <FullScreen><div style={{fontSize:'3rem',color:'var(--gold)',marginBottom:'16px'}}>⚠</div><h2 style={msgTitle}>Invalid Link</h2><p style={msgSub}>This gallery link is invalid.</p></FullScreen>;
   if (status==='expired') return <FullScreen><div style={{fontSize:'3rem',color:'var(--gold)',marginBottom:'16px'}}>⏱</div><h2 style={msgTitle}>Link Expired</h2><p style={msgSub}>This gallery link has expired. Please contact us for a new link.</p></FullScreen>;
   if (status==='info')    return <ClientInfoForm tokenData={tokenData} onConfirmed={(n,p)=>{ setClient({name:n,phone:p}); setStatus('loc-prompt'); }}/>;
