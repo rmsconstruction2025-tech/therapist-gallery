@@ -428,7 +428,6 @@
   </div>
   <div class="nav-links">
     <a href="#services">Services</a>
-    <a href="#therapists">Therapists</a>
     <a href="#location">Location</a>
     <a href="#booking" class="nav-book-btn">Book Now</a>
   </div>
@@ -625,80 +624,13 @@ function TherapistCard({ therapist, index, onSelect, selected }) {
 }
 
 // Shared state for selected therapist (lifted to App level via window)
-function Therapists() {
-  const [therapists, setTherapists] = useState(null);
-  const [selected,   setSelected]   = useState(null);
-
-  useEffect(()=>{
-    db.collection('therapists')
-      .where('onDuty','==',true)
-      .get()
-      .then(snap=>{
-        const list = snap.docs.map(d=>({id:d.id,...d.data()})).filter(t=>t.name||t.speciality);
-        if (list.length === 0) {
-          return db.collection('therapists').limit(8).get().then(s=>{
-            setTherapists(s.docs.map(d=>({id:d.id,...d.data()})));
-          });
-        }
-        setTherapists(list);
-      })
-      .catch(()=>setTherapists([]));
-  },[]);
-
-  const handleSelect = (idx) => {
-    setSelected(idx);
-    // Share selection with booking form
-    if (therapists) {
-      window.__selectedTherapist = { index: idx, data: therapists[idx] };
-    }
-  };
-
-  return (
-    <section id="therapists">
-      <div className="section-inner">
-        <div className="section-label">Our Team</div>
-        <h2 className="section-title">Choose Your Therapist</h2>
-        <p className="section-sub">Select a therapist below, then fill the booking form. Identities are protected — full profiles shared after booking confirmation.</p>
-        <div className="therapist-notice">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          Click "Select Therapist" on any card — your choice will auto-fill in the booking form below.
-        </div>
-        {therapists === null
-          ? <div className="therapists-grid">
-              {[0,1,2,3].map(i=>(
-                <div key={i} className="th-card">
-                  <div className="skel" style={{aspectRatio:'3/4'}}/>
-                  <div style={{padding:'14px',display:'flex',flexDirection:'column',gap:'8px'}}>
-                    <div className="skel" style={{height:'12px',width:'70%'}}/>
-                    <div className="skel" style={{height:'10px',width:'45%'}}/>
-                    <div className="skel" style={{height:'36px',borderRadius:'10px'}}/>
-                  </div>
-                </div>
-              ))}
-            </div>
-          : therapists.length === 0
-            ? <p style={{color:'var(--muted)',marginTop:'24px'}}>No therapists on duty right now. Please WhatsApp us to check availability.</p>
-            : <div className="therapists-grid">
-                {therapists.map((t,i)=>(
-                  <TherapistCard
-                    key={t.id} therapist={t} index={i}
-                    onSelect={handleSelect}
-                    selected={selected===i}
-                  />
-                ))}
-              </div>
-        }
-      </div>
-    </section>
-  );
-}
 
 // ═══════════════════════════════════════
 // BOOKING FORM
 // ═══════════════════════════════════════
 function BookingForm() {
   const [form, setForm] = useState({
-    name:'', phone:'', address:'', service:'', therapist:'', date:'', time:'', notes:'', chennai:false
+    name:'', phone:'', address:'', service:'', date:'', time:'', notes:'', chennai:false
   });
   const [errors, setErrors]   = useState({});
   const [success, setSuccess] = useState(false);
@@ -707,17 +639,6 @@ function BookingForm() {
   const today = new Date().toISOString().split('T')[0];
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
 
-  // Pick up therapist selection made from cards section
-  useEffect(()=>{
-    const check = setInterval(()=>{
-      const sel = window.__selectedTherapist;
-      if (sel && sel.index !== undefined) {
-        const label = `Therapist #${sel.index+1}${sel.data?.speciality ? ' — ' + sel.data.speciality : ''}`;
-        setForm(f=>({...f, therapist: label}));
-      }
-    }, 500);
-    return ()=>clearInterval(check);
-  },[]);
 
   const validate = () => {
     const e = {};
@@ -745,7 +666,6 @@ function BookingForm() {
       `Phone: +91${form.phone}`,
       `Address: ${form.address}`,
       `Service: ${form.service}`,
-      form.therapist ? `Therapist Preference: ${form.therapist}` : '',
       `Date: ${form.date}`,
       `Time: ${form.time}`,
       form.notes ? `Notes: ${form.notes}` : '',
@@ -768,7 +688,7 @@ function BookingForm() {
             <div style={{fontSize:'2.5rem',marginBottom:'12px'}}>🌿</div>
             <h3>WhatsApp opened!</h3>
             <p style={{marginBottom:'16px'}}>Your booking details are pre-filled. Just tap Send — we'll confirm and our therapist will come to your doorstep.</p>
-            <button onClick={()=>{setSuccess(false);setForm({name:'',phone:'',address:'',service:'',therapist:'',date:'',time:'',notes:'',chennai:false});window.__selectedTherapist=null;}}
+            <button onClick={()=>{setSuccess(false);setForm({name:'',phone:'',address:'',service:'',date:'',time:'',notes:'',chennai:false});}}
               style={{background:'var(--green2)',color:'var(--cream)',border:'none',borderRadius:'10px',padding:'10px 24px',fontSize:'.85rem',fontWeight:'700',cursor:'pointer'}}>
               Book Another
             </button>
@@ -836,17 +756,6 @@ function BookingForm() {
                     <option value="Not sure">Not sure — need recommendation</option>
                   </select>
                   {errors.service && <div className="form-error">{errors.service}</div>}
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Therapist</label>
-                  <input
-                    className="form-input"
-                    placeholder="Auto-filled when selected above ↑"
-                    value={form.therapist}
-                    onChange={e=>set('therapist',e.target.value)}
-                    style={form.therapist ? {borderColor:'rgba(61,140,88,.5)',background:'rgba(42,102,64,.08)'} : {}}
-                  />
-                  {form.therapist && <div style={{fontSize:'.7rem',color:'var(--green-lt)',marginTop:'4px'}}>✓ Therapist selected from above</div>}
                 </div>
               </div>
               <div className="form-row">
@@ -966,7 +875,6 @@ function App() {
     <>
       <Hero/>
       <Services/>
-      <Therapists/>
       <BookingForm/>
       <Location/>
       <Footer/>
