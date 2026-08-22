@@ -53,6 +53,7 @@
 
     /* ── Keyframes ── */
     @keyframes spin      { to { transform: rotate(360deg); } }
+    @keyframes fadeIn    { from { opacity:0; } to { opacity:1; } }
     @keyframes pulseRing { 0%{transform:scale(1);opacity:.4} 70%{transform:scale(2.5);opacity:0} 100%{transform:scale(2.5);opacity:0} }
     @keyframes fadeUp    { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:none} }
     @keyframes cardIn    { from{opacity:0;transform:scale(.94) translateY(16px)} to{opacity:1;transform:none} }
@@ -1366,50 +1367,60 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
     return new Promise(resolve=>{
       const canvas = canvasRef.current;
       if (!canvas) { resolve(srcUrl); return; }
-      // Safety timeout — resolve with original URL if image never loads
-      const timeout = setTimeout(()=>resolve(srcUrl), 10000);
+      // Reduced timeout — 4s max, not 10s
+      const timeout = setTimeout(()=>resolve(srcUrl), 4000);
       const done = (url)=>{ clearTimeout(timeout); resolve(url); };
       const img = new Image();
-      img.crossOrigin = 'anonymous'; // needed to avoid tainted canvas on Firebase Storage URLs
+      img.crossOrigin = 'anonymous';
       img.onload = ()=>{
         try {
-        const W=img.naturalWidth||img.width, H=img.naturalHeight||img.height;
-        canvas.width=W; canvas.height=H;
-        const ctx=canvas.getContext('2d');
-        ctx.drawImage(img,0,0,W,H);
-        const ts=new Date().toLocaleString('en-IN');
-        // Heavy diagonal watermark — repeated across entire photo
+        // ── Cap resolution for mobile performance ──
+        // Full-res canvas on mobile freezes for 1-3s; max 900px wide is plenty
+        const MAX = 900;
+        const naturalW = img.naturalWidth  || img.width;
+        const naturalH = img.naturalHeight || img.height;
+        const scale = naturalW > MAX ? MAX / naturalW : 1;
+        const W = Math.round(naturalW * scale);
+        const H = Math.round(naturalH * scale);
+
+        canvas.width = W; canvas.height = H;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, W, H);
+
+        const ts = new Date().toLocaleString('en-IN');
+        // Diagonal watermark
         ctx.save();
         ctx.globalAlpha=0.38; ctx.fillStyle='#ffffff';
-        ctx.font=`bold ${Math.max(18,W*0.045)}px Arial`;
+        ctx.font=`bold ${Math.max(14,W*0.045)}px Arial`;
         ctx.rotate(-Math.PI/7);
-        const step=Math.max(90,W*0.32);
+        const step=Math.max(80,W*0.32);
         for(let y=-H;y<H*2;y+=step)
           for(let x=-W;x<W*2;x+=step*1.5){
             ctx.fillText(clientName,x,y);
-            ctx.fillText(`+91${clientPhone}`,x,y+Math.max(22,W*0.042));
+            ctx.fillText(`+91${clientPhone}`,x,y+Math.max(18,W*0.042));
           }
         ctx.restore();
-        // Bold top banner
+        // Top banner
         ctx.save();
         ctx.fillStyle='rgba(0,0,0,0.55)';
-        ctx.fillRect(0,0,W,Math.max(44,H*0.09));
+        ctx.fillRect(0,0,W,Math.max(36,H*0.09));
         ctx.globalAlpha=1; ctx.fillStyle='#ffcc00';
-        ctx.font=`bold ${Math.max(13,W*0.032)}px Arial`;
+        ctx.font=`bold ${Math.max(11,W*0.032)}px Arial`;
         ctx.textAlign='center';
-        ctx.fillText(`FOR: ${clientName}  |  +91${clientPhone}`,W/2,Math.max(28,H*0.062));
+        ctx.fillText(`FOR: ${clientName}  |  +91${clientPhone}`,W/2,Math.max(24,H*0.062));
         ctx.restore();
-        // Bold bottom stamp
+        // Bottom stamp
         ctx.save();
         ctx.fillStyle='rgba(0,0,0,0.55)';
-        ctx.fillRect(0,H-Math.max(44,H*0.09),W,Math.max(44,H*0.09));
+        ctx.fillRect(0,H-Math.max(36,H*0.09),W,Math.max(36,H*0.09));
         ctx.globalAlpha=1; ctx.fillStyle='#ffcc00';
-        ctx.font=`bold ${Math.max(11,W*0.026)}px Arial`;
+        ctx.font=`bold ${Math.max(9,W*0.026)}px Arial`;
         ctx.textAlign='center';
-        ctx.fillText(`${clientName} | +91${clientPhone} | ${ts}`,W/2,H-Math.max(14,H*0.025));
+        ctx.fillText(`${clientName} | +91${clientPhone} | ${ts}`,W/2,H-Math.max(10,H*0.025));
         ctx.restore();
-        done(canvas.toDataURL('image/jpeg',0.92));
-        } catch(e){ done(srcUrl); } // tainted canvas fallback
+        // Lower quality = much faster encoding on mobile (0.75 vs 0.92)
+        done(canvas.toDataURL('image/jpeg', 0.75));
+        } catch(e){ done(srcUrl); }
       };
       img.onerror=()=>done(srcUrl);
       img.src=srcUrl;
@@ -1424,21 +1435,22 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
       const live  = snap.exists ? (snap.data().count||0) : 0;
       if(live>=maxViews){ setViewCount(live); setLimitReached(true); return; }
 
-      await db.collection('viewCounts').doc(countDocId).set({
+      const newCount = live + 1;
+      setViewCount(newCount);
+      if(newCount>=maxViews) setLimitReached(true);
+
+      // Fire Firestore writes in background — don't block image display
+      db.collection('viewCounts').doc(countDocId).set({
         count: FieldValue.increment(1), lastViewedAt: FieldValue.serverTimestamp(),
         therapistId:therapist.id, tokenId,
-      },{merge:true});
+      },{merge:true}).catch(()=>{});
 
-      await db.collection('viewLogs').add({
+      db.collection('viewLogs').add({
         token:tokenId, therapistId:therapist.id,
         clientName, clientPhone,
         viewedAt:FieldValue.serverTimestamp(),
-        viewCount:live+1, userAgent:navigator.userAgent,
-      });
-
-      const newCount=live+1;
-      setViewCount(newCount);
-      if(newCount>=maxViews) setLimitReached(true);
+        viewCount:newCount, userAgent:navigator.userAgent,
+      }).catch(()=>{});
 
       // Show all photos in sequence
       photoIndexRef.current = 0;
@@ -1535,7 +1547,7 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
 
       {/* ── Watermarked photo (when visible) ── */}
       {isVisible && canvasUrl && (
-        <div style={{position:'absolute',inset:0,zIndex:2}}>
+        <div style={{position:'absolute',inset:0,zIndex:2,animation:'fadeIn 0.35s ease'}}>
           {isIOS
             ? <img src={canvasUrl} onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover',display:'block',WebkitUserSelect:'none',userSelect:'none'}}/>
             : <video ref={videoRef} poster={canvasUrl} muted playsInline autoPlay onContextMenu={e=>e.preventDefault()} style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}/>
