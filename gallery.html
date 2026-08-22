@@ -738,7 +738,11 @@ function TherapistGallery({ tokenData, clientName, clientPhone, clientLoc, isBlu
           if (busyDocIds.has(t.id)) return false;
           const wh = t.workingHours;
           if (!wh) return true;
-          return wh[filterInfo.dayKey]?.on === true;
+          // dayKey is lowercase ('sat'), but admin saves uppercase ('SAT') — check both
+          const dayEntry = wh[filterInfo.dayKey] || wh[filterInfo.dayKey.toUpperCase()];
+          if (!dayEntry) return true; // no hours set for this day → show anyway
+          // admin panel saves 'enabled', older data may use 'on'
+          return dayEntry.enabled === true || dayEntry.on === true;
         });
 
         if (hasPinned) {
@@ -1473,7 +1477,7 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
 
   const DAYS = [{k:'mon',l:'M'},{k:'tue',l:'T'},{k:'wed',l:'W'},{k:'thu',l:'T'},{k:'fri',l:'F'},{k:'sat',l:'S'},{k:'sun',l:'S'}];
   const wh = therapist.workingHours;
-  const hasSchedule = wh && Object.values(wh).some(d=>d?.on);
+  const hasSchedule = wh && Object.values(wh).some(d=>d?.on||d?.enabled);
   const initials = (therapist.name||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)||'?';
 
   return (
@@ -1614,7 +1618,7 @@ function TherapistCard({ therapist, tokenData, clientName, clientPhone, isNeares
             {hasSchedule && (
               <div className="day-pills">
                 {DAYS.map(({k,l})=>(
-                  <div key={k} className={`dp ${wh[k]?.on?'on':'off'}`}>{l}</div>
+                  <div key={k} className={`dp ${(wh[k]?.on||wh[k]?.enabled||wh[k.toUpperCase()]?.enabled)?'on':'off'}`}>{l}</div>
                 ))}
               </div>
             )}
